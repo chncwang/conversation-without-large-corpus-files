@@ -23,7 +23,7 @@ dtype computePerplex(const std::vector<Node *> &nodes, const std::vector<int> &a
         log_sum += log(reciprocal_answer_prob);
     }
 
-    return exp(1.0f / nodes.size() * log_sum);
+    return exp(1.0f / answers.size() * log_sum);
 }
 
 #endif
