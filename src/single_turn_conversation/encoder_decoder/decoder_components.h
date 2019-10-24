@@ -34,11 +34,11 @@ struct DecoderComponents {
             Node &keyword_input,
             vector<Node *> &encoder_hiddens,
             bool is_training) {
-        shared_ptr<DotAttentionBuilder> attention_builder(new DotAttentionBuilder);
+        shared_ptr<AdditiveAttentionBuilder> attention_builder(new AdditiveAttentionBuilder);
         Node *guide = decoder.size() == 0 ?
             static_cast<Node*>(bucket(hyper_params.hidden_dim,
                         graph)) : static_cast<Node*>(decoder._hiddens.at(decoder.size() - 1));
-        attention_builder->forward(graph, encoder_hiddens, *guide);
+        attention_builder->forward(graph, model_params.attention_params, encoder_hiddens, *guide);
         contexts.push_back(attention_builder->_hidden);
 
         ConcatNode* concat = new ConcatNode;
