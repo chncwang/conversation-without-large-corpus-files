@@ -844,6 +844,7 @@ int main(int argc, char *argv[]) {
                 model_params.lookup_table.init(*alphabet, hyper_params.word_dim, true);
             }
         }
+        model_params.attention_params.init(hyper_params.hidden_dim, hyper_params.hidden_dim);
         model_params.left_to_right_encoder_params.init(hyper_params.hidden_dim,
                 2 * hyper_params.word_dim + hyper_params.hidden_dim);
         model_params.hidden_to_wordvector_params.init(hyper_params.word_dim,
