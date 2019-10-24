@@ -818,6 +818,24 @@ int main(int argc, char *argv[]) {
     vector<string> all_word_list = getAllWordsByIdfAscendingly(all_idf, word_counts,
                         hyper_params.word_cutoff);
     cout << "all_word_list size:" << all_word_list.size() << endl;
+    int sum = 0;
+    int ii = 0;
+    for (auto &s : response_sentences) {
+        ++ii;
+        bool include = false;
+        for (const string &w : s) {
+            if (all_idf.at(w) > 6) {
+                break;
+            }
+        }
+        cout << endl;
+        if (include) {
+            ++sum;
+        }
+    }
+    cout << boost::format("%1% sentences contain words of idf %2%") %
+        ((float)sum / response_sentences.size()) % 6 << endl;
+
 //    for (int i = 0; i < 40000; ++i) {
 //        cout << all_word_list.at(i) << ":" ;
 //        cout << all_idf.at(all_word_list.at(i)) << " ";
