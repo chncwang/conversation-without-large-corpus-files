@@ -1010,7 +1010,7 @@ int main(int argc, char *argv[]) {
             profiler.SetEnabled(true);
             profiler.BeginEvent("total");
 
-            for (int batch_i = 0; batch_i < 10; ++batch_i) { // TODO
+            for (int batch_i = 0; batch_i < batch_count; ++batch_i) {
                 cout << format("batch_i:%1% iteration:%2%") % batch_i % iteration << endl;
                 if (epoch == 0) {
                     if (iteration < hyper_params.warm_up_iterations) {
