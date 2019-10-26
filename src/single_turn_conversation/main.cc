@@ -831,17 +831,16 @@ int main(int argc, char *argv[]) {
         ++ii;
         bool include = false;
         for (const string &w : s) {
-            if (all_idf.at(w) > 6) {
+            if (all_idf.at(w) > hyper_params.idf_threshhold) {
                 break;
             }
         }
-        cout << endl;
         if (include) {
             ++sum;
         }
     }
     cout << boost::format("%1% sentences contain words of idf %2%") %
-        ((float)sum / response_sentences.size()) % 6 << endl;
+        ((float)sum / response_sentences.size()) % hyper_params.idf_threshhold << endl;
 
 //    for (int i = 0; i < 40000; ++i) {
 //        cout << all_word_list.at(i) << ":" ;
@@ -869,6 +868,7 @@ int main(int argc, char *argv[]) {
                 model_params.lookup_table.init(*alphabet, hyper_params.word_dim, true);
             }
         }
+        model_params.attention_params.init(hyper_params.hidden_dim, hyper_params.hidden_dim);
         model_params.left_to_right_encoder_params.init(hyper_params.hidden_dim,
                 2 * hyper_params.word_dim + hyper_params.hidden_dim);
         model_params.hidden_to_wordvector_params.init(hyper_params.word_dim,

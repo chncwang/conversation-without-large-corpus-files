@@ -15,16 +15,18 @@ struct ModelParams : public N3LDGSerializable, public TunableCombination<BasePar
     UniParams hidden_to_wordvector_params;
     UniParams hidden_to_keyword_params;
     LSTM1Params left_to_right_encoder_params;
+    AdditiveAttentionParams attention_params;
 
     ModelParams() : hidden_to_wordvector_params("hidden_to_wordvector_params"),
-    hidden_to_keyword_params("hidden_to_keyword_params"), left_to_right_encoder_params("lstm") {}
+    hidden_to_keyword_params("hidden_to_keyword_params"), left_to_right_encoder_params("lstm"),
+    attention_params("attention_params"){}
 
     Json::Value toJson() const override {
         Json::Value json;
         json["lookup_table"] = lookup_table.toJson();
         json["hidden_to_wordvector_params"] = hidden_to_wordvector_params.toJson();
         json["hidden_to_keyword_params"] = hidden_to_keyword_params.toJson();
-        json["left_to_right_encoder_params"] = left_to_right_encoder_params.toJson();
+        json["left_to_right_encoder_params"] = left_to_right_encoder_params.toJson(); // TODO
         return json;
     }
 

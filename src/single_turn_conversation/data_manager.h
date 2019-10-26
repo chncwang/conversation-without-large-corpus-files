@@ -302,7 +302,8 @@ WordIdfInfo getWordIdfInfo(const vector<string> &sentence,
             return idf >= threshhold;
         };
         auto it = std::find_if(word_frequencies.begin() + i, word_frequencies.end(), check);
-        string word = sentence.at(it - word_frequencies.begin());
+        string word = it == word_frequencies.end() ? STOP_SYMBOL :
+            sentence.at(it - word_frequencies.begin());
         if (word == ::unknownkey) {
             cerr << word_counts.at(::unknownkey) << endl;
             abort();
