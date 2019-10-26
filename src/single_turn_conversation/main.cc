@@ -275,6 +275,13 @@ HyperParams parseHyperParams(INIReader &ini_reader) {
         abort();
     }
 
+    float idf_threshhold = ini_reader.GetReal("hyper", "idf_threshhold", -1.0f);
+    if (idf_threshhold < 0) {
+        cerr << "idf_threshhold:" << idf_threshhold << endl;
+        abort();
+    }
+    hyper_params.idf_threshhold = idf_threshhold;
+
     return hyper_params;
 }
 
@@ -892,37 +899,39 @@ int main(int argc, char *argv[]) {
     }
     auto black_list = readBlackList(default_config.black_list_file);
 
-//    cout << "post:" << endl;
-//    for (auto &s : post_sentences) {
-//        WordIdfInfo info = getWordIdfInfo(s, all_idf, word_counts, hyper_params.word_cutoff);
-//        print(info.keywords_behind);
-//        bool first = true;
-//        for (float f : info.word_idfs) {
-//            if (first) {
-//                first = false;
-//            } else {
-//                cout << " ";
-//            }
-//            cout << f;
-//        }
-//        cout << endl;
-//    }
-//    cout << "response:" << endl;
-//    for (auto &s : response_sentences) {
-//        WordIdfInfo info = getWordIdfInfo(s, all_idf, word_counts, hyper_params.word_cutoff);
-//        print(info.keywords_behind);
-//        bool first = true;
-//        for (float f : info.word_idfs) {
-//            if (first) {
-//                first = false;
-//            } else {
-//                cout << " ";
-//            }
-//            cout << f;
-//        }
-//        cout << endl;
-//    }
-//    exit(0);
+    cout << "post:" << endl;
+    for (auto &s : post_sentences) {
+        WordIdfInfo info = getWordIdfInfo(s, all_idf, word_counts, hyper_params.word_cutoff,
+                hyper_params.idf_threshhold);
+        print(info.keywords_behind);
+        bool first = true;
+        for (float f : info.word_idfs) {
+            if (first) {
+                first = false;
+            } else {
+                cout << " ";
+            }
+            cout << f;
+        }
+        cout << endl;
+    }
+    cout << "response:" << endl;
+    for (auto &s : response_sentences) {
+        WordIdfInfo info = getWordIdfInfo(s, all_idf, word_counts, hyper_params.word_cutoff,
+                hyper_params.idf_threshhold);
+        print(info.keywords_behind);
+        bool first = true;
+        for (float f : info.word_idfs) {
+            if (first) {
+                first = false;
+            } else {
+                cout << " ";
+            }
+            cout << f;
+        }
+        cout << endl;
+    }
+    exit(0);
 
     cout << "reading post idf info ..." << endl;
     vector<WordIdfInfo> post_idf_info_list = readWordIdfInfoList(default_config.post_idf_file);

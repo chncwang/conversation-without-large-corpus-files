@@ -276,7 +276,8 @@ struct WordIdfInfo {
 WordIdfInfo getWordIdfInfo(const vector<string> &sentence,
         const unordered_map<string, float> &word_idfs,
         const unordered_map<string, int> word_counts,
-        int cutoff) {
+        int cutoff,
+        float threshhold) {
     WordIdfInfo word_idf_info;
     word_idf_info.word_idfs.reserve(sentence.size());
     word_idf_info.keywords_behind.reserve(sentence.size());
@@ -297,7 +298,10 @@ WordIdfInfo getWordIdfInfo(const vector<string> &sentence,
 
     auto &word_frequencies = word_idf_info.word_idfs;
     for (int i = 0; i < word_frequencies.size(); ++i) {
-        auto it = std::max_element(word_frequencies.begin() + i, word_frequencies.end());
+        auto check = [&threshhold](float idf) {
+            return idf >= threshhold;
+        };
+        auto it = std::find_if(word_frequencies.begin() + i, word_frequencies.end(), check);
         string word = sentence.at(it - word_frequencies.begin());
         if (word == ::unknownkey) {
             cerr << word_counts.at(::unknownkey) << endl;
