@@ -108,6 +108,14 @@ private:
     std::array<int, 3> ngram_counts_ = {};
 };
 
+string toSentenceStringWithSpace(const vector<string> &sentence) {
+    string result;
+    for (const string &w : sentence) {
+        result += w + " ";
+    }
+    return result;
+}
+
 void printWordIds(const vector<WordIdAndProbability> &word_ids_with_probability_vector,
         const LookupTable &lookup_table) {
     for (const WordIdAndProbability &ids : word_ids_with_probability_vector) {
@@ -529,7 +537,10 @@ struct GraphBuilder {
             ModelParams &model_params,
             bool is_training) {
         if (sentence.size() != keywords.size()) {
-            cerr << boost::format("stence size:%1% keyword size:%2%") % sentence.size() %
+            cerr << "sentence:" << endl;
+            cerr << toSentenceStringWithSpace(sentence) << endl;
+            cerr << toSentenceStringWithSpace(keywords) << endl;
+            cerr << boost::format("sentence size:%1% keyword size:%2%") % sentence.size() %
                 keywords.size() << endl;
             abort();
         }
