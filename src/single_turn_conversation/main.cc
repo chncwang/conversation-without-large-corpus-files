@@ -1278,12 +1278,11 @@ int main(int argc, char *argv[]) {
                             return model_params.lookup_table.elems.from_string(unknownkey) == id;
                         };
                         return MaxLogProbabilityLossWithInconsistentDims(
-                                keyword_nodes_and_ids.first, keyword_nodes_and_ids.second,
-                                hyper_params.batch_size, is_unkown,
+                                keyword_nodes_and_ids.first, keyword_nodes_and_ids.second, 1,
+                                is_unkown,
                                 model_params.lookup_table.nVSize).first +
                             MaxLogProbabilityLossWithInconsistentDims( result_nodes, word_ids,
-                                    hyper_params.batch_size, is_unkown,
-                                    model_params.lookup_table.nVSize).first;
+                                    1, is_unkown, model_params.lookup_table.nVSize).first;
                     };
                     cout << format("checking grad - conversation_pair size:%1%") %
                         conversation_pair_in_batch.size() << endl;
