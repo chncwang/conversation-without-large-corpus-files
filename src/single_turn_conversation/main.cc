@@ -307,9 +307,81 @@ vector<int> toIds(const vector<string> &sentence, const LookupTable &lookup_tabl
     return ids;
 }
 
+vector<int> toNormalWordIds(const vector<string> &sentence, const LookupTable &lookup_table,
+        int keyword_id_offset,
+        bool permit_unkown = true) {
+    vector<int> ids;
+    for (const string &word : sentence) {
+	int xid = lookup_table.getElemId(word);
+        if (!permit_unkown && xid == lookup_table.elems.from_string(::unknownkey)) {
+            cerr << "toIds error: unknown word " << word << endl;
+            abort();
+        }
+        if (xid >= lookup_table.nVSize) {
+            cerr << "xid:" << xid << " word:" << word << endl;
+            for (const string &w :sentence) {
+                cerr << w;
+            }
+            cerr << endl;
+            abort();
+        }
+        if (xid >= keyword_id_offset) {
+            xid = keyword_id_offset;
+        }
+        ids.push_back(xid);
+    }
+    return ids;
+}
+
+vector<int> toKeywordIds(const vector<string> &sentence, const LookupTable &lookup_table,
+        int keyword_id_offset,
+        bool permit_unkown = true) {
+    vector<int> ids;
+    for (const string &word : sentence) {
+	int xid = lookup_table.getElemId(word);
+        if (!permit_unkown && xid == lookup_table.elems.from_string(::unknownkey)) {
+            cerr << "toIds error: unknown word " << word << endl;
+            abort();
+        }
+        if (xid >= lookup_table.nVSize) {
+            cerr << "xid:" << xid << " word:" << word << endl;
+            for (const string &w :sentence) {
+                cerr << w;
+            }
+            cerr << endl;
+            abort();
+        }
+        if (xid == 0) {
+            xid = keyword_id_offset;
+        }
+        xid = (xid == 0 ? lookup_table.nVSize : xid) - keyword_id_offset;
+        ids.push_back(xid);
+    }
+    return ids;
+}
+
 void printWordIds(const vector<int> &word_ids, const LookupTable &lookup_table) {
     for (int word_id : word_ids) {
         cout << lookup_table.elems.from_id(word_id) << " ";
+    }
+    cout << endl;
+}
+
+void printKeywordIds(const vector<int> &word_ids, const LookupTable &lookup_table,
+        int keyword_id_offset) {
+
+    for (int word_id : word_ids) {
+        cout << (word_id < lookup_table.nVSize - keyword_id_offset ?
+                lookup_table.elems.from_id(word_id) : "<end>") << " ";
+    }
+    cout << endl;
+}
+
+void printNormalWordIds(const vector<int> &word_ids, const LookupTable &lookup_table,
+        int keyword_id_offset) {
+    for (int word_id : word_ids) {
+        cout << (word_id < keyword_id_offset ? lookup_table.elems.from_id(word_id) : "keyword") <<
+            " ";
     }
     cout << endl;
 }
@@ -418,8 +490,7 @@ void loadModel(const DefaultConfig &default_config, HyperParams &hyper_params,
 pair<vector<Node *>, vector<int>> keywordNodesAndIds(const DecoderComponents &decoder_components,
         const WordIdfInfo &idf_info,
         const ModelParams &model_params) {
-    vector<Node *> keyword_result_nodes = toNodePointers<LinearWordVectorNode>(
-            decoder_components.keyword_vector_to_onehots);
+    vector<Node *> keyword_result_nodes = decoder_components.keyword_vector_to_onehots;
     vector<int> keyword_ids = toIds(idf_info.keywords_behind, model_params.lookup_table, false);
     vector<Node *> non_null_nodes;
     vector<int> chnanged_keyword_ids;
@@ -443,7 +514,8 @@ float metricTestPosts(const HyperParams &hyper_params, ModelParams &model_params
         const vector<vector<string>> &post_sentences,
         const vector<vector<string>> &response_sentences,
         const vector<WordIdfInfo> &post_idf_info_list,
-        const vector<WordIdfInfo> &response_idf_info_list) {
+        const vector<WordIdfInfo> &response_idf_info_list,
+        int keyword_id_offset) {
     cout << "metricTestPosts begin" << endl;
     hyper_params.print();
     float rep_perplex(0.0f);
@@ -476,9 +548,8 @@ float metricTestPosts(const HyperParams &hyper_params, ModelParams &model_params
                         hyper_params, model_params, false);
                 DecoderComponents decoder_components;
                 graph_builder.forwardDecoder(graph, decoder_components,
-                        response_sentences.at(response_id),
-                        idf_info.keywords_behind,
-                        hyper_params, model_params, false);
+                        response_sentences.at(response_id), idf_info.keywords_behind, hyper_params,
+                        model_params, keyword_id_offset, false);
                 profiler.EndEvent();
                 graph.compute();
                 vector<Node*> nodes = toNodePointers(decoder_components.wordvector_to_onehots);
@@ -524,6 +595,7 @@ float metricTestPosts(const HyperParams &hyper_params, ModelParams &model_params
 void decodeTestPosts(const HyperParams &hyper_params, ModelParams &model_params,
         DefaultConfig &default_config,
         const unordered_map<string, float> & word_idf_table,
+        int keyword_id_offset,
         const vector<WordIdfInfo> &post_idf_info_list,
         const vector<WordIdfInfo> &response_idf_info_list,
         const vector<PostAndResponses> &post_and_responses_vector,
@@ -545,8 +617,8 @@ void decodeTestPosts(const HyperParams &hyper_params, ModelParams &model_params,
         vector<DecoderComponents> decoder_components_vector;
         decoder_components_vector.resize(hyper_params.beam_size);
         auto pair = graph_builder.forwardDecoderUsingBeamSearch(graph, decoder_components_vector,
-                word_idf_table, hyper_params.beam_size, hyper_params, model_params, default_config,
-                black_list);
+                word_idf_table, keyword_id_offset, hyper_params.beam_size, hyper_params,
+                model_params, default_config, black_list);
         const vector<WordIdAndProbability> &word_ids_and_probability = pair.first;
         cout << "post:" << endl;
         print(post_sentences.at(post_and_responses.post_id));
@@ -624,6 +696,30 @@ unordered_set<string> knownWords(const vector<string> &words) {
     return word_set;
 }
 
+int calculateIdfThreshholdOffset(const unordered_map<string, float> &idf_table,
+        const vector<string> &word_list,
+        float threshhold) {
+    float min = 1e10;
+    string min_str;
+    for (auto &it : idf_table) {
+        if (it.second >= threshhold && min > it.second) {
+            min = it.second;
+            min_str = it.first;
+        }
+    }
+
+    if (min_str.empty()) {
+        cerr << "min_str still empty" << endl;
+        abort();
+    }
+
+    const auto &it = std::find(word_list.begin(), word_list.end(), min_str);
+    if (it == word_list.end()) {
+        abort();
+    }
+    return it - word_list.begin();
+}
+
 vector<string> getAllWordsByIdfAscendingly(const unordered_map<string, float> &idf_table,
         const unordered_map<string, int> &word_count_table,
         int word_cutoff) {
@@ -640,6 +736,12 @@ vector<string> getAllWordsByIdfAscendingly(const unordered_map<string, float> &i
 
     sort(result.begin(), result.end(), cmp);
     result.push_back(unknownkey);
+
+    const string &first = result.front();
+    if (first != STOP_SYMBOL) {
+        cerr << "first:" << first << endl;
+        abort();
+    }
 
     return result;
 }
@@ -825,6 +927,11 @@ int main(int argc, char *argv[]) {
     vector<string> all_word_list = getAllWordsByIdfAscendingly(all_idf, word_counts,
                         hyper_params.word_cutoff);
     cout << "all_word_list size:" << all_word_list.size() << endl;
+    int keyword_id_offset = calculateIdfThreshholdOffset(all_idf, all_word_list,
+            hyper_params.idf_threshhold);
+    cout << boost::format("idf:%1% offset:%2%") % hyper_params.idf_threshhold %
+        keyword_id_offset << endl;
+
     int sum = 0;
     int ii = 0;
     for (auto &s : response_sentences) {
@@ -899,39 +1006,39 @@ int main(int argc, char *argv[]) {
     }
     auto black_list = readBlackList(default_config.black_list_file);
 
-    cout << "post:" << endl;
-    for (auto &s : post_sentences) {
-        WordIdfInfo info = getWordIdfInfo(s, all_idf, word_counts, hyper_params.word_cutoff,
-                hyper_params.idf_threshhold);
-        print(info.keywords_behind);
-        bool first = true;
-        for (float f : info.word_idfs) {
-            if (first) {
-                first = false;
-            } else {
-                cout << " ";
-            }
-            cout << f;
-        }
-        cout << endl;
-    }
-    cout << "response:" << endl;
-    for (auto &s : response_sentences) {
-        WordIdfInfo info = getWordIdfInfo(s, all_idf, word_counts, hyper_params.word_cutoff,
-                hyper_params.idf_threshhold);
-        print(info.keywords_behind);
-        bool first = true;
-        for (float f : info.word_idfs) {
-            if (first) {
-                first = false;
-            } else {
-                cout << " ";
-            }
-            cout << f;
-        }
-        cout << endl;
-    }
-    exit(0);
+//    cout << "post:" << endl;
+//    for (auto &s : post_sentences) {
+//        WordIdfInfo info = getWordIdfInfo(s, all_idf, word_counts, hyper_params.word_cutoff,
+//                hyper_params.idf_threshhold);
+//        print(info.keywords_behind);
+//        bool first = true;
+//        for (float f : info.word_idfs) {
+//            if (first) {
+//                first = false;
+//            } else {
+//                cout << " ";
+//            }
+//            cout << f;
+//        }
+//        cout << endl;
+//    }
+//    cout << "response:" << endl;
+//    for (auto &s : response_sentences) {
+//        WordIdfInfo info = getWordIdfInfo(s, all_idf, word_counts, hyper_params.word_cutoff,
+//                hyper_params.idf_threshhold);
+//        print(info.keywords_behind);
+//        bool first = true;
+//        for (float f : info.word_idfs) {
+//            if (first) {
+//                first = false;
+//            } else {
+//                cout << " ";
+//            }
+//            cout << f;
+//        }
+//        cout << endl;
+//    }
+//    exit(0);
 
     cout << "reading post idf info ..." << endl;
     vector<WordIdfInfo> post_idf_info_list = readWordIdfInfoList(default_config.post_idf_file);
@@ -947,9 +1054,9 @@ int main(int argc, char *argv[]) {
                 hyper_params.word_cutoff, black_list);
     } else if (default_config.program_mode == ProgramMode::DECODING) {
         hyper_params.beam_size = beam_size;
-        decodeTestPosts(hyper_params, model_params, default_config, all_idf, post_idf_info_list,
-                response_idf_info_list, test_post_and_responses, post_sentences,
-                response_sentences, black_list);
+        decodeTestPosts(hyper_params, model_params, default_config, all_idf, keyword_id_offset,
+                post_idf_info_list, response_idf_info_list, test_post_and_responses,
+                post_sentences, response_sentences, black_list);
     } else if (default_config.program_mode == ProgramMode::METRIC) {
         path dir_path(default_config.input_model_dir);
         if (!is_directory(dir_path)) {
@@ -982,8 +1089,8 @@ int main(int argc, char *argv[]) {
             loadModel(default_config, hyper_params, model_params, root_ptr.get(),
                     allocate_model_params);
             float rep_perplex = metricTestPosts(hyper_params, model_params, dev_post_and_responses,
-                    post_sentences, response_sentences, post_idf_info_list,
-                    response_idf_info_list);
+                    post_sentences, response_sentences, post_idf_info_list, response_idf_info_list,
+                    keyword_id_offset);
             cout << format("model %1% rep_perplex is %2%") % model_file_path % rep_perplex << endl;
             if (max_rep_perplex < rep_perplex) {
                 max_rep_perplex = rep_perplex;
@@ -1070,7 +1177,8 @@ int main(int argc, char *argv[]) {
                     const WordIdfInfo &idf_info = response_idf_info_list.at(response_id);
                     DecoderComponents decoder_components;
                     graph_builder->forwardDecoder(graph, decoder_components, response_sentence,
-                            idf_info.keywords_behind, hyper_params, model_params, true);
+                            idf_info.keywords_behind, hyper_params, model_params,
+                            keyword_id_offset, true);
                     decoder_components_vector.push_back(decoder_components);
                 }
 
@@ -1080,7 +1188,8 @@ int main(int argc, char *argv[]) {
                     int instance_index = getSentenceIndex(i);
                     int response_id = train_conversation_pairs.at(instance_index).response_id;
                     auto response_sentence = response_sentences.at(response_id);
-                    vector<int> word_ids = toIds(response_sentence, model_params.lookup_table);
+                    vector<int> word_ids = toNormalWordIds(response_sentence,
+                            model_params.lookup_table, keyword_id_offset);
                     vector<Node*> result_nodes =
                         toNodePointers(decoder_components_vector.at(i).wordvector_to_onehots);
                     profiler.BeginEvent("loss");
@@ -1116,14 +1225,17 @@ int main(int argc, char *argv[]) {
                         print(post_sentences.at(post_id));
 
                         cout << "golden answer:" << endl;
-                        printWordIds(word_ids, model_params.lookup_table);
+                        printNormalWordIds(word_ids, model_params.lookup_table, keyword_id_offset);
                         cout << "output:" << endl;
-                        printWordIds(result.second, model_params.lookup_table);
+                        printNormalWordIds(result.second, model_params.lookup_table,
+                                keyword_id_offset);
 
                         cout << "golden keywords:" << endl;
-                        printWordIds(keyword_nodes_and_ids.second, model_params.lookup_table);
+                        printKeywordIds(keyword_nodes_and_ids.second, model_params.lookup_table,
+                                keyword_id_offset);
                         cout << "output:" << endl;
-                        printWordIds(keyword_result.second, model_params.lookup_table);
+                        printKeywordIds(keyword_result.second, model_params.lookup_table,
+                                keyword_id_offset);
                     }
                 }
 
@@ -1149,12 +1261,13 @@ int main(int argc, char *argv[]) {
                                 response_sentences.at(conversation_pair.response_id),
                                 response_idf_info_list.at(
                                     conversation_pair.response_id).keywords_behind,
-                                hyper_params, model_params, true);
+                                hyper_params, model_params, keyword_id_offset, true);
 
                         graph.compute();
 
-                        vector<int> word_ids = toIds(response_sentences.at(
-                                    conversation_pair.response_id), model_params.lookup_table);
+                        vector<int> word_ids = toNormalWordIds(response_sentences.at(
+                                    conversation_pair.response_id), model_params.lookup_table,
+                                keyword_id_offset);
                         vector<Node*> result_nodes = toNodePointers(
                                 decoder_components.wordvector_to_onehots);
                         const WordIdfInfo &response_idf = response_idf_info_list.at(
