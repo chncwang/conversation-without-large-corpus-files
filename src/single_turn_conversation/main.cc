@@ -1197,7 +1197,7 @@ int main(int argc, char *argv[]) {
                         return model_params.lookup_table.elems.from_string(unknownkey) == id;
                     };
                     auto result = MaxLogProbabilityLossWithInconsistentDims(result_nodes, word_ids,
-                            hyper_params.batch_size, is_unkown, model_params.lookup_table.nVSize);
+                            hyper_params.batch_size, is_unkown, keyword_id_offset);
                     profiler.EndCudaEvent();
                     loss_sum += result.first;
                     vector<int> filtered_ids;
@@ -1213,8 +1213,14 @@ int main(int argc, char *argv[]) {
                     profiler.BeginEvent("loss");
                     auto keyword_result = MaxLogProbabilityLossWithInconsistentDims(
                             keyword_nodes_and_ids.first, keyword_nodes_and_ids.second,
-                            hyper_params.batch_size, is_unkown, model_params.lookup_table.nVSize);
+                            hyper_params.batch_size, is_unkown, model_params.lookup_table.nVSize -
+                            keyword_id_offset);
                     profiler.EndCudaEvent();
+                    if (keyword_result.first < 0) {
+                        cerr << boost::format("keyword result is less than 0:%1%") %
+                            keyword_result.first << endl;
+                        abort();
+                    }
                     loss_sum += keyword_result.first;
                     analyze(keyword_result.second, keyword_nodes_and_ids.second, *keyword_metric);
 
