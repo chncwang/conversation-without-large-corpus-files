@@ -307,10 +307,21 @@ vector<int> toIds(const vector<string> &sentence, const LookupTable &lookup_tabl
     return ids;
 }
 
-vector<int> toNormalWordIds(const vector<string> &sentence, const LookupTable &lookup_table,
+void print(const vector<string> &words) {
+    for (const string &w : words) {
+        cout << w << " ";
+    }
+    cout << endl;
+}
+
+
+vector<int> toNormalWordIds(const vector<string> &sentence, const vector<string> &keywords,
+        const LookupTable &lookup_table,
         int keyword_id_offset,
+        unordered_map<string, float> &idf_table,
         bool permit_unkown = true) {
     vector<int> ids;
+    int i = 0;
     for (const string &word : sentence) {
 	int xid = lookup_table.getElemId(word);
         if (!permit_unkown && xid == lookup_table.elems.from_string(::unknownkey)) {
@@ -326,9 +337,24 @@ vector<int> toNormalWordIds(const vector<string> &sentence, const LookupTable &l
             abort();
         }
         if (xid >= keyword_id_offset) {
+            int keyword_id = lookup_table.elems.from_string(keywords.at(i));
+            if (xid != keyword_id) {
+                cerr << "sentence:" << endl;
+                print(sentence);
+                cerr << "keywords:" << endl;
+                print(keywords);
+                cerr << boost::format("word:%1% keyword:%2%") % word % keywords.at(i) << endl;
+                cerr << boost::format("%1% idf:%2%") % word % idf_table.at(word) << endl;
+                cerr << boost::format("xid:%1% keyword id:%2%") % xid % keyword_id << endl;
+                abort();
+            }
             xid = keyword_id_offset;
+            if (keyword_id != 0) {
+                ++xid;
+            }
         }
         ids.push_back(xid);
+        ++i;
     }
     return ids;
 }
@@ -399,15 +425,17 @@ void printWordIdsWithKeywords(const vector<int> &word_ids, const LookupTable &lo
     cout << endl;
 }
 
-void print(const vector<string> &words) {
-    for (const string &w : words) {
-        cout << w << " ";
-    }
-    cout << endl;
-}
-
 void analyze(const vector<int> &results, const vector<int> &answers, Metric &metric) {
     if (results.size() != answers.size()) {
+        cerr << "results:" << endl;
+        for (int result : results) {
+            cerr << result << " ";
+        }
+        cerr << endl << "answers:" << endl;
+        for (int answer : answers) {
+            cerr << answer << " ";
+        }
+        cerr << endl;
         cerr << "results size is not equal to answers size" << endl;
         cerr << boost::format("results size:%1% answers size:%2%\n") % results.size() %
             answers.size();
@@ -771,6 +799,12 @@ std::pair<dtype, std::vector<int>> MaxLogProbabilityLossWithInconsistentDims(
 //        cout << boost::format("word_id:%1% offset:%2% dim:%3%") % ids.at(i) %
 //            vector_node.getOffset() % vector_node.getDim() << endl;
         auto result = maxLogProbabilityLoss(node, id, batchsize);
+        if (result.first < 0) {
+            cerr << "loss is less than 0:" << result.first << endl;
+            cerr << boost::format("node dim:%1% id:%2%") % node.front()->getDim() % id.front() <<
+                endl;
+            abort();
+        }
         if (result.second.size() != 1) {
             cerr << "result second size:" << result.second.size() << endl;
             abort();
@@ -949,11 +983,11 @@ int main(int argc, char *argv[]) {
     cout << boost::format("%1% sentences contain words of idf %2%") %
         ((float)sum / response_sentences.size()) % hyper_params.idf_threshhold << endl;
 
-//    for (int i = 0; i < 40000; ++i) {
-//        cout << all_word_list.at(i) << ":" ;
-//        cout << all_idf.at(all_word_list.at(i)) << " ";
-//        cout << word_counts.at(all_word_list.at(i)) << endl;
-//    }
+    for (int i = 0; i < all_word_list.size(); ++i) {
+        cout << all_word_list.at(i) << ":" ;
+        cout << all_idf.at(all_word_list.at(i)) << " ";
+        cout << word_counts.at(all_word_list.at(i)) << endl;
+    }
     alphabet.init(all_word_list);
     cout << boost::format("alphabet size:%1%") % alphabet.size() << endl;
 
@@ -1006,39 +1040,39 @@ int main(int argc, char *argv[]) {
     }
     auto black_list = readBlackList(default_config.black_list_file);
 
-//    cout << "post:" << endl;
-//    for (auto &s : post_sentences) {
-//        WordIdfInfo info = getWordIdfInfo(s, all_idf, word_counts, hyper_params.word_cutoff,
-//                hyper_params.idf_threshhold);
-//        print(info.keywords_behind);
-//        bool first = true;
-//        for (float f : info.word_idfs) {
-//            if (first) {
-//                first = false;
-//            } else {
-//                cout << " ";
-//            }
-//            cout << f;
-//        }
-//        cout << endl;
-//    }
-//    cout << "response:" << endl;
-//    for (auto &s : response_sentences) {
-//        WordIdfInfo info = getWordIdfInfo(s, all_idf, word_counts, hyper_params.word_cutoff,
-//                hyper_params.idf_threshhold);
-//        print(info.keywords_behind);
-//        bool first = true;
-//        for (float f : info.word_idfs) {
-//            if (first) {
-//                first = false;
-//            } else {
-//                cout << " ";
-//            }
-//            cout << f;
-//        }
-//        cout << endl;
-//    }
-//    exit(0);
+    cout << "post:" << endl;
+    for (auto &s : post_sentences) {
+        WordIdfInfo info = getWordIdfInfo(s, all_idf, word_counts, hyper_params.word_cutoff,
+                hyper_params.idf_threshhold);
+        print(info.keywords_behind);
+        bool first = true;
+        for (float f : info.word_idfs) {
+            if (first) {
+                first = false;
+            } else {
+                cout << " ";
+            }
+            cout << f;
+        }
+        cout << endl;
+    }
+    cout << "response:" << endl;
+    for (auto &s : response_sentences) {
+        WordIdfInfo info = getWordIdfInfo(s, all_idf, word_counts, hyper_params.word_cutoff,
+                hyper_params.idf_threshhold);
+        print(info.keywords_behind);
+        bool first = true;
+        for (float f : info.word_idfs) {
+            if (first) {
+                first = false;
+            } else {
+                cout << " ";
+            }
+            cout << f;
+        }
+        cout << endl;
+    }
+    exit(0);
 
     cout << "reading post idf info ..." << endl;
     vector<WordIdfInfo> post_idf_info_list = readWordIdfInfoList(default_config.post_idf_file);
@@ -1188,14 +1222,26 @@ int main(int argc, char *argv[]) {
                     int instance_index = getSentenceIndex(i);
                     int response_id = train_conversation_pairs.at(instance_index).response_id;
                     auto response_sentence = response_sentences.at(response_id);
+                    const WordIdfInfo &response_idf = response_idf_info_list.at(response_id);
+                    cout << "response_id:" << response_id << endl;
                     vector<int> word_ids = toNormalWordIds(response_sentence,
-                            model_params.lookup_table, keyword_id_offset);
+                            response_idf.keywords_behind, model_params.lookup_table,
+                            keyword_id_offset, all_idf);
                     vector<Node*> result_nodes =
                         toNodePointers(decoder_components_vector.at(i).wordvector_to_onehots);
                     profiler.BeginEvent("loss");
                     auto is_unkown = [&](int id) {
                         return model_params.lookup_table.elems.from_string(unknownkey) == id;
                     };
+
+                    for (Node *result_node : result_nodes) {
+                        if (result_node->getDim() != keyword_id_offset) {
+                            cerr << boost::format("result node dim should be %1%, but is %2%") %
+                                (keyword_id_offset + 1) % result_node->getDim() << endl;
+                            abort();
+                        }
+                    }
+
                     auto result = MaxLogProbabilityLossWithInconsistentDims(result_nodes, word_ids,
                             hyper_params.batch_size, is_unkown, keyword_id_offset);
                     profiler.EndCudaEvent();
@@ -1207,14 +1253,34 @@ int main(int argc, char *argv[]) {
                         }
                     }
                     analyze(result.second, filtered_ids, *metric);
-                    const WordIdfInfo &response_idf = response_idf_info_list.at(response_id);
                     auto keyword_nodes_and_ids = keywordNodesAndIds(
                             decoder_components_vector.at(i), response_idf, model_params);
+                    vector<int> raw_keyword_ids = keyword_nodes_and_ids.second;
+                    vector<Node *> keyword_nodes = keyword_nodes_and_ids.first;
+                    vector<int> processed_keyword_ids;
+                    int j = 0;
+                    for (int id : raw_keyword_ids) {
+                        if (keyword_nodes.at(j)->getDim() != model_params.lookup_table.nVSize -
+                                keyword_id_offset + 1) {
+                            cerr << "dim:" << keyword_nodes.at(j)->getDim() << endl;
+                            abort();
+                        }
+                        int processed = (id == 0 ? model_params.lookup_table.nVSize  : id) -
+                            keyword_id_offset;
+                        if (processed > model_params.lookup_table.nVSize || processed < 0) {
+                            cerr << "processed:" << processed << endl;
+                            abort();
+                        }
+
+                        processed_keyword_ids.push_back(processed);
+                        ++j;
+                    }
+
                     profiler.BeginEvent("loss");
                     auto keyword_result = MaxLogProbabilityLossWithInconsistentDims(
-                            keyword_nodes_and_ids.first, keyword_nodes_and_ids.second,
-                            hyper_params.batch_size, is_unkown, model_params.lookup_table.nVSize -
-                            keyword_id_offset);
+                            keyword_nodes_and_ids.first, processed_keyword_ids,
+                            hyper_params.batch_size, is_unkown,
+                            model_params.lookup_table.nVSize - keyword_id_offset + 1);
                     profiler.EndCudaEvent();
                     if (keyword_result.first < 0) {
                         cerr << boost::format("keyword result is less than 0:%1%") %
@@ -1222,7 +1288,7 @@ int main(int argc, char *argv[]) {
                         abort();
                     }
                     loss_sum += keyword_result.first;
-                    analyze(keyword_result.second, keyword_nodes_and_ids.second, *keyword_metric);
+                    analyze(keyword_result.second, processed_keyword_ids, *keyword_metric);
 
                     static int count_for_print;
                     if (++count_for_print % 100 == 1) {
@@ -1271,13 +1337,13 @@ int main(int argc, char *argv[]) {
 
                         graph.compute();
 
-                        vector<int> word_ids = toNormalWordIds(response_sentences.at(
-                                    conversation_pair.response_id), model_params.lookup_table,
-                                keyword_id_offset);
-                        vector<Node*> result_nodes = toNodePointers(
-                                decoder_components.wordvector_to_onehots);
                         const WordIdfInfo &response_idf = response_idf_info_list.at(
                                 conversation_pair.response_id);
+                        vector<int> word_ids = toNormalWordIds(response_sentences.at(
+                                    conversation_pair.response_id), response_idf.keywords_behind,
+                                model_params.lookup_table, keyword_id_offset, all_idf);
+                        vector<Node*> result_nodes = toNodePointers(
+                                decoder_components.wordvector_to_onehots);
                         auto keyword_nodes_and_ids = keywordNodesAndIds(
                                 decoder_components, response_idf, model_params);
                         auto is_unkown = [&](int id) {

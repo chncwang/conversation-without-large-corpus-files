@@ -643,8 +643,18 @@ struct GraphBuilder {
         Node *decoder_to_wordvector = nodes.result;
         decoder_components.decoder_to_wordvectors.push_back(decoder_to_wordvector);
 
+        int wordvector_to_onehot_dim;
+        int wordvector_to_onehot_offset;
+        if (last_keyword_id == 0) {
+            wordvector_to_onehot_dim = keyword_id_offset;
+            wordvector_to_onehot_offset = 0;
+        } else {
+            wordvector_to_onehot_dim = keyword_id_offset - 1;
+            wordvector_to_onehot_offset = 1;
+        }
         Node *wordvector_to_onehot = n3ldg_plus::linearWordVector(graph,
-                keyword_id_offset, model_params.lookup_table.E, *decoder_to_wordvector);
+                wordvector_to_onehot_dim, model_params.lookup_table.E, *decoder_to_wordvector,
+                wordvector_to_onehot_offset);
         Node *concated;
         if (last_keyword_id == 0) {
             concated = wordvector_to_onehot;
