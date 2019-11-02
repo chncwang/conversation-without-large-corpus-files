@@ -336,8 +336,8 @@ vector<int> toNormalWordIds(const vector<string> &sentence, const vector<string>
             cerr << endl;
             abort();
         }
+        int keyword_id = lookup_table.elems.from_string(keywords.at(i));
         if (xid >= keyword_id_offset) {
-            int keyword_id = lookup_table.elems.from_string(keywords.at(i));
             if (xid != keyword_id) {
                 cerr << "sentence:" << endl;
                 print(sentence);
@@ -348,9 +348,11 @@ vector<int> toNormalWordIds(const vector<string> &sentence, const vector<string>
                 cerr << boost::format("xid:%1% keyword id:%2%") % xid % keyword_id << endl;
                 abort();
             }
-            xid = keyword_id_offset;
-            if (keyword_id != 0) {
-                ++xid;
+            xid = keyword_id_offset - 1;
+        } else if (keyword_id > 0) {
+            if(--xid < 0) {
+                cerr << "toNormalWordIds - xid:" << xid << endl;
+                abort();
             }
         }
         ids.push_back(xid);
@@ -789,6 +791,11 @@ std::pair<dtype, std::vector<int>> MaxLogProbabilityLossWithInconsistentDims(
     pair<dtype, std::vector<int>> final_result;
 
     for (int i = 0; i < result_nodes.size(); ++i) {
+        if (ids.at(i) >= result_nodes.at(i)->getDim() || ids.at(i) < 0) {
+            cerr << boost::format("id:%1% dim:%2%") % ids.at(i) % result_nodes.at(i)->getDim() <<
+                endl;
+            abort();
+        }
         vector<int> id = {ids.at(i)};
         if (is_unkown(id.front())) {
             continue;
@@ -803,6 +810,7 @@ std::pair<dtype, std::vector<int>> MaxLogProbabilityLossWithInconsistentDims(
             cerr << "loss is less than 0:" << result.first << endl;
             cerr << boost::format("node dim:%1% id:%2%") % node.front()->getDim() % id.front() <<
                 endl;
+            node.front()->getVal().print();
             abort();
         }
         if (result.second.size() != 1) {
@@ -983,11 +991,13 @@ int main(int argc, char *argv[]) {
     cout << boost::format("%1% sentences contain words of idf %2%") %
         ((float)sum / response_sentences.size()) % hyper_params.idf_threshhold << endl;
 
-    for (int i = 0; i < all_word_list.size(); ++i) {
-        cout << all_word_list.at(i) << ":" ;
-        cout << all_idf.at(all_word_list.at(i)) << " ";
-        cout << word_counts.at(all_word_list.at(i)) << endl;
-    }
+//    for (int i = 0; i < all_word_list.size(); ++i) {
+//        cout << all_word_list.at(i) << ":" ;
+//        if (all_word_list.at(i) != unknownkey) {
+//            cout << all_idf.at(all_word_list.at(i)) << " ";
+//        }
+//        cout << word_counts.at(all_word_list.at(i)) << endl;
+//    }
     alphabet.init(all_word_list);
     cout << boost::format("alphabet size:%1%") % alphabet.size() << endl;
 
@@ -1040,39 +1050,39 @@ int main(int argc, char *argv[]) {
     }
     auto black_list = readBlackList(default_config.black_list_file);
 
-    cout << "post:" << endl;
-    for (auto &s : post_sentences) {
-        WordIdfInfo info = getWordIdfInfo(s, all_idf, word_counts, hyper_params.word_cutoff,
-                hyper_params.idf_threshhold);
-        print(info.keywords_behind);
-        bool first = true;
-        for (float f : info.word_idfs) {
-            if (first) {
-                first = false;
-            } else {
-                cout << " ";
-            }
-            cout << f;
-        }
-        cout << endl;
-    }
-    cout << "response:" << endl;
-    for (auto &s : response_sentences) {
-        WordIdfInfo info = getWordIdfInfo(s, all_idf, word_counts, hyper_params.word_cutoff,
-                hyper_params.idf_threshhold);
-        print(info.keywords_behind);
-        bool first = true;
-        for (float f : info.word_idfs) {
-            if (first) {
-                first = false;
-            } else {
-                cout << " ";
-            }
-            cout << f;
-        }
-        cout << endl;
-    }
-    exit(0);
+//    cout << "post:" << endl;
+//    for (auto &s : post_sentences) {
+//        WordIdfInfo info = getWordIdfInfo(s, all_idf, word_counts, hyper_params.word_cutoff,
+//                hyper_params.idf_threshhold);
+//        print(info.keywords_behind);
+//        bool first = true;
+//        for (float f : info.word_idfs) {
+//            if (first) {
+//                first = false;
+//            } else {
+//                cout << " ";
+//            }
+//            cout << f;
+//        }
+//        cout << endl;
+//    }
+//    cout << "response:" << endl;
+//    for (auto &s : response_sentences) {
+//        WordIdfInfo info = getWordIdfInfo(s, all_idf, word_counts, hyper_params.word_cutoff,
+//                hyper_params.idf_threshhold);
+//        print(info.keywords_behind);
+//        bool first = true;
+//        for (float f : info.word_idfs) {
+//            if (first) {
+//                first = false;
+//            } else {
+//                cout << " ";
+//            }
+//            cout << f;
+//        }
+//        cout << endl;
+//    }
+//    exit(0);
 
     cout << "reading post idf info ..." << endl;
     vector<WordIdfInfo> post_idf_info_list = readWordIdfInfoList(default_config.post_idf_file);
@@ -1223,7 +1233,6 @@ int main(int argc, char *argv[]) {
                     int response_id = train_conversation_pairs.at(instance_index).response_id;
                     auto response_sentence = response_sentences.at(response_id);
                     const WordIdfInfo &response_idf = response_idf_info_list.at(response_id);
-                    cout << "response_id:" << response_id << endl;
                     vector<int> word_ids = toNormalWordIds(response_sentence,
                             response_idf.keywords_behind, model_params.lookup_table,
                             keyword_id_offset, all_idf);
