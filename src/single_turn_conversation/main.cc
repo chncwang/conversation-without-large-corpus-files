@@ -833,42 +833,8 @@ int main(int argc, char *argv[]) {
                             model_params.lookup_table);
                     vector<Node*> result_nodes =
                         toNodePointers(decoder_components_vector.at(i).wordvector_to_onehots);
-#if USE_GPU
-                    vector<const dtype *> vals;
-                    vector<dtype*> losses;
-                    for (const Node *node : result_nodes) {
-                        vals.push_back(node->getVal().value);
-                        losses.push_back(node->getLoss().value);
-                    }
-                    int dim = result_nodes.at(0)->getDim();
-                    auto result = n3ldg_cuda::SoftMaxLoss(vals, vals.size(), dim, word_ids,
-                            hyper_params.batch_size, losses);
-                    auto result_ids = result.second;
-                    for (int id : result_ids) {
-                        if (id >= dim) {
-                            cerr << boost::format("id:%1% dim:%2%") % id % dim << endl;
-                            abort();
-                        }
-                    }
-#if TEST_CUDA
-                    cout << "cpu loss ..." << endl;
-                    auto cpu_result = maxLogProbabilityLoss(result_nodes, word_ids,
-                            hyper_params.batch_size);
-                    cout << format("result loss:%1% cpu_result loss:%2%") % result.first %
-                        cpu_result.first << endl;
-                    if (abs(result.first - cpu_result.first) > 0.001) {
-                        abort();
-                    }
-
-                    for (const Node *node : result_nodes) {
-                        n3ldg_cuda::Assert(node->getLoss().verify("cross entropy loss"));
-                    }
-                    cout << "loss tested" << endl;
-#endif
-#else
                     auto result = maxLogProbabilityLoss(result_nodes, word_ids,
                             hyper_params.batch_size);
-#endif
                     loss_sum += result.first;
 
                     analyze(result.second, word_ids, *metric);
