@@ -353,8 +353,9 @@ vector<BeamSearchResult> mostProbableKeywords(
             Node *stop_symbol = n3ldg_plus::linearWordVector(graph, 1, model_params.lookup_table.E,
                     *keyword);
             Node *concat = n3ldg_plus::concat(graph, {keyword_vector_to_onehot, stop_symbol});
-            components.keyword_vector_to_onehots.push_back(concat);
-            node = keyword_vector_to_onehot;
+            Node *prob = n3ldg_plus::softmax(graph, *concat);
+            components.keyword_vector_to_onehots.push_back(prob);
+            node = prob;
         } else {
             node = nullptr;
             keyword_node = nullptr;
@@ -663,7 +664,7 @@ struct GraphBuilder {
                     *decoder_to_wordvector, last_keyword_id);
             concated = n3ldg_plus::concat(graph, {wordvector_to_onehot, keyword});
         }
-        decoder_components.wordvector_to_onehots.push_back(concated);
+        decoder_components.wordvector_to_onehots.push_back(n3ldg_plus::softmax(graph, *concated));
 
         decoder_components.decoder_to_keyword_vectors.push_back(nodes.keyword);
 
@@ -679,7 +680,8 @@ struct GraphBuilder {
             keyword_vector_to_onehot = n3ldg_plus::concat(graph,
                     {keyword_vector_to_onehot, stop_symbol});
         }
-        decoder_components.keyword_vector_to_onehots.push_back(keyword_vector_to_onehot);
+        decoder_components.keyword_vector_to_onehots.push_back(n3ldg_plus::softmax(graph,
+                    *keyword_vector_to_onehot));
     }
 
     void forwardDecoderResultByOneStep(Graph &graph, DecoderComponents &decoder_components, int i,
@@ -757,7 +759,8 @@ struct GraphBuilder {
         one_hot_node->init(model_params.lookup_table.nVSize);
         one_hot_node->setParam(model_params.lookup_table.E);
         one_hot_node->forward(graph, *result_node);
-        decoder_components.wordvector_to_onehots.push_back(one_hot_node);
+        decoder_components.wordvector_to_onehots.push_back(n3ldg_plus::softmax(graph,
+                    *one_hot_node));
 
 //        Node *one_hot_node = n3ldg_plus::LinearWordVectorNode(
     }

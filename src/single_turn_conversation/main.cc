@@ -1358,8 +1358,28 @@ int main(int argc, char *argv[]) {
                         auto is_unkown = [&](int id) {
                             return model_params.lookup_table.elems.from_string(unknownkey) == id;
                         };
+                        vector<int> processed_keyword_ids;
+                        vector<int> raw_keyword_ids = keyword_nodes_and_ids.second;
+                        vector<Node *> keyword_nodes = keyword_nodes_and_ids.first;
+                        int j = 0;
+                        for (int id : raw_keyword_ids) {
+                            if (keyword_nodes.at(j)->getDim() != model_params.lookup_table.nVSize -
+                                    keyword_id_offset + 1) {
+                                cerr << "dim:" << keyword_nodes.at(j)->getDim() << endl;
+                                abort();
+                            }
+                            int processed = (id == 0 ? model_params.lookup_table.nVSize  : id) -
+                                keyword_id_offset;
+                            if (processed > model_params.lookup_table.nVSize || processed < 0) {
+                                cerr << "processed:" << processed << endl;
+                                abort();
+                            }
+
+                            processed_keyword_ids.push_back(processed);
+                            ++j;
+                        }
                         return MaxLogProbabilityLossWithInconsistentDims(
-                                keyword_nodes_and_ids.first, keyword_nodes_and_ids.second, 1,
+                                keyword_nodes_and_ids.first, processed_keyword_ids, 1,
                                 is_unkown,
                                 model_params.lookup_table.nVSize).first +
                             MaxLogProbabilityLossWithInconsistentDims( result_nodes, word_ids,
