@@ -352,7 +352,10 @@ struct GraphBuilder {
         wordvector_to_onehot->init(model_params.lookup_table.nVSize);
         wordvector_to_onehot->setParam(model_params.lookup_table.E);
         wordvector_to_onehot->forward(graph, *decoder_to_wordvector);
-        decoder_components.wordvector_to_onehots.push_back(wordvector_to_onehot);
+
+        Node *softmax = n3ldg_plus::softmax(graph, *wordvector_to_onehot);
+
+        decoder_components.wordvector_to_onehots.push_back(softmax);
     }
 
     pair<vector<WordIdAndProbability>, dtype> forwardDecoderUsingBeamSearch(Graph &graph,

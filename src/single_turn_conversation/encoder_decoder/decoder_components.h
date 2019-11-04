@@ -10,7 +10,7 @@ struct DecoderComponents {
     std::vector<LookupNode *> decoder_lookups_before_dropout;
     std::vector<DropoutNode *> decoder_lookups;
     std::vector<Node *> decoder_to_wordvectors;
-    std::vector<LinearWordVectorNode *> wordvector_to_onehots;
+    std::vector<Node *> wordvector_to_onehots;
     DynamicLSTMBuilder decoder;
     vector<Node*> contexts;
 
