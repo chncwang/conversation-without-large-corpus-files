@@ -227,7 +227,7 @@ HyperParams parseHyperParams(INIReader &ini_reader) {
     return hyper_params;
 }
 
-vector<int> toIds(const vector<string> &sentence, LookupTable &lookup_table) {
+vector<int> toIds(const vector<string> &sentence, LookupTable<Param> &lookup_table) {
     vector<int> ids;
     for (const string &word : sentence) {
 	int xid = lookup_table.getElemId(word);
@@ -236,7 +236,7 @@ vector<int> toIds(const vector<string> &sentence, LookupTable &lookup_table) {
     return ids;
 }
 
-void printWordIds(const vector<int> &word_ids, const LookupTable &lookup_table) {
+void printWordIds(const vector<int> &word_ids, const LookupTable<Param> &lookup_table) {
     for (int word_id : word_ids) {
         cout << lookup_table.elems.from_id(word_id) << " ";
     }

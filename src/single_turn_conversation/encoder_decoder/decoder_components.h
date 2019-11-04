@@ -7,7 +7,7 @@
 #include "single_turn_conversation/encoder_decoder/hyper_params.h"
 
 struct DecoderComponents {
-    std::vector<LookupNode *> decoder_lookups_before_dropout;
+    std::vector<LookupNode<Param> *> decoder_lookups_before_dropout;
     std::vector<DropoutNode *> decoder_lookups;
     std::vector<Node *> decoder_to_wordvectors;
     std::vector<Node *> wordvector_to_onehots;

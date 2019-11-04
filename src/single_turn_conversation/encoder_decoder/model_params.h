@@ -11,7 +11,7 @@ struct ModelParams : public N3LDGSerializable, public TunableCombination<BasePar
 , public TransferableComponents
 #endif
 {
-    LookupTable lookup_table;
+    LookupTable<Param> lookup_table;
     UniParams hidden_to_wordvector_params;
     LSTM1Params left_to_right_encoder_params;
     AdditiveAttentionParams attention_params;

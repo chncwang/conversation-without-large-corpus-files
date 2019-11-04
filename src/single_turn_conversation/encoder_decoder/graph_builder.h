@@ -98,7 +98,7 @@ private:
 };
 
 void printWordIds(const vector<WordIdAndProbability> &word_ids_with_probability_vector,
-        const LookupTable &lookup_table) {
+        const LookupTable<Param> &lookup_table) {
     for (const WordIdAndProbability &ids : word_ids_with_probability_vector) {
         cout << lookup_table.elems.from_id(ids.word_id);
     }
@@ -280,7 +280,7 @@ struct GraphBuilder {
         word_bucket->forward(graph);
 
         for (const string &word : sentence) {
-            LookupNode* input_lookup(new LookupNode);
+            LookupNode<Param>* input_lookup(new LookupNode<Param>);
             input_lookup->init(hyper_params.word_dim);
             input_lookup->setParam(model_params.lookup_table);
             input_lookup->forward(graph, word);
@@ -324,7 +324,7 @@ struct GraphBuilder {
             bool is_training) {
         Node *last_input;
         if (i > 0) {
-            LookupNode* before_dropout(new LookupNode);
+            LookupNode<Param>* before_dropout(new LookupNode<Param>);
             before_dropout->init(hyper_params.word_dim);
             before_dropout->setParam(model_params.lookup_table);
             before_dropout->forward(graph, *answer);
