@@ -57,8 +57,8 @@ public:
         for (const auto &p : path_) {
             unique_words.insert(p.word_id);
         }
-//        return (final_log_probability + extra_score_) / unique_words.size();
-        return final_log_probability / sqrt(unique_words.size());
+        return (final_log_probability ) / unique_words.size();
+//        return final_log_probability;
     }
 
     dtype finalLogProbability() const {
@@ -180,7 +180,11 @@ vector<BeamSearchResult> mostProbableResults(
 //    int stop_id = model_params.lookup_table.getElemId(STOP_SYMBOL);
     vector<BeamSearchResult> results;
     for (int i = 0; i < (is_first ? 1 : nodes.size()); ++i) {
-        const Node &node = *nodes.at(i);
+        Node &node = *nodes.at(i);
+#if USE_GPU
+        node.val().initOnMemory(node.getDim());
+        node.val().copyFromDeviceToHost();
+#endif
         auto tuple = toExp(node);
 
         for (int j = 0; j < nodes.at(i)->getDim(); ++j) {
