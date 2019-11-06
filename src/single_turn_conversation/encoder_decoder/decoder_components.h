@@ -12,13 +12,13 @@ struct ResultAndKeywordVectors {
 };
 
 struct DecoderComponents {
-    std::vector<LookupNode *> decoder_lookups_before_dropout;
+    std::vector<LookupNode<Param> *> decoder_lookups_before_dropout;
     std::vector<DropoutNode *> decoder_lookups;
-    std::vector<LookupNode *> decoder_keyword_lookups;
+    std::vector<LookupNode<Param> *> decoder_keyword_lookups;
     std::vector<Node *> decoder_to_wordvectors;
     std::vector<Node *> decoder_to_keyword_vectors;
-    std::vector<LinearWordVectorNode *> wordvector_to_onehots;
-    std::vector<LinearWordVectorNode *> keyword_vector_to_onehots;
+    std::vector<Node *> wordvector_to_onehots;
+    std::vector<Node *> keyword_vector_to_onehots;
     DynamicLSTMBuilder decoder;
     vector<Node*> contexts;
 
