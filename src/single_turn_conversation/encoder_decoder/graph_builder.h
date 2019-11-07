@@ -109,7 +109,7 @@ private:
 };
 
 void printWordIds(const vector<WordIdAndProbability> &word_ids_with_probability_vector,
-        const LookupTable &lookup_table) {
+        const LookupTable<Param> &lookup_table) {
     for (const WordIdAndProbability &ids : word_ids_with_probability_vector) {
         cout << lookup_table.elems.from_id(ids.word_id);
     }
@@ -117,7 +117,7 @@ void printWordIds(const vector<WordIdAndProbability> &word_ids_with_probability_
 }
 
 void printWordIdsWithKeywords(const vector<WordIdAndProbability> &word_ids_with_probability_vector,
-        const LookupTable &lookup_table,
+        const LookupTable<Param> &lookup_table,
         const unordered_map<string, float> &idf_table) {
     cout << "keywords:" << endl;
     for (int i = 0; i < word_ids_with_probability_vector.size(); i += 2) {
@@ -545,7 +545,7 @@ struct GraphBuilder {
         word_bucket->forward(graph);
 
         for (int i = 0; i < sentence.size(); ++i) {
-            LookupNode* input_lookup(new LookupNode);
+            LookupNode<Param>* input_lookup(new LookupNode<Param>);
             input_lookup->init(hyper_params.word_dim);
             input_lookup->setParam(model_params.lookup_table);
             input_lookup->forward(graph, sentence.at(i));
@@ -558,7 +558,7 @@ struct GraphBuilder {
             bucket->init(hyper_params.hidden_dim);
             bucket->forward(graph);
 
-            LookupNode *keyword_lookup = new LookupNode;
+            LookupNode<Param> *keyword_lookup = new LookupNode<Param>;
             keyword_lookup->init(hyper_params.word_dim);
             keyword_lookup->setParam(model_params.lookup_table);
             keyword_lookup->forward(graph, keywords.at(i));
@@ -599,7 +599,7 @@ struct GraphBuilder {
             int last_keyword_id) {
         Node *last_input, *last_keyword;
         if (i > 0) {
-            LookupNode* before_dropout(new LookupNode);
+            LookupNode<Param>* before_dropout(new LookupNode<Param>);
             before_dropout->init(hyper_params.word_dim);
             before_dropout->setParam(model_params.lookup_table);
             before_dropout->forward(graph, *answer);
@@ -630,7 +630,7 @@ struct GraphBuilder {
             last_keyword = bucket;
         }
 
-        LookupNode *keyword_node(new LookupNode);
+        LookupNode<Param> *keyword_node(new LookupNode<Param>);
         keyword_node->init(hyper_params.word_dim);
         keyword_node->setParam(model_params.lookup_table);
         keyword_node->forward(graph, keyword);
@@ -679,16 +679,16 @@ struct GraphBuilder {
                     *nodes.keyword);
             keyword_vector_to_onehot = n3ldg_plus::concat(graph,
                     {keyword_vector_to_onehot, stop_symbol});
+            keyword_vector_to_onehot = n3ldg_plus::softmax(graph, *keyword_vector_to_onehot);
         }
-        decoder_components.keyword_vector_to_onehots.push_back(n3ldg_plus::softmax(graph,
-                    *keyword_vector_to_onehot));
+        decoder_components.keyword_vector_to_onehots.push_back(keyword_vector_to_onehot);
     }
 
     void forwardDecoderResultByOneStep(Graph &graph, DecoderComponents &decoder_components, int i,
             const string &keyword,
             const HyperParams &hyper_params,
             ModelParams &model_params) {
-        LookupNode *keyword_lookup = new LookupNode;
+        LookupNode<Param> *keyword_lookup = new LookupNode<Param>;
         keyword_lookup->init(hyper_params.word_dim);
         keyword_lookup->setParam(model_params.lookup_table);
         keyword_lookup->forward(graph, keyword);
@@ -701,7 +701,7 @@ struct GraphBuilder {
             ModelParams &model_params) {
         Node *last_input, * last_keyword;
         if (i > 0) {
-            LookupNode* before_dropout(new LookupNode);
+            LookupNode<Param>* before_dropout(new LookupNode<Param>);
             before_dropout->init(hyper_params.word_dim);
             before_dropout->setParam(model_params.lookup_table);
             before_dropout->forward(graph, *answer);
@@ -741,7 +741,7 @@ struct GraphBuilder {
             const HyperParams &hyper_params,
             ModelParams &model_params,
             vector<Node*> &encoder_hiddens) {
-        LookupNode *keyword_embedding = new LookupNode;
+        LookupNode<Param> *keyword_embedding = new LookupNode<Param>;
         keyword_embedding->init(hyper_params.word_dim);
         keyword_embedding->setParam(model_params.lookup_table);
         keyword_embedding->forward(graph, keyword);

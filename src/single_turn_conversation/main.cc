@@ -285,7 +285,7 @@ HyperParams parseHyperParams(INIReader &ini_reader) {
     return hyper_params;
 }
 
-vector<int> toIds(const vector<string> &sentence, const LookupTable &lookup_table,
+vector<int> toIds(const vector<string> &sentence, const LookupTable<Param> &lookup_table,
         bool permit_unkown = true) {
     vector<int> ids;
     for (const string &word : sentence) {
@@ -316,7 +316,7 @@ void print(const vector<string> &words) {
 
 
 vector<int> toNormalWordIds(const vector<string> &sentence, const vector<string> &keywords,
-        const LookupTable &lookup_table,
+        const LookupTable<Param> &lookup_table,
         int keyword_id_offset,
         unordered_map<string, float> &idf_table,
         bool permit_unkown = true) {
@@ -361,7 +361,7 @@ vector<int> toNormalWordIds(const vector<string> &sentence, const vector<string>
     return ids;
 }
 
-vector<int> toKeywordIds(const vector<string> &sentence, const LookupTable &lookup_table,
+vector<int> toKeywordIds(const vector<string> &sentence, const LookupTable<Param> &lookup_table,
         int keyword_id_offset,
         bool permit_unkown = true) {
     vector<int> ids;
@@ -388,14 +388,14 @@ vector<int> toKeywordIds(const vector<string> &sentence, const LookupTable &look
     return ids;
 }
 
-void printWordIds(const vector<int> &word_ids, const LookupTable &lookup_table) {
+void printWordIds(const vector<int> &word_ids, const LookupTable<Param> &lookup_table) {
     for (int word_id : word_ids) {
         cout << lookup_table.elems.from_id(word_id) << " ";
     }
     cout << endl;
 }
 
-void printKeywordIds(const vector<int> &word_ids, const LookupTable &lookup_table,
+void printKeywordIds(const vector<int> &word_ids, const LookupTable<Param> &lookup_table,
         int keyword_id_offset) {
 
     for (int word_id : word_ids) {
@@ -405,7 +405,7 @@ void printKeywordIds(const vector<int> &word_ids, const LookupTable &lookup_tabl
     cout << endl;
 }
 
-void printNormalWordIds(const vector<int> &word_ids, const LookupTable &lookup_table,
+void printNormalWordIds(const vector<int> &word_ids, const LookupTable<Param> &lookup_table,
         int keyword_id_offset) {
     for (int word_id : word_ids) {
         cout << (word_id < keyword_id_offset ? lookup_table.elems.from_id(word_id) : "keyword") <<
@@ -414,7 +414,8 @@ void printNormalWordIds(const vector<int> &word_ids, const LookupTable &lookup_t
     cout << endl;
 }
 
-void printWordIdsWithKeywords(const vector<int> &word_ids, const LookupTable &lookup_table) {
+void printWordIdsWithKeywords(const vector<int> &word_ids,
+        const LookupTable<Param> &lookup_table) {
     for (int i = 0; i < word_ids.size(); i += 2) {
         int word_id = word_ids.at(i);
         cout << lookup_table.elems.from_id(word_id) << " ";
