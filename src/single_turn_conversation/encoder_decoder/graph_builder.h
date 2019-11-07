@@ -303,7 +303,7 @@ vector<BeamSearchResult> mostProbableResults(
 vector<BeamSearchResult> mostProbableKeywords(
         vector<DecoderComponents> &beam,
         const vector<BeamSearchResult> &last_results,
-        const unordered_map<string ,float> word_idf_table,
+        const unordered_map<string ,float> &word_idf_table,
         int keyword_id_offset,
         int word_pos,
         int k,
@@ -644,26 +644,14 @@ struct GraphBuilder {
         Node *decoder_to_wordvector = nodes.result;
         decoder_components.decoder_to_wordvectors.push_back(decoder_to_wordvector);
 
-        int wordvector_to_onehot_dim;
-        int wordvector_to_onehot_offset;
-        if (last_keyword_id == 0) {
-            wordvector_to_onehot_dim = keyword_id_offset;
-            wordvector_to_onehot_offset = 0;
-        } else {
-            wordvector_to_onehot_dim = keyword_id_offset - 1;
-            wordvector_to_onehot_offset = 1;
-        }
+        int wordvector_to_onehot_dim = keyword_id_offset - 1;
+        int wordvector_to_onehot_offset = 1;
         Node *wordvector_to_onehot = n3ldg_plus::linearWordVector(graph,
                 wordvector_to_onehot_dim, model_params.lookup_table.E, *decoder_to_wordvector,
                 wordvector_to_onehot_offset);
-        Node *concated;
-        if (last_keyword_id == 0) {
-            concated = wordvector_to_onehot;
-        } else {
-            Node *keyword = n3ldg_plus::linearWordVector(graph, 1, model_params.lookup_table.E,
-                    *decoder_to_wordvector, last_keyword_id);
-            concated = n3ldg_plus::concat(graph, {wordvector_to_onehot, keyword});
-        }
+        Node *keyword_one_dim_node = n3ldg_plus::linearWordVector(graph, 1,
+                model_params.lookup_table.E, *decoder_to_wordvector, last_keyword_id);
+        Node *concated = n3ldg_plus::concat(graph, {wordvector_to_onehot, keyword_one_dim_node});
         decoder_components.wordvector_to_onehots.push_back(n3ldg_plus::softmax(graph, *concated));
 
         decoder_components.decoder_to_keyword_vectors.push_back(nodes.keyword);

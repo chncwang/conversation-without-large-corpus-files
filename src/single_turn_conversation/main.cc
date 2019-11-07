@@ -337,7 +337,7 @@ vector<int> toNormalWordIds(const vector<string> &sentence, const vector<string>
             abort();
         }
         int keyword_id = lookup_table.elems.from_string(keywords.at(i));
-        if (xid >= keyword_id_offset) {
+        if (xid >= keyword_id_offset || xid == 0) {
             if (xid != keyword_id) {
                 cerr << "sentence:" << endl;
                 print(sentence);
@@ -349,7 +349,7 @@ vector<int> toNormalWordIds(const vector<string> &sentence, const vector<string>
                 abort();
             }
             xid = keyword_id_offset - 1;
-        } else if (keyword_id > 0) {
+        } else {
             if(--xid < 0) {
                 cerr << "toNormalWordIds - xid:" << xid << endl;
                 abort();
@@ -408,8 +408,8 @@ void printKeywordIds(const vector<int> &word_ids, const LookupTable<Param> &look
 void printNormalWordIds(const vector<int> &word_ids, const LookupTable<Param> &lookup_table,
         int keyword_id_offset) {
     for (int word_id : word_ids) {
-        cout << (word_id < keyword_id_offset ? lookup_table.elems.from_id(word_id) : "keyword") <<
-            " ";
+        cout << (word_id < keyword_id_offset - 1 ? lookup_table.elems.from_id(word_id + 1) :
+                "keyword") << " ";
     }
     cout << endl;
 }
