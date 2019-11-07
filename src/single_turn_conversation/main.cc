@@ -760,7 +760,7 @@ int main(int argc, char *argv[]) {
         dtype loss_sum = 0.0f;
 
         n3ldg_cuda::Profiler &profiler = n3ldg_cuda::Profiler::Ins();
-        profiler.SetEnabled(true);
+        profiler.SetEnabled(false);
         profiler.BeginEvent("total");
 
         int iteration = 0;
