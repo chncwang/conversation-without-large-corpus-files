@@ -16,10 +16,7 @@ dtype computePerplex(const std::vector<Node *> &nodes, const std::vector<int> &a
 
     for (int i = 0; i < nodes.size(); ++i) {
         Node &node = *nodes.at(i);
-        auto exped_result = toExp(node);
-        n3ldg_cpu::Tensor1D &t = *std::get<0>(exped_result).get();
-        dtype sum = std::get<2>(exped_result);
-        dtype reciprocal_answer_prob = sum / t.v[answers.at(i)];
+        dtype reciprocal_answer_prob = 1 / node.getVal().v[answers.at(i)];
         log_sum += log(reciprocal_answer_prob);
     }
 
