@@ -400,7 +400,7 @@ void printKeywordIds(const vector<int> &word_ids, const LookupTable<Param> &look
 
     for (int word_id : word_ids) {
         cout << (word_id < lookup_table.nVSize - keyword_id_offset ?
-                lookup_table.elems.from_id(word_id) : "<end>") << " ";
+                lookup_table.elems.from_id(word_id + keyword_id_offset) : "<end>") << " ";
     }
     cout << endl;
 }
@@ -1313,7 +1313,7 @@ int main(int argc, char *argv[]) {
                                 keyword_id_offset);
 
                         cout << "golden keywords:" << endl;
-                        printKeywordIds(keyword_nodes_and_ids.second, model_params.lookup_table,
+                        printKeywordIds(processed_keyword_ids, model_params.lookup_table,
                                 keyword_id_offset);
                         cout << "output:" << endl;
                         printKeywordIds(keyword_result.second, model_params.lookup_table,
