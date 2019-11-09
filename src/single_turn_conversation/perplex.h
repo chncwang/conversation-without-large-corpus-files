@@ -16,6 +16,7 @@ dtype computePerplex(const std::vector<Node *> &nodes, const std::vector<int> &a
 
     for (int i = 0; i < nodes.size(); ++i) {
         Node &node = *nodes.at(i);
+//        cout <<"dim:" << node.getDim() << " answer:" << answers.at(i)  << " prob:" <<  node.getVal().v[answers.at(i)]<< endl;
         dtype reciprocal_answer_prob = 1 / node.getVal().v[answers.at(i)];
         log_sum += log(reciprocal_answer_prob);
     }

@@ -520,15 +520,16 @@ void loadModel(const DefaultConfig &default_config, HyperParams &hyper_params,
 
 pair<vector<Node *>, vector<int>> keywordNodesAndIds(const DecoderComponents &decoder_components,
         const WordIdfInfo &idf_info,
-        const ModelParams &model_params) {
+        const ModelParams &model_params,
+        int keyword_id_offset) {
     vector<Node *> keyword_result_nodes = decoder_components.keyword_vector_to_onehots;
     vector<int> keyword_ids = toIds(idf_info.keywords_behind, model_params.lookup_table, false);
     vector<Node *> non_null_nodes;
-    vector<int> chnanged_keyword_ids;
+    vector<int> changed_keyword_ids;
     for (int j = 0; j < keyword_result_nodes.size(); ++j) {
         if (keyword_result_nodes.at(j) != nullptr) {
             non_null_nodes.push_back(keyword_result_nodes.at(j));
-            chnanged_keyword_ids.push_back(keyword_ids.at(j));
+            changed_keyword_ids.push_back(keyword_ids.at(j));
             if (keyword_ids.at(j) == model_params.lookup_table.elems.from_string(::unknownkey)) {
                 cerr << "unkownkey keyword found" << endl;
                 abort();
@@ -536,7 +537,26 @@ pair<vector<Node *>, vector<int>> keywordNodesAndIds(const DecoderComponents &de
         }
     }
 
-    return {non_null_nodes, chnanged_keyword_ids};
+    vector<int> processed_keyword_ids;
+    int j = 0;
+    for (int id : changed_keyword_ids) {
+        if (non_null_nodes.at(j)->getDim() != model_params.lookup_table.nVSize -
+                keyword_id_offset + 1) {
+            cerr << "dim:" << non_null_nodes.at(j)->getDim() << endl;
+            abort();
+        }
+        int processed = (id == 0 ? model_params.lookup_table.nVSize  : id) -
+            keyword_id_offset;
+        if (processed > model_params.lookup_table.nVSize || processed < 0) {
+            cerr << "processed:" << processed << endl;
+            abort();
+        }
+
+        processed_keyword_ids.push_back(processed);
+        ++j;
+    }
+
+    return {non_null_nodes, processed_keyword_ids};
 }
 
 
@@ -586,26 +606,22 @@ float metricTestPosts(const HyperParams &hyper_params, ModelParams &model_params
                 vector<Node*> nodes = toNodePointers(decoder_components.wordvector_to_onehots);
                 vector<int> word_ids = transferVector<int, string>(
                         response_sentences.at(response_id), [&](const string &w) -> int {
-                        return model_params.lookup_table.getElemId(w);
+                        int raw_id = model_params.lookup_table.getElemId(w);
+                        if (raw_id >= keyword_id_offset || raw_id == 0) {
+                        raw_id = keyword_id_offset - 1;
+                        } else {
+                        --raw_id;
+                        }
+                        return raw_id;
                         });
                 auto keyword_nodes_and_ids = keywordNodesAndIds(decoder_components, idf_info,
-                        model_params);
+                        model_params, keyword_id_offset);
                 for (int i = 0; i < keyword_nodes_and_ids.first.size(); ++i) {
                     nodes.push_back(keyword_nodes_and_ids.first.at(i));
                     word_ids.push_back(keyword_nodes_and_ids.second.at(i));
                 }
-                vector<int> filtered_word_ids;
-                vector<Node*> filtered_nodes;
-                for (int i = 0; i < word_ids.size(); ++i) {
-                    int word_id = word_ids.at(i);
-                    if (word_id == model_params.lookup_table.nUNKId) {
-                        continue;
-                    }
-                    filtered_word_ids.push_back(word_id);
-                    filtered_nodes.push_back(nodes.at(i));
-                }
 
-                float perplex = computePerplex(filtered_nodes, filtered_word_ids);
+                float perplex = computePerplex(nodes, word_ids);
                 avg_perplex += perplex;
             }
             avg_perplex /= response_ids.size();
@@ -871,14 +887,12 @@ int main(int argc, char *argv[]) {
     int i = 0;
     for (const PostAndResponses &post_and_responses : post_and_responses_vector) {
         auto add_to_train = [&]() {
-            if (default_config.program_mode == ProgramMode::TRAINING) {
                 train_post_and_responses.push_back(post_and_responses);
                 vector<ConversationPair> conversation_pairs =
                     toConversationPairs(post_and_responses);
                 for (ConversationPair &conversation_pair : conversation_pairs) {
                     train_conversation_pairs.push_back(move(conversation_pair));
                 }
-            }
         };
         if (i < default_config.dev_size) {
             dev_post_and_responses.push_back(post_and_responses);
@@ -891,9 +905,7 @@ int main(int argc, char *argv[]) {
                 add_to_train();
             }
         } else {
-            if (default_config.program_mode == ProgramMode::TRAINING) {
                 add_to_train();
-            }
         }
         ++i;
     }
@@ -1256,39 +1268,21 @@ int main(int argc, char *argv[]) {
                             hyper_params.batch_size, is_unkown, keyword_id_offset);
                     profiler.EndCudaEvent();
                     loss_sum += result.first;
-                    vector<int> filtered_ids;
-                    for (int id : word_ids) {
-                        if (!is_unkown(id)) {
-                            filtered_ids.push_back(id);
-                        }
-                    }
-                    analyze(result.second, filtered_ids, *metric);
+//                    vector<int> filtered_ids;
+//                    for (int id : word_ids) {
+//                        if (!is_unkown(id)) {
+//                            filtered_ids.push_back(id);
+//                        }
+//                    }
+                    analyze(result.second, word_ids, *metric);
                     auto keyword_nodes_and_ids = keywordNodesAndIds(
-                            decoder_components_vector.at(i), response_idf, model_params);
-                    vector<int> raw_keyword_ids = keyword_nodes_and_ids.second;
+                            decoder_components_vector.at(i), response_idf, model_params,
+                            keyword_id_offset);
                     vector<Node *> keyword_nodes = keyword_nodes_and_ids.first;
-                    vector<int> processed_keyword_ids;
-                    int j = 0;
-                    for (int id : raw_keyword_ids) {
-                        if (keyword_nodes.at(j)->getDim() != model_params.lookup_table.nVSize -
-                                keyword_id_offset + 1) {
-                            cerr << "dim:" << keyword_nodes.at(j)->getDim() << endl;
-                            abort();
-                        }
-                        int processed = (id == 0 ? model_params.lookup_table.nVSize  : id) -
-                            keyword_id_offset;
-                        if (processed > model_params.lookup_table.nVSize || processed < 0) {
-                            cerr << "processed:" << processed << endl;
-                            abort();
-                        }
-
-                        processed_keyword_ids.push_back(processed);
-                        ++j;
-                    }
 
                     profiler.BeginEvent("loss");
                     auto keyword_result = MaxLogProbabilityLossWithInconsistentDims(
-                            keyword_nodes_and_ids.first, processed_keyword_ids,
+                            keyword_nodes_and_ids.first, keyword_nodes_and_ids.second,
                             hyper_params.batch_size, is_unkown,
                             model_params.lookup_table.nVSize - keyword_id_offset + 1);
                     profiler.EndCudaEvent();
@@ -1298,7 +1292,7 @@ int main(int argc, char *argv[]) {
                         abort();
                     }
                     loss_sum += keyword_result.first;
-                    analyze(keyword_result.second, processed_keyword_ids, *keyword_metric);
+                    analyze(keyword_result.second, keyword_nodes_and_ids.second, *keyword_metric);
 
                     static int count_for_print;
                     if (++count_for_print % 100 == 1) {
@@ -1313,7 +1307,7 @@ int main(int argc, char *argv[]) {
                                 keyword_id_offset);
 
                         cout << "golden keywords:" << endl;
-                        printKeywordIds(processed_keyword_ids, model_params.lookup_table,
+                        printKeywordIds(keyword_nodes_and_ids.second, model_params.lookup_table,
                                 keyword_id_offset);
                         cout << "output:" << endl;
                         printKeywordIds(keyword_result.second, model_params.lookup_table,
@@ -1355,7 +1349,7 @@ int main(int argc, char *argv[]) {
                         vector<Node*> result_nodes = toNodePointers(
                                 decoder_components.wordvector_to_onehots);
                         auto keyword_nodes_and_ids = keywordNodesAndIds(
-                                decoder_components, response_idf, model_params);
+                                decoder_components, response_idf, model_params, keyword_id_offset);
                         auto is_unkown = [&](int id) {
                             return model_params.lookup_table.elems.from_string(unknownkey) == id;
                         };
