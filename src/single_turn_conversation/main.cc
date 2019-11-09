@@ -767,32 +767,29 @@ int calculateIdfThreshholdOffset(const unordered_map<string, float> &idf_table,
     return it - word_list.begin();
 }
 
-vector<string> getAllWordsByIdfAscendingly(const unordered_map<string, float> &idf_table,
+unordered_map<string, float> getKeywords(const unordered_map<string, float> &idf_table,
         const unordered_map<string, int> &word_count_table,
-        int word_cutoff) {
-    vector<string> result;
+        float threshhold) {
+    unordered_map<string, float> map_result;
     for (auto &it : word_count_table) {
-        if (it.second > word_cutoff && it.first != unknownkey) {
-            result.push_back(it.first);
+        if (idf_table.at(it.first) >= threshhold) {
+            map_result.insert(it);
         }
     }
-
-    auto cmp = [&idf_table](const string &a, const string &b) -> bool {
-        return idf_table.at(a) < idf_table.at(b);
-    };
-
-    sort(result.begin(), result.end(), cmp);
-    result.push_back(unknownkey);
-
-    const string &first = result.front();
-    if (first != STOP_SYMBOL) {
-        cerr << "first:" << first << endl;
-        abort();
-    }
-
-    return result;
+    return map_result;
 }
 
+unordered_map<string, float> getNormalWords(const unordered_map<string, float> &idf_table,
+        const unordered_map<string, int> &word_count_table,
+        float threshhold) {
+    unordered_map<string, float> map_result;
+    for (auto &it : word_count_table) {
+        if (idf_table.at(it.first) < threshhold) {
+            map_result.insert(it);
+        }
+    }
+    return map_result;
+}
 
 std::pair<dtype, std::vector<int>> MaxLogProbabilityLossWithInconsistentDims(
         const std::vector<Node*> &result_nodes,
@@ -926,7 +923,7 @@ int main(int argc, char *argv[]) {
         print(post_sentences.at(i.post_id));
     }
 
-    Alphabet alphabet;
+    Alphabet keyword_alphabet, normal_alphabet;
     shared_ptr<Json::Value> root_ptr;
     unordered_map<string, int> word_counts;
     auto wordStat = [&]() {
@@ -965,8 +962,6 @@ int main(int argc, char *argv[]) {
     };
     wordStat();
 
-    word_counts[unknownkey] = 1000000000;
-
     vector<vector<string>> all_sentences;
     cout << "merging sentences..." << endl;
     for (auto &s : post_sentences) {
@@ -979,13 +974,7 @@ int main(int argc, char *argv[]) {
     cout << "calculating idf" << endl;
     auto all_idf = calculateIdf(all_sentences);
     cout << "idf calculated" << endl;
-    vector<string> all_word_list = getAllWordsByIdfAscendingly(all_idf, word_counts,
-                        hyper_params.word_cutoff);
-    cout << "all_word_list size:" << all_word_list.size() << endl;
-    int keyword_id_offset = calculateIdfThreshholdOffset(all_idf, all_word_list,
-            hyper_params.idf_threshhold);
-    cout << boost::format("idf:%1% offset:%2%") % hyper_params.idf_threshhold %
-        keyword_id_offset << endl;
+    cout << boost::format("idf:%1%") % hyper_params.idf_threshhold << endl;
 
     int sum = 0;
     int ii = 0;
@@ -1004,14 +993,6 @@ int main(int argc, char *argv[]) {
     cout << boost::format("%1% sentences contain words of idf %2%") %
         ((float)sum / response_sentences.size()) % hyper_params.idf_threshhold << endl;
 
-//    for (int i = 0; i < all_word_list.size(); ++i) {
-//        cout << all_word_list.at(i) << ":" ;
-//        if (all_word_list.at(i) != unknownkey) {
-//            cout << all_idf.at(all_word_list.at(i)) << " ";
-//        }
-//        cout << word_counts.at(all_word_list.at(i)) << endl;
-//    }
-    alphabet.init(all_word_list);
     cout << boost::format("alphabet size:%1%") % alphabet.size() << endl;
 
     ModelParams model_params;
