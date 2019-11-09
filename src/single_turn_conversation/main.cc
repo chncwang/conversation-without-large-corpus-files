@@ -1171,9 +1171,9 @@ int main(int argc, char *argv[]) {
                         printWordIds(result.second, model_params.lookup_table);
 
                         cout << "golden keywords:" << endl;
-                        printWordIds(keyword_nodes_and_ids.second, model_params.lookup_table);
+                        printWordIds(keyword_nodes_and_ids.second, model_params.keyword_table);
                         cout << "output:" << endl;
-                        printWordIds(keyword_result.second, model_params.lookup_table);
+                        printWordIds(keyword_result.second, model_params.keyword_table);
                     }
                 }
 

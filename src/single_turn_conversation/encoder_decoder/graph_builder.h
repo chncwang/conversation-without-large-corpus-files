@@ -575,7 +575,7 @@ struct GraphBuilder {
             ModelParams &model_params,
             bool is_training) {
         for (int i = 0; i < answer.size(); ++i) {
-            int last_keyword_id = model_params.lookup_table.elems.from_string(keywords.at(i));
+            int last_keyword_id = model_params.keyword_table.elems.from_string(keywords.at(i));
             forwardDecoderByOneStep(graph, decoder_components, i,
                     i == 0 ? nullptr : &answer.at(i - 1), keywords.at(i),
                     i == 0 ||  answer.at(i - 1) == keywords.at(i - 1), hyper_params,
