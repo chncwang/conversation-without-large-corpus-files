@@ -55,20 +55,17 @@ public:
 
     dtype finalScore() const {
         set<int> unique_words;
-        set<int> unique_keywords;
+        set<int> all_unique_words;
         int i = 0;
         for (const auto &p : path_) {
-//            if (i % 2 == 1) {
+            if (i % 2 == 1) {
                 unique_words.insert(p.word_id);
-//            } else {
-//                unique_keywords.insert(p.word_id);
-//            }
+            }
+            all_unique_words.insert(p.word_id);
             ++i;
         }
-        float base = final_log_probability / sqrt(unique_words.size());
-//        if (path_.size() > 10) {
-//            base -= (path_.size() - 10) * 0.1f;
-//        }
+        float base = path_.size() % 2 == 0 ? final_log_probability / unique_words.size()
+            : final_log_probability / all_unique_words.size();
         return base;
     }
 
@@ -203,6 +200,7 @@ vector<BeamSearchResult> mostProbableResults(
         int k,
         const ModelParams &model_params,
         const DefaultConfig &default_config,
+        bool is_first,
         const vector<string> &black_list,
         const unordered_map<string, float> &idf_table) {
     vector<Node *> nodes;
@@ -229,7 +227,7 @@ vector<BeamSearchResult> mostProbableResults(
     };
     priority_queue<BeamSearchResult, vector<BeamSearchResult>, decltype(cmp)> queue(cmp);
     vector<BeamSearchResult> results;
-    for (int i = 0; i < nodes.size(); ++i) {
+    for (int i = 0; i < (is_first ? 1 : nodes.size()); ++i) {
         const Node &node = *nodes.at(i);
         auto tuple = toExp(node);
 
@@ -354,8 +352,16 @@ vector<BeamSearchResult> mostProbableKeywords(
                     *context_concated);
             keyword_node = keyword;
 
+            int last_keyword_id;
+            if (last_results.empty()) {
+                last_keyword_id = model_params.lookup_table.nVSize - 1;
+            } else {
+                vector<WordIdAndProbability> path = last_results.at(ii).getPath();
+                last_keyword_id = path.at(path.size() - 2).word_id;
+            }
+
             LinearWordVectorNode *keyword_vector_to_onehot = new LinearWordVectorNode;
-            keyword_vector_to_onehot->init(model_params.lookup_table.nVSize);
+            keyword_vector_to_onehot->init(last_keyword_id + 1);
             keyword_vector_to_onehot->setParam(model_params.lookup_table.E);
             keyword_vector_to_onehot->forward(graph, *keyword);
 
@@ -399,8 +405,7 @@ vector<BeamSearchResult> mostProbableKeywords(
             auto tuple = toExp(node);
 
             BeamSearchResult beam_search_result;
-            priority_queue<BeamSearchResult, vector<BeamSearchResult>, decltype(cmp)>
-                local_queue(cmp);
+            float max_score = -1e10;
             for (int j = 0; j < nodes.at(i)->getDim(); ++j) {
                 bool should_continue = false;
                 if (is_first) {
@@ -445,52 +450,24 @@ vector<BeamSearchResult> mostProbableKeywords(
                 }
                 word_ids.push_back(WordIdAndProbability(j, word_probability));
 
-                beam_search_result = BeamSearchResult(beam.at(i), word_ids, log_probability);
-                if (local_queue.size() < k) {
-                    local_queue.push(beam_search_result);
-                } else if (local_queue.top().finalScore() < beam_search_result.finalScore()) {
-                    local_queue.pop();
-                    local_queue.push(beam_search_result);
-                }
-            }
-
-            vector<BeamSearchResult> local_results;
-            float current_score = -1e10;
-            while (!local_queue.empty()) {
-                auto &e = local_queue.top();
-                current_score = e.finalScore();
-                local_results.push_back(e);
-                local_queue.pop();
-            }
-
-            for (int i = local_results.size(); i > 0; --i) {
-                auto &e = local_results.at(i - 1);
+                BeamSearchResult local = BeamSearchResult(beam.at(i), word_ids, log_probability);
                 if (is_first) {
-                    if (queue.size() < k) {
-                        queue.push(e);
-                    } else if (queue.top().finalScore() < e.finalScore()) {
-                        queue.pop();
-                        queue.push(e);
-                    }
-                } else if (i < local_results.size()) {
-                    int word_id = e.getPath().back().word_id;
-                    float idf =
-                        word_idf_table.at(model_params.lookup_table.elems.from_id(word_id));
-                    if (idf >= default_config.keyword_fork_bound) {
-                        if (queue.size() < k) {
-                            queue.push(e);
-                        } else if (queue.top().finalScore() < e.finalScore()) {
-                            queue.pop();
-                            queue.push(e);
-                        }
+                    if (local.finalScore() > max_score) {
+                        beam_search_result = local;
+                        max_score = local.finalScore();
                     }
                 } else {
                     if (queue.size() < k) {
-                        queue.push(e);
-                    } else if (queue.top().finalScore() < e.finalScore()) {
+                        queue.push(local);
+                    } else if (queue.top().finalScore() < local.finalScore()) {
                         queue.pop();
-                        queue.push(e);
+                        queue.push(local);
                     }
+                }
+            }
+            if (is_first) {
+                while (queue.size() < k) {
+                    queue.push(beam_search_result);
                 }
             }
         }
@@ -760,8 +737,9 @@ struct GraphBuilder {
                 hyper_params, model_params, encoder_hiddens, i, false);
         Node *result_node = result.result;
 
+        int keyword_id = model_params.lookup_table.elems.from_string(keyword);
         LinearWordVectorNode *one_hot_node = new LinearWordVectorNode;
-        one_hot_node->init(model_params.lookup_table.nVSize);
+        one_hot_node->init(keyword_id + 1);
         one_hot_node->setParam(model_params.lookup_table.E);
         one_hot_node->forward(graph, *result_node);
         Node *softmax = n3ldg_plus::softmax(graph, *one_hot_node);
@@ -853,7 +831,7 @@ struct GraphBuilder {
 
                 last_answers.clear();
                 most_probable_results = mostProbableResults(beam, most_probable_results, i,
-                        left_k, model_params, default_config, black_list, word_idf_table);
+                        left_k, model_params, default_config, i == 0, black_list, word_idf_table);
                 cout << boost::format("most_probable_results size:%1%") %
                     most_probable_results.size() << endl;
                 beam.clear();
