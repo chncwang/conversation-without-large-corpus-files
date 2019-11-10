@@ -1083,7 +1083,7 @@ int main(int argc, char *argv[]) {
             unique_ptr<Metric> keyword_metric = unique_ptr<Metric>(new Metric);
             n3ldg_cuda::Profiler::Reset();
             n3ldg_cuda::Profiler &profiler = n3ldg_cuda::Profiler::Ins();
-            profiler.SetEnabled(true);
+            profiler.SetEnabled(false);
             profiler.BeginEvent("total");
 
             for (int batch_i = 0; batch_i < batch_count; ++batch_i) {
