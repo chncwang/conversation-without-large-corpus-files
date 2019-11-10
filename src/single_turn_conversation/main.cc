@@ -448,8 +448,8 @@ pair<vector<Node *>, vector<int>> keywordNodesAndIds(const DecoderComponents &de
         if (keyword_result_nodes.at(j) != nullptr) {
             non_null_nodes.push_back(keyword_result_nodes.at(j));
             changed_keyword_ids.push_back(keyword_ids.at(j));
-            if (keyword_ids.at(j) == model_params.lookup_table.elems.from_string(::unknownkey)) {
-                cerr << "unkownkey keyword found" << endl;
+            if (keyword_ids.at(j) == model_params.keyword_table.elems.from_string(::unknownkey)) {
+                cerr << "unkownkey keyword found:" << endl;
                 abort();
             }
         }
