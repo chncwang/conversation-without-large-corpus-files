@@ -54,19 +54,25 @@ public:
             }
 
     dtype finalScore() const {
-        set<int> unique_words;
-        set<int> all_unique_words;
-        int i = 0;
-        for (const auto &p : path_) {
-            if (i % 2 == 1) {
-                unique_words.insert(p.word_id);
+        if (path_.size() % 2 == 0) {
+            for (int n = 2; n < 10; ++n) {
+                if (path_.size() >= n * 4) {
+                    for (int i = path_.size() - n * 4 + 1; i>=0;--i) {
+                        bool ngram_hit = true;
+                        for (int j = 0; j < n; ++j) {
+                            if (path_.at(i + 2 * j).word_id != path_.at(path_.size() - n * 2 + j * 2).word_id) {
+                                ngram_hit = false;
+                                break;
+                            }
+                        }
+                        if (ngram_hit) {
+                            return -1e10;
+                        }
+                    }
+                }
             }
-            all_unique_words.insert(p.word_id);
-            ++i;
         }
-        float base = path_.size() % 2 == 0 ? final_log_probability / unique_words.size()
-            : final_log_probability / all_unique_words.size();
-        return base;
+        return final_log_probability / path_.size();
     }
 
     dtype finalLogProbability() const {
@@ -227,7 +233,8 @@ vector<BeamSearchResult> mostProbableResults(
     };
     priority_queue<BeamSearchResult, vector<BeamSearchResult>, decltype(cmp)> queue(cmp);
     vector<BeamSearchResult> results;
-    for (int i = 0; i < (is_first ? 1 : nodes.size()); ++i) {
+//    for (int i = 0; i < (is_first ? 1 : nodes.size()); ++i) {
+    for (int i = 0; i < nodes.size(); ++i) {
         const Node &node = *nodes.at(i);
         auto tuple = toExp(node);
 
@@ -385,6 +392,7 @@ vector<BeamSearchResult> mostProbableKeywords(
     priority_queue<BeamSearchResult, vector<BeamSearchResult>, decltype(cmp)> queue(cmp);
     vector<BeamSearchResult> results;
     for (int i = 0; i < (is_first ? 1 : nodes.size()); ++i) {
+//    for (int i = 0; i < nodes.size(); ++i) {
         const Node *node_ptr = nodes.at(i);
         if (node_ptr == nullptr) {
             vector<WordIdAndProbability> new_id_and_probs = last_results.at(i).getPath();
@@ -405,8 +413,13 @@ vector<BeamSearchResult> mostProbableKeywords(
             auto tuple = toExp(node);
 
             BeamSearchResult beam_search_result;
-            float max_score = -1e10;
             for (int j = 0; j < nodes.at(i)->getDim(); ++j) {
+                if (!is_first) {
+                    auto path = last_results.at(i).getPath();
+                    if (path.at(path.size() - 2).word_id == j) {
+                        continue;
+                    }
+                }
                 bool should_continue = false;
                 if (is_first) {
                     if (searched_ids.find(j) != searched_ids.end()) {
@@ -451,25 +464,25 @@ vector<BeamSearchResult> mostProbableKeywords(
                 word_ids.push_back(WordIdAndProbability(j, word_probability));
 
                 BeamSearchResult local = BeamSearchResult(beam.at(i), word_ids, log_probability);
-                if (is_first) {
-                    if (local.finalScore() > max_score) {
-                        beam_search_result = local;
-                        max_score = local.finalScore();
-                    }
-                } else {
-                    if (queue.size() < k) {
-                        queue.push(local);
-                    } else if (queue.top().finalScore() < local.finalScore()) {
-                        queue.pop();
-                        queue.push(local);
-                    }
+//                if (is_first) {
+//                    if (local.finalScore() > max_score) {
+//                        beam_search_result = local;
+//                        max_score = local.finalScore();
+//                    }
+//                } else {
+                if (queue.size() < k) {
+                    queue.push(local);
+                } else if (queue.top().finalScore() < local.finalScore()) {
+                    queue.pop();
+                    queue.push(local);
                 }
+//                }
             }
-            if (is_first) {
-                while (queue.size() < k) {
-                    queue.push(beam_search_result);
-                }
-            }
+//            if (is_first) {
+//                while (queue.size() < k) {
+//                    queue.push(beam_search_result);
+//                }
+//            }
         }
     }
 
