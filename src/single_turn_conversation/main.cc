@@ -349,6 +349,7 @@ float metricTestPosts(const HyperParams &hyper_params, ModelParams &model_params
 
             const vector<int> &response_ids = post_and_responses.response_ids;
             float sum = 0.0f;
+            int word_sum = 0;
             cout << "response size:" << response_ids.size() << endl;
             for (int response_id : response_ids) {
                 //            cout << "response:" << endl;
@@ -368,18 +369,20 @@ float metricTestPosts(const HyperParams &hyper_params, ModelParams &model_params
                         });
                 float perplex = computePerplex(nodes, word_ids);
                 sum += perplex;
+                word_sum += word_ids.size();
             }
             cout << "avg_perplex:" << sum << endl;
             rep_perplex_mutex.lock();
             rep_perplex += sum;
-            size_sum += response_ids.size();
+            size_sum += word_sum;
             rep_perplex_mutex.unlock();
         };
         post(pool, f);
     }
     pool.join();
 
-    cout << "total avg perplex:" << exp(rep_perplex / size_sum) << endl;
+    rep_perplex = exp(rep_perplex / size_sum);
+    cout << "total avg perplex:" << rep_perplex << endl;
     return rep_perplex;
 }
 
