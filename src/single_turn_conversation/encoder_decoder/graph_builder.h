@@ -21,6 +21,7 @@
 #include "single_turn_conversation/encoder_decoder/decoder_components.h"
 
 using namespace std;
+using namespace n3ldg_plus;
 
 struct WordIdAndProbability {
     int word_id;
@@ -524,19 +525,9 @@ vector<BeamSearchResult> mostProbableKeywords(
 struct GraphBuilder {
     DynamicLSTMBuilder left_to_right_encoder;
 
-    void forward(Graph &graph, const vector<string> &sentence, const vector<string> &keywords,
-            const HyperParams &hyper_params,
+    void forward(Graph &graph, const vector<string> &sentence, const HyperParams &hyper_params,
             ModelParams &model_params,
             bool is_training) {
-        if (sentence.size() != keywords.size()) {
-            cerr << "sentence:" << endl;
-            cerr << toSentenceStringWithSpace(sentence) << endl;
-            cerr << toSentenceStringWithSpace(keywords) << endl;
-            cerr << boost::format("sentence size:%1% keyword size:%2%") % sentence.size() %
-                keywords.size() << endl;
-            abort();
-        }
-
         BucketNode *hidden_bucket = new BucketNode;
         hidden_bucket->init(hyper_params.hidden_dim);
         hidden_bucket->forward(graph);
@@ -555,17 +546,12 @@ struct GraphBuilder {
             dropout_node->forward(graph, *input_lookup);
 
             BucketNode *bucket = new BucketNode();
-            bucket->init(hyper_params.hidden_dim);
+            bucket->init(hyper_params.hidden_dim + hyper_params.word_dim);
             bucket->forward(graph);
-
-            LookupNode<Param> *keyword_lookup = new LookupNode<Param>;
-            keyword_lookup->init(hyper_params.word_dim);
-            keyword_lookup->setParam(model_params.lookup_table);
-            keyword_lookup->forward(graph, keywords.at(i));
 
             ConcatNode *concat = new ConcatNode;
             concat->init(dropout_node->getDim() * 2 + bucket->getDim());
-            concat->forward(graph, {dropout_node, keyword_lookup, bucket});
+            concat->forward(graph, {dropout_node, bucket});
 
             left_to_right_encoder.forward(graph, model_params.left_to_right_encoder_params,
                     *concat, *hidden_bucket, *hidden_bucket, hyper_params.dropout, is_training);

@@ -466,7 +466,6 @@ float metricTestPosts(const HyperParams &hyper_params, ModelParams &model_params
                 Graph graph;
                 GraphBuilder graph_builder;
                 graph_builder.forward(graph, post_sentences.at(post_and_responses.post_id),
-                        post_idf_info.keywords_behind,
                         hyper_params, model_params, false);
                 DecoderComponents decoder_components;
                 graph_builder.forwardDecoder(graph, decoder_components,
@@ -535,11 +534,10 @@ void decodeTestPosts(const HyperParams &hyper_params, ModelParams &model_params,
         cout << "post:" << endl;
         auto post_sentence = post_sentences.at(post_and_responses.post_id);
         print(post_sentence);
-        const auto &idf = post_idf_info_list.at(post_and_responses.post_id);
         Graph graph;
         GraphBuilder graph_builder;
         graph_builder.forward(graph, post_sentences.at(post_and_responses.post_id),
-                idf.keywords_behind, hyper_params, model_params, false);
+                hyper_params, model_params, false);
         vector<DecoderComponents> decoder_components_vector;
         decoder_components_vector.resize(hyper_params.beam_size);
         auto pair = graph_builder.forwardDecoderUsingBeamSearch(graph, decoder_components_vector,
@@ -1039,9 +1037,7 @@ int main(int argc, char *argv[]) {
                     conversation_pair_in_batch.push_back(train_conversation_pairs.at(
                                 instance_index));
                     auto post_sentence = post_sentences.at(post_id);
-                    const WordIdfInfo& post_idf = post_idf_info_list.at(post_id);
-                    graph_builder->forward(graph, post_sentence, post_idf.keywords_behind,
-                            hyper_params, model_params, true);
+                    graph_builder->forward(graph, post_sentence, hyper_params, model_params, true);
                     int response_id = train_conversation_pairs.at(instance_index).response_id;
                     auto response_sentence = response_sentences.at(response_id);
                     const WordIdfInfo &idf_info = response_idf_info_list.at(response_id);
@@ -1118,7 +1114,6 @@ int main(int argc, char *argv[]) {
                         Graph graph;
 
                         graph_builder.forward(graph, post_sentences.at(conversation_pair.post_id),
-                                post_idf_info_list.at(conversation_pair.post_id).keywords_behind,
                                 hyper_params, model_params, true);
 
                         DecoderComponents decoder_components;
