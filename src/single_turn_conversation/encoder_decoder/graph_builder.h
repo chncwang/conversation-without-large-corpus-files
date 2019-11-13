@@ -549,9 +549,7 @@ struct GraphBuilder {
             bucket->init(hyper_params.hidden_dim + hyper_params.word_dim);
             bucket->forward(graph);
 
-            ConcatNode *concat = new ConcatNode;
-            concat->init(dropout_node->getDim() * 2 + bucket->getDim());
-            concat->forward(graph, {dropout_node, bucket});
+            Node *concat = n3ldg_plus::concat(graph, {dropout_node, bucket});
 
             left_to_right_encoder.forward(graph, model_params.left_to_right_encoder_params,
                     *concat, *hidden_bucket, *hidden_bucket, hyper_params.dropout, is_training);
