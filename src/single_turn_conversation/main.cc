@@ -480,6 +480,7 @@ float metricTestPosts(const HyperParams &hyper_params, ModelParams &model_params
                         });
                 auto keyword_nodes_and_ids = keywordNodesAndIds(decoder_components, idf_info,
                         model_params);
+                int sentence_len = nodes.size();
                 for (int i = 0; i < keyword_nodes_and_ids.first.size(); ++i) {
                     nodes.push_back(keyword_nodes_and_ids.first.at(i));
                     word_ids.push_back(keyword_nodes_and_ids.second.at(i));
@@ -495,7 +496,7 @@ float metricTestPosts(const HyperParams &hyper_params, ModelParams &model_params
                     filtered_nodes.push_back(nodes.at(i));
                 }
 
-                float perplex = computePerplex(filtered_nodes, filtered_word_ids);
+                float perplex = computePerplex(filtered_nodes, filtered_word_ids, sentence_len);
                 avg_perplex += perplex;
             }
             avg_perplex /= response_ids.size();
