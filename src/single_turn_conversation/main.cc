@@ -371,7 +371,7 @@ float metricTestPosts(const HyperParams &hyper_params, ModelParams &model_params
                 sum += perplex;
                 word_sum += word_ids.size();
             }
-            cout << "avg_perplex:" << sum << endl;
+            cout << "avg_perplex:" << exp(sum/word_sum) << endl;
             rep_perplex_mutex.lock();
             rep_perplex += sum;
             size_sum += word_sum;
