@@ -480,6 +480,7 @@ float metricTestPosts(const HyperParams &hyper_params, ModelParams &model_params
                         response_sentences.at(response_id), [&](const string &w) -> int {
                         return model_params.lookup_table.getElemId(w);
                         });
+                int word_ids_size = word_ids.size();
                 auto keyword_nodes_and_ids = keywordNodesAndIds(decoder_components, idf_info,
                         model_params);
                 int sentence_len = nodes.size();
@@ -500,10 +501,10 @@ float metricTestPosts(const HyperParams &hyper_params, ModelParams &model_params
 
                 float perplex = computePerplex(filtered_nodes, filtered_word_ids, sentence_len);
                 avg_perplex += perplex;
-                sum += word_ids.size();
+                sum += word_ids_size;
             }
             cout << "size:" << response_ids.size() << endl;
-            cout << "avg_perplex:" << avg_perplex << endl;
+            cout << "avg_perplex:" << exp(avg_perplex/sum) << endl;
             rep_perplex_mutex.lock();
             rep_perplex += avg_perplex;
             size_sum += sum;
