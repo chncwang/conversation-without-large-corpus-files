@@ -679,6 +679,13 @@ std::pair<dtype, std::vector<int>> MaxLogProbabilityLossWithInconsistentDims(
     return final_result;
 }
 
+//int main() {
+//    vector<int> v = {1, 2, 3,4};
+//    Eigen::Map<Matrix<int, Dynamic, Dynamic, ColMajor> > matrix(v.data(), 2, 2);
+//    cout << matrix << endl;
+//    cout << matrix(0, 1) << endl;
+//}
+
 int main(int argc, char *argv[]) {
     cout << "dtype size:" << sizeof(dtype) << endl;
 
@@ -852,6 +859,12 @@ int main(int argc, char *argv[]) {
                 2 * hyper_params.hidden_dim + 3 * hyper_params.word_dim, false);
         model_params.hidden_to_keyword_params.init(hyper_params.word_dim,
                 2 * hyper_params.hidden_dim, false);
+        int vsize = model_params.lookup_table.nVSize;
+        function<float(int, int)> bound = [](int out, int in) -> float {
+            return sqrt(2.0 / in);
+        };
+        model_params.triangle_params.init(vsize, vsize, true, &bound);
+        model_params.triangle_params2.init(vsize, vsize, true);
     };
 
     if (default_config.program_mode != ProgramMode::METRIC) {
@@ -1022,7 +1035,7 @@ int main(int argc, char *argv[]) {
                             hyper_params.learning_rate << endl;
                     }
                 }
-                Graph graph;
+                Graph graph(false);
                 vector<shared_ptr<GraphBuilder>> graph_builders;
                 vector<DecoderComponents> decoder_components_vector;
                 vector<ConversationPair> conversation_pair_in_batch;

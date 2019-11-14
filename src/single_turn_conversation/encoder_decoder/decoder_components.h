@@ -18,6 +18,7 @@ struct DecoderComponents {
     std::vector<Node *> decoder_to_wordvectors;
     std::vector<Node *> decoder_to_keyword_vectors;
     std::vector<Node *> wordvector_to_onehots;
+    std::vector<Node *> all_word_probabilities;
     std::vector<Node *> keyword_vector_to_onehots;
     DynamicLSTMBuilder decoder;
     vector<Node*> contexts;

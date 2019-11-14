@@ -19,6 +19,7 @@
 #include "single_turn_conversation/def.h"
 #include "single_turn_conversation/default_config.h"
 #include "single_turn_conversation/encoder_decoder/decoder_components.h"
+#include "single_turn_conversation/components/upper_triangular_matrix.h"
 
 using namespace std;
 using namespace n3ldg_plus;
@@ -54,7 +55,7 @@ public:
                 ngram_counts_ = {0, 0, 0};
             }
 
-    dtype finalScore() const {
+    dtype finalScore(const unordered_map<string ,float> &word_idf_table, const ModelParams &model_params) const {
         if (path_.size() % 2 == 0) {
             for (int n = 2; n < 10; ++n) {
                 if (path_.size() >= n * 4) {
@@ -73,7 +74,12 @@ public:
                 }
             }
         }
-        return final_log_probability / path_.size();
+        float sum = 0;
+        for (int i = 0; i < path_.size(); i += 2) {
+            string w= model_params.lookup_table.elems.from_id(path_.at(i).word_id);
+            sum += 0.5 * word_idf_table.at(w);
+        }
+        return final_log_probability + sum;
     }
 
     dtype finalLogProbability() const {
@@ -229,8 +235,8 @@ vector<BeamSearchResult> mostProbableResults(
         abort();
     }
 
-    auto cmp = [](const BeamSearchResult &a, const BeamSearchResult &b) {
-        return a.finalScore() > b.finalScore();
+    auto cmp = [&](const BeamSearchResult &a, const BeamSearchResult &b) {
+        return a.finalScore(idf_table, model_params) > b.finalScore(idf_table, model_params);
     };
     priority_queue<BeamSearchResult, vector<BeamSearchResult>, decltype(cmp)> queue(cmp);
     vector<BeamSearchResult> results;
@@ -263,7 +269,8 @@ vector<BeamSearchResult> mostProbableResults(
             beam_search_result =  BeamSearchResult(beam.at(i), word_ids, log_probability);
             if (queue.size() < k) {
                 queue.push(beam_search_result);
-            } else if (queue.top().finalScore() < beam_search_result.finalScore()) {
+            } else if (queue.top().finalScore(idf_table, model_params) <
+                    beam_search_result.finalScore(idf_table, model_params)) {
                 queue.pop();
                 queue.push(beam_search_result);
             }
@@ -306,7 +313,7 @@ vector<BeamSearchResult> mostProbableResults(
 //        }
         final_results.push_back(result);
         cout << boost::format("mostProbableResults - i:%1% prob:%2% score:%3%") % i %
-            result.finalLogProbability() % result.finalScore() << endl;
+            result.finalLogProbability() % result.finalScore(idf_table, model_params) << endl;
         printWordIdsWithKeywords(result.getPath(), model_params.lookup_table, idf_table);
         ++i;
     }
@@ -387,8 +394,8 @@ vector<BeamSearchResult> mostProbableKeywords(
     }
     graph.compute();
 
-    auto cmp = [](const BeamSearchResult &a, const BeamSearchResult &b) {
-        return a.finalScore() > b.finalScore();
+    auto cmp = [&](const BeamSearchResult &a, const BeamSearchResult &b) {
+        return a.finalScore(word_idf_table, model_params) > b.finalScore(word_idf_table, model_params);
     };
     priority_queue<BeamSearchResult, vector<BeamSearchResult>, decltype(cmp)> queue(cmp);
     vector<BeamSearchResult> results;
@@ -405,7 +412,8 @@ vector<BeamSearchResult> mostProbableKeywords(
                     last_results.at(i).finalLogProbability());
             if (queue.size() < k) {
                 queue.push(beam_search_result);
-            } else if (queue.top().finalScore() < beam_search_result.finalScore()) {
+            } else if (queue.top().finalScore(word_idf_table, model_params) <
+                    beam_search_result.finalScore(word_idf_table, model_params)) {
                 queue.pop();
                 queue.push(beam_search_result);
             }
@@ -473,7 +481,8 @@ vector<BeamSearchResult> mostProbableKeywords(
 //                } else {
                 if (queue.size() < k) {
                     queue.push(local);
-                } else if (queue.top().finalScore() < local.finalScore()) {
+                } else if (queue.top().finalScore(word_idf_table, model_params) <
+                        local.finalScore(word_idf_table, model_params)) {
                     queue.pop();
                     queue.push(local);
                 }
@@ -489,7 +498,7 @@ vector<BeamSearchResult> mostProbableKeywords(
 
     while (!queue.empty()) {
         auto &e = queue.top();
-        if (e.finalScore() != e.finalScore()) {
+        if (e.finalScore(word_idf_table, model_params) != e.finalScore(word_idf_table, model_params)) {
             printWordIdsWithKeywords(e.getPath(), model_params.lookup_table, word_idf_table);
             cerr << "final score nan" << endl;
             abort();
@@ -514,7 +523,7 @@ vector<BeamSearchResult> mostProbableKeywords(
         string sentence = ::getSentence(ids, model_params);
         final_results.push_back(result);
         cout << boost::format("mostProbableKeywords - i:%1% prob:%2% score:%3%") % i %
-            result.finalLogProbability() % result.finalScore() << endl;
+            result.finalLogProbability() % result.finalScore(word_idf_table, model_params) << endl;
         printWordIdsWithKeywords(result.getPath(), model_params.lookup_table, word_idf_table);
         ++i;
     }
@@ -652,15 +661,23 @@ struct GraphBuilder {
 
         decoder_components.decoder_to_keyword_vectors.push_back(nodes.keyword);
 
-        Node *keyword_vector_to_onehot;
+        Node *keyword_vector_to_onehot, *all_word_probabilities;
         if (nodes.keyword == nullptr) {
             keyword_vector_to_onehot = nullptr;
+            all_word_probabilities = nullptr;
         } else {
-            keyword_vector_to_onehot = n3ldg_plus::linearWordVector(graph,
+            Node *keyword_score = n3ldg_plus::linearWordVector(graph,
                     keyword_word_id_upper_open_bound, model_params.lookup_table.E, *nodes.keyword);
-            keyword_vector_to_onehot = n3ldg_plus::softmax(graph, *keyword_vector_to_onehot);
+//            all_word_probabilities = n3ldg_plus::sigmoid(graph, *keyword_score);
+            Node *tri = n3ldg_plus::triangularNode(graph, *keyword_score,
+                    keyword_word_id_upper_open_bound, model_params.triangle_params);
+            Node *relued = n3ldg_plus::relu(graph, *tri);
+            tri = n3ldg_plus::triangularNode(graph, *relued, keyword_word_id_upper_open_bound,
+                    model_params.triangle_params2);
+            keyword_vector_to_onehot = n3ldg_plus::softmax(graph, *tri);
         }
         decoder_components.keyword_vector_to_onehots.push_back(keyword_vector_to_onehot);
+        decoder_components.all_word_probabilities.push_back(all_word_probabilities);
     }
 
     void forwardDecoderResultByOneStep(Graph &graph, DecoderComponents &decoder_components, int i,
@@ -842,7 +859,7 @@ struct GraphBuilder {
                             last_word_id);
                     if (word == STOP_SYMBOL) {
                         word_ids_result.push_back(make_pair(word_ids,
-                                    beam_search_result.finalScore()));
+                                    beam_search_result.finalScore(word_idf_table, model_params)));
                         succeeded = word == STOP_SYMBOL;
                     } else {
                         stop_removed_results.push_back(beam_search_result);
