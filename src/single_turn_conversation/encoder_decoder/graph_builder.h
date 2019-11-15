@@ -234,7 +234,6 @@ vector<BeamSearchResult> mostProbableResults(
     };
     priority_queue<BeamSearchResult, vector<BeamSearchResult>, decltype(cmp)> queue(cmp);
     vector<BeamSearchResult> results;
-//    for (int i = 0; i < (is_first ? 1 : nodes.size()); ++i) {
     for (int i = 0; i < nodes.size(); ++i) {
         const Node &node = *nodes.at(i);
         auto tuple = toExp(node);
@@ -262,8 +261,6 @@ vector<BeamSearchResult> mostProbableResults(
                 abort();
             }
             word_ids.push_back(WordIdAndProbability(j, word_probability));
-//            if (log_probability > max_log_prob) {
-//                max_log_prob = log_probability;
             beam_search_result =  BeamSearchResult(beam.at(i), word_ids, log_probability);
             if (queue.size() < k) {
                 queue.push(beam_search_result);
@@ -271,18 +268,7 @@ vector<BeamSearchResult> mostProbableResults(
                 queue.pop();
                 queue.push(beam_search_result);
             }
-//            }
         }
-//        while (!local_queue.empty()) {
-//            auto &e = local_queue.top();
-//            if (queue.size() < k) {
-//                queue.push(e);
-//            } else if (queue.top().finalScore() < e.finalScore()) {
-//                queue.pop();
-//                queue.push(e);
-//            }
-//            local_queue.pop();
-//        }
     }
 
     while (!queue.empty()) {
@@ -297,17 +283,6 @@ vector<BeamSearchResult> mostProbableResults(
         vector<int> ids = transferVector<int, WordIdAndProbability>(result.getPath(),
                 [](const WordIdAndProbability &in) ->int {return in.word_id;});
         string sentence = ::getSentence(ids, model_params);
-//        bool contain_black = false;
-//        for (const string str : black_list) {
-//            utf8_string utf8_str(str), utf8_sentece(sentence);
-//            if (utf8_sentece.find(utf8_str) != string::npos) {
-//                contain_black = true;
-//                break;
-//            }
-//        }
-//        if (contain_black) {
-//            continue;
-//        }
         final_results.push_back(result);
         cout << boost::format("mostProbableResults - i:%1% prob:%2% score:%3%") % i %
             result.finalLogProbability() % result.finalScore() << endl;
@@ -344,6 +319,10 @@ vector<BeamSearchResult> mostProbableKeywords(
         }
         Node *node, *keyword_node, *hidden;
         hidden = beam.at(ii).decoder._hiddens.at(word_pos);
+
+        Node *all_word_vector = n3ldg_plus::uni(graph, model_params.hidden_to_all_word_params);
+        Node *all_word_score = n3ldg_plus::linearWordVector(graph, model_params
+
         if (should_predict_keyword) {
             DecoderComponents &components = beam.at(ii);
 
