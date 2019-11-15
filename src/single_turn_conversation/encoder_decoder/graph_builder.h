@@ -73,7 +73,7 @@ public:
                 }
             }
         }
-        return final_log_probability / path_.size();
+        return final_log_probability;
     }
 
     dtype finalLogProbability() const {
@@ -243,6 +243,10 @@ vector<BeamSearchResult> mostProbableResults(
         priority_queue<BeamSearchResult, vector<BeamSearchResult>, decltype(cmp)> local_queue(cmp);
         for (int j = 0; j < nodes.at(i)->getDim(); ++j) {
             if (j == model_params.lookup_table.getElemId(::unknownkey)) {
+                continue;
+            }
+            if (j == 0 && !last_results.empty() &&
+                    last_results.at(i).getPath().back().word_id != 0) {
                 continue;
             }
             dtype value = node.getVal().v[j] - get<1>(tuple).second;
@@ -415,12 +419,6 @@ vector<BeamSearchResult> mostProbableKeywords(
 
             BeamSearchResult beam_search_result;
             for (int j = 0; j < nodes.at(i)->getDim(); ++j) {
-                if (!is_first) {
-                    auto path = last_results.at(i).getPath();
-                    if (path.at(path.size() - 2).word_id == j) {
-                        continue;
-                    }
-                }
                 bool should_continue = false;
                 if (is_first) {
                     if (searched_ids.find(j) != searched_ids.end()) {
