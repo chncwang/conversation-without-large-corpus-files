@@ -9,14 +9,14 @@
 struct ResultAndKeywordVectors {
     Node *result;
     Node *keyword;
+    Node *keyword_idf;
 };
 
 struct DecoderComponents {
-    std::vector<LookupNode<Param> *> decoder_lookups_before_dropout;
-    std::vector<DropoutNode *> decoder_lookups;
-    std::vector<LookupNode<Param> *> decoder_keyword_lookups;
+    std::vector<Node *> decoder_lookups_before_dropout;
+    std::vector<Node *> decoder_lookups;
+    std::vector<Node *> decoder_keyword_lookups;
     std::vector<Node *> decoder_to_wordvectors;
-    std::vector<Node *> decoder_to_keyword_vectors;
     std::vector<Node *> wordvector_to_onehots;
     std::vector<Node *> keyword_vector_to_onehots;
     DynamicLSTMBuilder decoder;
@@ -41,12 +41,11 @@ struct DecoderComponents {
         attention_builder->forward(graph, model_params.attention_params, encoder_hiddens, *guide);
         contexts.push_back(attention_builder->_hidden);
 
-        ConcatNode* concat = new ConcatNode;
-        concat->init(2 * hyper_params.word_dim + hyper_params.hidden_dim);
         vector<Node *> ins = {&input, &keyword_input, attention_builder->_hidden};
-        concat->forward(graph, ins);
 
-        decoder.forward(graph, model_params.left_to_right_encoder_params, *concat,
+        Node *concated = n3ldg_plus::concat(graph, {ins});
+
+        decoder.forward(graph, model_params.left_to_right_encoder_params, *concated,
                 *bucket(hyper_params.hidden_dim, graph),
                 *bucket(hyper_params.hidden_dim, graph),
                 hyper_params.dropout, is_training);
@@ -57,43 +56,40 @@ struct DecoderComponents {
             vector<Node *> &encoder_hiddens,
             int i,
             bool return_keyword) {
-        ConcatNode *concat_node = new ConcatNode();
-        int context_dim = contexts.at(0)->getDim();
-        concat_node->init(context_dim + hyper_params.hidden_dim + 2 * hyper_params.word_dim);
         vector<Node *> concat_inputs = {
             contexts.at(i), decoder._hiddens.at(i),
-            i == 0 ? bucket(hyper_params.word_dim, graph) :
-                static_cast<Node*>(decoder_lookups.at(i - 1)),
-            i == 0 ? bucket(hyper_params.word_dim, graph) :
-                static_cast<Node*>(decoder_keyword_lookups.at(i - 1))
+            i == 0 ? bucket(hyper_params.word_dim + 1, graph) :
+                static_cast<Node*>(decoder_lookups.at(i - 1))
         };
         if (decoder_lookups.size() != i) {
             cerr << boost::format("decoder_lookups size:%1% i:%2%") % decoder_lookups.size() %
                 i << endl;
             abort();
         }
-        concat_node->forward(graph, concat_inputs);
+        Node *concat_node = n3ldg_plus::concat(graph, concat_inputs);
 
-        Node *keyword;
+        Node *keyword, *keyword_idf;
         if (return_keyword) {
             ConcatNode *context_concated = new ConcatNode;
             context_concated->init(2 * hyper_params.hidden_dim);
             context_concated->forward(graph, {decoder._hiddens.at(i), contexts.at(i)});
 
-            keyword = n3ldg_plus::uni(graph, model_params.hidden_to_keyword_params,
+            keyword = n3ldg_plus::linear(graph, model_params.hidden_to_keyword_params,
+                    *context_concated);
+            keyword_idf = n3ldg_plus::linear(graph, model_params.hidden_to_keyword_idf_params,
                     *context_concated);
         } else {
             keyword = nullptr;
+            keyword_idf = nullptr;
         }
 
-        ConcatNode *keyword_concated = new ConcatNode();
-        keyword_concated->init(concat_node->getDim() + hyper_params.word_dim);
-        keyword_concated->forward(graph, {concat_node, decoder_keyword_lookups.at(i)});
+        Node *keyword_concated = n3ldg_plus::concat(graph, {concat_node,
+                decoder_keyword_lookups.at(i)});
 
-        Node *decoder_to_wordvector = n3ldg_plus::uni(graph,
+        Node *decoder_to_wordvector = n3ldg_plus::linear(graph,
                 model_params.hidden_to_wordvector_params, *keyword_concated);
 
-        return {decoder_to_wordvector, keyword};
+        return {decoder_to_wordvector, keyword, keyword_idf};
     }
 };
 

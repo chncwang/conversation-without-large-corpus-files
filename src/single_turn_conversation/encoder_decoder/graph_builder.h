@@ -360,7 +360,7 @@ vector<BeamSearchResult> mostProbableKeywords(
             context_concated->forward(graph, {components.decoder._hiddens.at(word_pos),
                     components.contexts.at(word_pos)});
 
-            Node *keyword = n3ldg_plus::uni(graph, model_params.hidden_to_keyword_params,
+            Node *keyword = n3ldg_plus::linear(graph, model_params.hidden_to_keyword_params,
                     *context_concated);
             keyword_node = keyword;
 
@@ -377,7 +377,12 @@ vector<BeamSearchResult> mostProbableKeywords(
             keyword_vector_to_onehot->setParam(model_params.lookup_table.E);
             keyword_vector_to_onehot->forward(graph, *keyword);
 
-            Node *softmax = n3ldg_plus::softmax(graph, *keyword_vector_to_onehot);
+            Node *keyword_idf = n3ldg_plus::linear(graph, model_params.hidden_to_keyword_idf_params,
+                    *context_concated);
+            Node *idf_to_onehot = n3ldg_plus::linearWordVector(graph, 1, model_params.idf_table.E,
+                    *keyword_idf);
+            Node *onehot = n3ldg_plus::add(graph, {keyword_vector_to_onehot, idf_to_onehot});
+            Node *softmax = n3ldg_plus::softmax(graph, *onehot);
 
             components.keyword_vector_to_onehots.push_back(softmax);
             node = keyword_vector_to_onehot;
@@ -397,7 +402,6 @@ vector<BeamSearchResult> mostProbableKeywords(
     priority_queue<BeamSearchResult, vector<BeamSearchResult>, decltype(cmp)> queue(cmp);
     vector<BeamSearchResult> results;
     for (int i = 0; i < (is_first ? 1 : nodes.size()); ++i) {
-//    for (int i = 0; i < nodes.size(); ++i) {
         const Node *node_ptr = nodes.at(i);
         if (node_ptr == nullptr) {
             vector<WordIdAndProbability> new_id_and_probs = last_results.at(i).getPath();
@@ -544,10 +548,12 @@ struct GraphBuilder {
             dropout_node->forward(graph, *input_lookup);
 
             BucketNode *bucket = new BucketNode();
-            bucket->init(hyper_params.hidden_dim + hyper_params.word_dim);
+            bucket->init(hyper_params.hidden_dim + hyper_params.word_dim + 1);
             bucket->forward(graph);
 
-            Node *concat = n3ldg_plus::concat(graph, {dropout_node, bucket});
+            Node *idf = n3ldg_plus::embedding(graph, model_params.idf_table, 1, sentence.at(i));
+
+            Node *concat = n3ldg_plus::concat(graph, {dropout_node, idf, bucket});
 
             left_to_right_encoder.forward(graph, model_params.left_to_right_encoder_params,
                     *concat, *hidden_bucket, *hidden_bucket, hyper_params.dropout, is_training);
@@ -602,7 +608,11 @@ struct GraphBuilder {
             DropoutNode* decoder_lookup(new DropoutNode(hyper_params.dropout, is_training));
             decoder_lookup->init(hyper_params.word_dim);
             decoder_lookup->forward(graph, *before_dropout);
-            decoder_components.decoder_lookups.push_back(decoder_lookup);
+
+            Node *idf = n3ldg_plus::embedding(graph, model_params.idf_table, 1, *answer);
+            Node *concated = n3ldg_plus::concat(graph, {decoder_lookup, idf});
+            decoder_components.decoder_lookups.push_back(concated);
+
             if (decoder_components.decoder_lookups.size() != i) {
                 cerr << boost::format("decoder_lookups size:%1% i:%2%") %
                     decoder_components.decoder_lookups.size() % i << endl;
@@ -619,7 +629,7 @@ struct GraphBuilder {
             last_keyword = decoder_components.decoder_keyword_lookups.back();
         } else {
             BucketNode *bucket = new BucketNode;
-            bucket->init(hyper_params.word_dim);
+            bucket->init(hyper_params.word_dim + 1);
             bucket->forward(graph);
             last_input = bucket;
             last_keyword = bucket;
@@ -629,7 +639,10 @@ struct GraphBuilder {
         keyword_node->init(hyper_params.word_dim);
         keyword_node->setParam(model_params.lookup_table);
         keyword_node->forward(graph, keyword);
-        decoder_components.decoder_keyword_lookups.push_back(keyword_node);
+
+        Node *idf = n3ldg_plus::embedding(graph, model_params.idf_table, 1, keyword);
+        Node *concated = n3ldg_plus::concat(graph, {keyword_node, idf});
+        decoder_components.decoder_keyword_lookups.push_back(concated);
 
         decoder_components.forward(graph, hyper_params, model_params, *last_input, *last_keyword,
                 left_to_right_encoder._hiddens, is_training);
@@ -648,15 +661,17 @@ struct GraphBuilder {
 
         decoder_components.wordvector_to_onehots.push_back(softmax);
 
-        decoder_components.decoder_to_keyword_vectors.push_back(nodes.keyword);
-
         Node *keyword_vector_to_onehot;
         if (nodes.keyword == nullptr) {
             keyword_vector_to_onehot = nullptr;
         } else {
-            keyword_vector_to_onehot = n3ldg_plus::linearWordVector(graph,
+            Node *semantic_part = n3ldg_plus::linearWordVector(graph,
                     keyword_word_id_upper_open_bound, model_params.lookup_table.E, *nodes.keyword);
-            keyword_vector_to_onehot = n3ldg_plus::softmax(graph, *keyword_vector_to_onehot);
+            Node *idf_part = n3ldg_plus::linearWordVector(graph, keyword_word_id_upper_open_bound,
+                    model_params.idf_table.E, *nodes.keyword_idf);
+            Node *sum = n3ldg_plus::add(graph, {semantic_part, idf_part});
+
+            keyword_vector_to_onehot = n3ldg_plus::softmax(graph, *sum);
         }
         decoder_components.keyword_vector_to_onehots.push_back(keyword_vector_to_onehot);
     }
@@ -669,7 +684,10 @@ struct GraphBuilder {
         keyword_lookup->init(hyper_params.word_dim);
         keyword_lookup->setParam(model_params.lookup_table);
         keyword_lookup->forward(graph, keyword);
-        decoder_components.decoder_keyword_lookups.push_back(keyword_lookup);
+        Node *idf = n3ldg_plus::embedding(graph, model_params.idf_table, 1, keyword);
+        Node *concated = n3ldg_plus::concat(graph, {keyword_lookup, idf});
+
+        decoder_components.decoder_keyword_lookups.push_back(concated);
     }
 
     void forwardDecoderHiddenByOneStep(Graph &graph, DecoderComponents &decoder_components, int i,
@@ -687,7 +705,11 @@ struct GraphBuilder {
             DropoutNode* decoder_lookup(new DropoutNode(hyper_params.dropout, false));
             decoder_lookup->init(hyper_params.word_dim);
             decoder_lookup->forward(graph, *before_dropout);
-            decoder_components.decoder_lookups.push_back(decoder_lookup);
+
+            Node *idf = n3ldg_plus::embedding(graph, model_params.idf_table, 1, *answer);
+            Node *concated = n3ldg_plus::concat(graph, {decoder_lookup, idf});
+            decoder_components.decoder_lookups.push_back(concated);
+
             if (decoder_components.decoder_lookups.size() != i) {
                 cerr << boost::format("decoder_lookups size:%1% i:%2%") %
                     decoder_components.decoder_lookups.size() % i << endl;
@@ -703,7 +725,7 @@ struct GraphBuilder {
             last_keyword = decoder_components.decoder_keyword_lookups.back();
         } else {
             BucketNode *bucket = new BucketNode;
-            bucket->init(hyper_params.word_dim);
+            bucket->init(hyper_params.word_dim + 1);
             bucket->forward(graph);
             last_input = bucket;
             last_keyword = bucket;
@@ -727,7 +749,10 @@ struct GraphBuilder {
                 << endl;
             abort();
         }
-        decoder_components.decoder_keyword_lookups.push_back(keyword_embedding);
+        Node *idf = n3ldg_plus::embedding(graph, model_params.idf_table, 1, keyword);
+        Node *concated = n3ldg_plus::concat(graph, {keyword_embedding, idf});
+        decoder_components.decoder_keyword_lookups.push_back(concated);
+
         ResultAndKeywordVectors result =  decoder_components.decoderToWordVectors(graph,
                 hyper_params, model_params, encoder_hiddens, i, false);
         Node *result_node = result.result;

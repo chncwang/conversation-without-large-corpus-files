@@ -830,12 +830,21 @@ int main(int argc, char *argv[]) {
     ModelParams model_params;
     int beam_size = hyper_params.beam_size;
 
-    auto allocate_model_params = [](const DefaultConfig &default_config,
+    auto allocate_model_params = [&](const DefaultConfig &default_config,
             const HyperParams &hyper_params,
             ModelParams &model_params,
             const Alphabet *alphabet) {
         cout << format("allocate word_file:%1%\n") % hyper_params.word_file;
         if (alphabet != nullptr) {
+            model_params.idf_table.init(*alphabet, 1, false);
+            Param &idf_param = model_params.idf_table.E;
+            for (int i = 0; i < model_params.idf_table.nVSize - 1; ++i) {
+                idf_param.val.mat()(0, i) = all_idf.find(alphabet->from_id(i))->second / 14.0;
+            }
+#if USE_GPU
+            idf_param.copyFromHostToDevice();
+#endif
+            idf_param.is_fixed = true;
             if(hyper_params.word_file != "" &&
                     default_config.program_mode == ProgramMode::TRAINING &&
                     default_config.input_model_file == "") {
@@ -844,14 +853,16 @@ int main(int argc, char *argv[]) {
             } else {
                 model_params.lookup_table.init(*alphabet, hyper_params.word_dim, true);
             }
+            model_params.lookup_table.E.is_fixed = true;
         }
         model_params.attention_params.init(hyper_params.hidden_dim, hyper_params.hidden_dim);
         model_params.left_to_right_encoder_params.init(hyper_params.hidden_dim,
-                2 * hyper_params.word_dim + hyper_params.hidden_dim);
+                2 * hyper_params.word_dim + hyper_params.hidden_dim + 2);
         model_params.hidden_to_wordvector_params.init(hyper_params.word_dim,
-                2 * hyper_params.hidden_dim + 3 * hyper_params.word_dim, false);
+                2 * hyper_params.hidden_dim + 2 * hyper_params.word_dim + 2, true);
         model_params.hidden_to_keyword_params.init(hyper_params.word_dim,
-                2 * hyper_params.hidden_dim, false);
+                2 * hyper_params.hidden_dim, true);
+        model_params.hidden_to_keyword_idf_params.init(1, 2 * hyper_params.hidden_dim, true);
     };
 
     if (default_config.program_mode != ProgramMode::METRIC) {
@@ -986,6 +997,10 @@ int main(int argc, char *argv[]) {
         for (int epoch = 0; ; ++epoch) {
             cout << "epoch:" << epoch << endl;
 
+            if (epoch > 0) {
+                model_params.lookup_table.E.is_fixed = false;
+            }
+
             auto cmp = [&] (const ConversationPair &a, const ConversationPair &b)->bool {
                 auto len = [&] (const ConversationPair &pair)->int {
                     return post_sentences.at(pair.post_id).size() +
@@ -1022,7 +1037,7 @@ int main(int argc, char *argv[]) {
                             hyper_params.learning_rate << endl;
                     }
                 }
-                Graph graph;
+                Graph graph(true);
                 vector<shared_ptr<GraphBuilder>> graph_builders;
                 vector<DecoderComponents> decoder_components_vector;
                 vector<ConversationPair> conversation_pair_in_batch;
