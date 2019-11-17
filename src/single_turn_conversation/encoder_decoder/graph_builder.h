@@ -377,10 +377,10 @@ vector<BeamSearchResult> mostProbableKeywords(
             keyword_vector_to_onehot->setParam(model_params.lookup_table.E);
             keyword_vector_to_onehot->forward(graph, *keyword);
 
-            Node *keyword_idf = n3ldg_plus::linear(graph, model_params.hidden_to_keyword_idf_params,
-                    *context_concated);
-            Node *idf_to_onehot = n3ldg_plus::linearWordVector(graph, 1, model_params.idf_table.E,
-                    *keyword_idf);
+            Node *keyword_idf = n3ldg_plus::linear(graph,
+                    model_params.hidden_to_keyword_idf_params, *context_concated);
+            Node *idf_to_onehot = n3ldg_plus::linearWordVector(graph, last_keyword_id + 1,
+                    model_params.idf_table.E, *keyword_idf);
             Node *onehot = n3ldg_plus::add(graph, {keyword_vector_to_onehot, idf_to_onehot});
             Node *softmax = n3ldg_plus::softmax(graph, *onehot);
 
