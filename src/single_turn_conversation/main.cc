@@ -620,14 +620,11 @@ unordered_set<string> knownWords(const vector<string> &words) {
     return word_set;
 }
 
-vector<string> getAllWordsByIdfAscendingly(const unordered_map<string, float> &idf_table,
-        const unordered_map<string, int> &word_count_table,
-        int word_cutoff) {
+vector<string> getAllWordsByIdfAscendingly(const unordered_map<string, float> &idf_table) {
     vector<string> result;
-    for (auto &it : word_count_table) {
-        if (it.second > word_cutoff && it.first != unknownkey) {
-            result.push_back(it.first);
-        }
+
+    for (auto &it : idf_table) {
+        result.push_back(it.first);
     }
 
     auto cmp = [&idf_table](const string &a, const string &b) -> bool {
@@ -635,7 +632,6 @@ vector<string> getAllWordsByIdfAscendingly(const unordered_map<string, float> &i
     };
 
     sort(result.begin(), result.end(), cmp);
-    result.push_back(unknownkey);
 
     return result;
 }
@@ -804,26 +800,44 @@ int main(int argc, char *argv[]) {
 
     word_counts[unknownkey] = 1000000000;
 
-    vector<vector<string>> all_sentences;
-    cout << "merging sentences..." << endl;
-    for (auto &s : post_sentences) {
-        all_sentences.push_back(s);
-    }
-    for (auto &s : response_sentences) {
-        all_sentences.push_back(s);
-    }
     cout << "merged" << endl;
     cout << "calculating idf" << endl;
+    vector<vector<string>> all_sentences;
+    for (const ConversationPair &conversation_pair : train_conversation_pairs) {
+        const vector<string> &response_sentence = response_sentences.at(
+                conversation_pair.response_id);
+        all_sentences.push_back(response_sentence);
+    }
     auto all_idf = calculateIdf(all_sentences);
     cout << "idf calculated" << endl;
-    vector<string> all_word_list = getAllWordsByIdfAscendingly(all_idf, word_counts,
-                        hyper_params.word_cutoff);
+    vector<string> all_word_list = getAllWordsByIdfAscendingly(all_idf);
+    all_word_list.push_back(unknownkey);
     cout << "all_word_list size:" << all_word_list.size() << endl;
-//    for (int i = 0; i < 40000; ++i) {
-//        cout << all_word_list.at(i) << ":" ;
-//        cout << all_idf.at(all_word_list.at(i)) << " ";
-//        cout << word_counts.at(all_word_list.at(i)) << endl;
-//    }
+    for (int i = 0; i < all_word_list.size() - 1; ++i) {
+        cout << all_word_list.at(i) << ":" ;
+        cout << all_idf.at(all_word_list.at(i)) << endl;
+    }
+
+    float occur_sum = 0.0f;
+    vector<int> idf_range;
+    for (int i = 0; i < all_word_list.size() - 1; ++i) {
+        float idf = all_idf.at(all_word_list.at(i));
+        occur_sum += 1 / exp(idf);
+        if (occur_sum >= 1) {
+            occur_sum = 0;
+            cout << i << " " << all_word_list.at(i) << " " << idf << endl;
+            idf_range.push_back(i);
+        }
+    }
+    idf_range.push_back(all_word_list.size());
+    vector<int> word_id_bound_table;
+    int idf_range_i = 0;
+    for (int i = 0; i < all_word_list.size() - 1; ++i) {
+        int bound = idf_range.at(idf_range_i);
+        word_id_bound_table.push_back(bound);
+        if (i == bound) ++idf_range_i;
+    }
+
     alphabet.init(all_word_list);
     cout << boost::format("alphabet size:%1%") % alphabet.size() << endl;
 
@@ -876,37 +890,23 @@ int main(int argc, char *argv[]) {
     }
     auto black_list = readBlackList(default_config.black_list_file);
 
-//    cout << "post:" << endl;
-//    for (auto &s : post_sentences) {
-//        WordIdfInfo info = getWordIdfInfo(s, all_idf, word_counts, hyper_params.word_cutoff);
-//        print(info.keywords_behind);
-//        bool first = true;
-//        for (float f : info.word_idfs) {
-//            if (first) {
-//                first = false;
-//            } else {
-//                cout << " ";
-//            }
-//            cout << f;
-//        }
-//        cout << endl;
-//    }
-//    cout << "response:" << endl;
-//    for (auto &s : response_sentences) {
-//        WordIdfInfo info = getWordIdfInfo(s, all_idf, word_counts, hyper_params.word_cutoff);
-//        print(info.keywords_behind);
-//        bool first = true;
-//        for (float f : info.word_idfs) {
-//            if (first) {
-//                first = false;
-//            } else {
-//                cout << " ";
-//            }
-//            cout << f;
-//        }
-//        cout << endl;
-//    }
-//    exit(0);
+    cout << "response:" << endl;
+    for (auto &s : response_sentences) {
+        WordIdfInfo info = getWordIdfInfo(s, model_params.lookup_table.elems.m_string_to_id,
+                word_counts, word_id_bound_table, hyper_params.word_cutoff);
+        print(info.keywords_behind);
+        bool first = true;
+        for (int f : info.word_id_bounds) {
+            if (first) {
+                first = false;
+            } else {
+                cout << " ";
+            }
+            cout << f;
+        }
+        cout << endl;
+    }
+    exit(0);
 
     cout << "reading post idf info ..." << endl;
     vector<WordIdfInfo> post_idf_info_list = readWordIdfInfoList(default_config.post_idf_file);

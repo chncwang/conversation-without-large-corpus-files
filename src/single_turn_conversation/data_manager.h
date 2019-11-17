@@ -241,64 +241,41 @@ vector<vector<string>> reprocessSentences(const vector<vector<string>> &sentence
     return result;
 }
 
-void reprocessSentences(const vector<PostAndResponses> bundles,
-        vector<vector<string>> &posts,
-        vector<vector<string>> &responses,
-        const unordered_map<string, int> &word_counts,
-        int min_occurences) {
-    vector<vector<string>> result;
-
-    cout << "bund count:" << bundles.size() << endl;
-    int i = 0;
-
-//    for (const PostAndResponses &bundle : bundles) {
-//        cout << i++ / (float)bundles.size() << endl;
-//        int post_id = bundle.post_id;
-//        auto &post = posts.at(post_id);
-//        post = reprocessSentence(post, word_counts, min_occurences);
-//        for (int response_id : bundle.response_ids) {
-//            auto &res = responses.at(response_id);
-//            res = reprocessSentence(res, word_counts, min_occurences);
-//        }
-//    }
-}
-
 struct WordIdfInfo {
-    vector<float> word_idfs;
+    vector<int> word_id_bounds;
     vector<string> keywords_behind;
 
     WordIdfInfo() noexcept = default;
     WordIdfInfo(const WordIdfInfo&) = delete;
-    WordIdfInfo(WordIdfInfo&& w) noexcept : word_idfs(move(w.word_idfs)),
+    WordIdfInfo(WordIdfInfo&& w) noexcept : word_id_bounds(move(w.word_id_bounds)),
         keywords_behind(move(w.keywords_behind)) {}
 };
 
 WordIdfInfo getWordIdfInfo(const vector<string> &sentence,
-        const unordered_map<string, float> &word_idfs,
-        const unordered_map<string, int> word_counts,
+        const unordered_map<string, int> &word_id_map,
+        const unordered_map<string, int> &word_counts,
+        const vector<int> &word_id_bound_table,
         int cutoff) {
     WordIdfInfo word_idf_info;
-    word_idf_info.word_idfs.reserve(sentence.size());
-    word_idf_info.keywords_behind.reserve(sentence.size());
 
     for (const string &word : sentence) {
-        float idf;
+        int id_bound;
         auto it = word_counts.find(word);
         if (it == word_counts.end()) {
-            idf = -1;
+            id_bound = -1;
         } else if (it->second <= cutoff) {
-            idf = -1;
+            id_bound = -1;
         } else {
-            auto it = word_idfs.find(word);
-            idf = it->second;
+            int word_id = word_id_map.find(word)->second;
+            id_bound = word_id_bound_table.at(word_id);
         }
-        word_idf_info.word_idfs.push_back(idf);
+        word_idf_info.word_id_bounds.push_back(id_bound);
     }
 
-    auto &word_frequencies = word_idf_info.word_idfs;
-    for (int i = 0; i < word_frequencies.size(); ++i) {
-        auto it = std::max_element(word_frequencies.begin() + i, word_frequencies.end());
-        string word = sentence.at(it - word_frequencies.begin());
+    auto &word_id_bounds = word_idf_info.word_id_bounds;
+    for (int i = 0; i < word_id_bounds.size(); ++i) {
+        auto it = std::max_element(word_id_bounds.begin() + i, word_id_bounds.end());
+        string word = sentence.at(it - word_id_bounds.begin());
         if (word == ::unknownkey) {
             cerr << word_counts.at(::unknownkey) << endl;
             abort();
@@ -326,7 +303,7 @@ vector<WordIdfInfo> readWordIdfInfoList(const string &filename) {
         boost::split(words, line, boost::is_any_of(" "));
         for (const string &word : words) {
             try {
-                word_idf_info.word_idfs.push_back(stof(word));
+                word_idf_info.word_id_bounds.push_back(stoi(word));
             } catch (const std::exception &e) {
                 cerr << word << endl;
                 throw e;
