@@ -2,6 +2,7 @@
 #define SINGLE_TURN_CONVERSATION_SRC_BASIC_DATA_MANAGER_H
 
 #include <string>
+#include <exception>
 #include <unordered_map>
 #include <unordered_set>
 #include <codecvt>
@@ -253,18 +254,15 @@ struct WordIdfInfo {
 
 WordIdfInfo getWordIdfInfo(const vector<string> &sentence,
         const unordered_map<string, int> &word_id_map,
-        const unordered_map<string, int> &word_counts,
-        const vector<int> &word_id_bound_table,
-        int cutoff) {
+        const vector<int> &word_id_bound_table) {
     WordIdfInfo word_idf_info;
 
     for (const string &word : sentence) {
         int id_bound;
-        auto it = word_counts.find(word);
-        if (it == word_counts.end()) {
-            id_bound = -1;
-        } else if (it->second <= cutoff) {
-            id_bound = -1;
+        const auto &it = word_id_map.find(word);
+        if (it == word_id_map.end()) {
+            cerr << "no such word:" << word << endl;
+            abort();
         } else {
             int word_id = word_id_map.find(word)->second;
             id_bound = word_id_bound_table.at(word_id);
@@ -277,7 +275,7 @@ WordIdfInfo getWordIdfInfo(const vector<string> &sentence,
         auto it = std::max_element(word_id_bounds.begin() + i, word_id_bounds.end());
         string word = sentence.at(it - word_id_bounds.begin());
         if (word == ::unknownkey) {
-            cerr << word_counts.at(::unknownkey) << endl;
+            cerr << "keyword is set as unknownkey" << endl;
             abort();
         }
         word_idf_info.keywords_behind.push_back(word);

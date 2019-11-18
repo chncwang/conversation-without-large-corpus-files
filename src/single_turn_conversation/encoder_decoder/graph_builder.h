@@ -142,11 +142,6 @@ void printWordIdsWithKeywords(const vector<WordIdAndProbability> &word_ids_with_
         cout << lookup_table.elems.from_id(word_id);
     }
     cout << endl;
-//    for (int i = 1; i < word_ids_with_probability_vector.size(); i += 2) {
-//        int word_id = word_ids_with_probability_vector.at(i).word_id;
-//        cout << idf_table.at(lookup_table.elems.from_id(word_id)) << " ";
-//    }
-//    cout << endl;
 }
 
 int countNgramDuplicate(const vector<int> &ids, int n) {
@@ -195,10 +190,6 @@ void updateBeamSearchResultScore(BeamSearchResult &beam_search_result,
         original_counts.at(1) = counts.at(1), original_counts.at(2) + counts.at(2)};
     beam_search_result.setNgramCounts(new_counts);
 }
-
-//bool beamSearchResultCmp(const BeamSearchResult &a, const BeamSearchResult &b) {
-//    return a.finalScore() != a.finalScore() ?  a.finalScore() > b.finalScore();
-//}
 
 vector<BeamSearchResult> mostProbableResults(
         const vector<DecoderComponents> &beam,
@@ -321,7 +312,8 @@ vector<BeamSearchResult> mostProbableResults(
 vector<BeamSearchResult> mostProbableKeywords(
         vector<DecoderComponents> &beam,
         const vector<BeamSearchResult> &last_results,
-        const unordered_map<string ,float> word_idf_table,
+        const unordered_map<string ,float> &word_idf_table,
+        const vector<int> &bound_table,
         int word_pos,
         int k,
         Graph &graph,
@@ -364,16 +356,17 @@ vector<BeamSearchResult> mostProbableKeywords(
                     *context_concated);
             keyword_node = keyword;
 
-            int last_keyword_id;
+            int bound;
             if (last_results.empty()) {
-                last_keyword_id = model_params.lookup_table.nVSize - 1;
+                bound = model_params.lookup_table.nVSize - 1;
             } else {
                 vector<WordIdAndProbability> path = last_results.at(ii).getPath();
-                last_keyword_id = path.at(path.size() - 2).word_id;
+                int last_keyword_id = path.at(path.size() - 2).word_id;
+                bound = bound_table.at(last_keyword_id);
             }
 
             LinearWordVectorNode *keyword_vector_to_onehot = new LinearWordVectorNode;
-            keyword_vector_to_onehot->init(last_keyword_id + 1);
+            keyword_vector_to_onehot->init(bound + 1);
             keyword_vector_to_onehot->setParam(model_params.lookup_table.E);
             keyword_vector_to_onehot->forward(graph, *keyword);
 
@@ -744,6 +737,7 @@ struct GraphBuilder {
     pair<vector<WordIdAndProbability>, dtype> forwardDecoderUsingBeamSearch(Graph &graph,
             const vector<DecoderComponents> &decoder_components_beam,
             const unordered_map<string, float> &word_idf_table,
+            const vector<int> &bound_table,
             int k,
             const HyperParams &hyper_params,
             ModelParams &model_params,
@@ -788,8 +782,8 @@ struct GraphBuilder {
                 graph.compute();
 
                 most_probable_results = mostProbableKeywords(beam, most_probable_results,
-                        word_idf_table, i, k, graph, model_params, hyper_params, default_config,
-                        i == 0, searched_ids, black_list);
+                        word_idf_table, bound_table, i, k, graph, model_params, hyper_params,
+                        default_config, i == 0, searched_ids, black_list);
                 for (int beam_i = 0; beam_i < beam.size(); ++beam_i) {
                     DecoderComponents &decoder_components = beam.at(beam_i);
                     int keyword_id = most_probable_results.at(beam_i).getPath().back().word_id;
