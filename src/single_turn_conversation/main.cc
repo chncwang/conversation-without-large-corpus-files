@@ -849,7 +849,7 @@ int main(int argc, char *argv[]) {
         model_params.left_to_right_encoder_params.init(hyper_params.hidden_dim,
                 2 * hyper_params.word_dim + hyper_params.hidden_dim);
         model_params.hidden_to_wordvector_params.init(hyper_params.word_dim,
-                2 * hyper_params.hidden_dim + 3 * hyper_params.word_dim, false);
+                2 * hyper_params.hidden_dim + 2 * hyper_params.word_dim, false);
         model_params.hidden_to_keyword_params.init(hyper_params.word_dim,
                 2 * hyper_params.hidden_dim, false);
     };
@@ -1022,7 +1022,7 @@ int main(int argc, char *argv[]) {
                             hyper_params.learning_rate << endl;
                     }
                 }
-                Graph graph;
+                Graph graph(true);
                 vector<shared_ptr<GraphBuilder>> graph_builders;
                 vector<DecoderComponents> decoder_components_vector;
                 vector<ConversationPair> conversation_pair_in_batch;
