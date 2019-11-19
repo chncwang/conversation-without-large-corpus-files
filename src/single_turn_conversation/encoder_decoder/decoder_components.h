@@ -75,7 +75,7 @@ struct DecoderComponents {
             context_concated->init(2 * hyper_params.hidden_dim);
             context_concated->forward(graph, {decoder._hiddens.at(i), contexts.at(i)});
 
-            keyword = n3ldg_plus::uni(graph, model_params.hidden_to_keyword_params,
+            keyword = n3ldg_plus::linear(graph, model_params.hidden_to_keyword_params,
                     *context_concated);
         } else {
             keyword = nullptr;
@@ -85,7 +85,7 @@ struct DecoderComponents {
         keyword_concated->init(concat_node->getDim() + hyper_params.word_dim);
         keyword_concated->forward(graph, {concat_node, decoder_keyword_lookups.at(i)});
 
-        Node *decoder_to_wordvector = n3ldg_plus::uni(graph,
+        Node *decoder_to_wordvector = n3ldg_plus::linear(graph,
                 model_params.hidden_to_wordvector_params, *keyword_concated);
 
         return {decoder_to_wordvector, keyword};

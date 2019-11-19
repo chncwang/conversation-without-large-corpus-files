@@ -961,7 +961,8 @@ int main(int argc, char *argv[]) {
 
         for (int epoch = 0; ; ++epoch) {
             cout << "epoch:" << epoch << endl;
-
+            model_params.lookup_table.E.is_fixed = (epoch == 0 &&
+                    default_config.input_model_file != "");
             auto cmp = [&] (const ConversationPair &a, const ConversationPair &b)->bool {
                 auto len = [&] (const ConversationPair &pair)->int {
                     return post_sentences.at(pair.post_id).size() +
