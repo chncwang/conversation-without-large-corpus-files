@@ -241,28 +241,6 @@ vector<vector<string>> reprocessSentences(const vector<vector<string>> &sentence
     return result;
 }
 
-void reprocessSentences(const vector<PostAndResponses> bundles,
-        vector<vector<string>> &posts,
-        vector<vector<string>> &responses,
-        const unordered_map<string, int> &word_counts,
-        int min_occurences) {
-    vector<vector<string>> result;
-
-    cout << "bund count:" << bundles.size() << endl;
-    int i = 0;
-
-//    for (const PostAndResponses &bundle : bundles) {
-//        cout << i++ / (float)bundles.size() << endl;
-//        int post_id = bundle.post_id;
-//        auto &post = posts.at(post_id);
-//        post = reprocessSentence(post, word_counts, min_occurences);
-//        for (int response_id : bundle.response_ids) {
-//            auto &res = responses.at(response_id);
-//            res = reprocessSentence(res, word_counts, min_occurences);
-//        }
-//    }
-}
-
 struct WordIdfInfo {
     vector<float> word_idfs;
     vector<string> keywords_behind;
@@ -274,8 +252,10 @@ struct WordIdfInfo {
 };
 
 WordIdfInfo getWordIdfInfo(const vector<string> &sentence,
+        bool is_in_train_set,
         const unordered_map<string, float> &word_idfs,
-        const unordered_map<string, int> word_counts,
+        const unordered_map<string, int> &word_id_table,
+        const unordered_map<string, int> &word_counts,
         int cutoff) {
     WordIdfInfo word_idf_info;
     word_idf_info.word_idfs.reserve(sentence.size());
@@ -285,9 +265,9 @@ WordIdfInfo getWordIdfInfo(const vector<string> &sentence,
         float idf;
         auto it = word_counts.find(word);
         if (it == word_counts.end()) {
-            idf = -1;
+            idf = 0;
         } else if (it->second <= cutoff) {
-            idf = -1;
+            idf = 0;
         } else {
             auto it = word_idfs.find(word);
             idf = it->second;
@@ -297,43 +277,40 @@ WordIdfInfo getWordIdfInfo(const vector<string> &sentence,
 
     auto &word_frequencies = word_idf_info.word_idfs;
     for (int i = 0; i < word_frequencies.size(); ++i) {
-        auto it = std::max_element(word_frequencies.begin() + i, word_frequencies.end());
-        string word = sentence.at(it - word_frequencies.begin());
-        if (word == ::unknownkey) {
-            cerr << word_counts.at(::unknownkey) << endl;
-            abort();
+        int max_id = -1;
+        string word;
+        for (int j = i; j < word_frequencies.size(); ++j) {
+            const auto &it  = word_id_table.find(sentence.at(j));
+            if (is_in_train_set && it == word_id_table.end()) {
+                cerr << sentence.at(j) << " not found" << endl;
+                abort();
+            }
+            if (it->second >= max_id) {
+                word = sentence.at(j);
+                max_id = it->second;
+            }
         }
+//        cout << "word:" << word <<" id:" << max_id << endl;
+
         word_idf_info.keywords_behind.push_back(word);
     }
 
     return word_idf_info;
 }
 
-vector<WordIdfInfo> readWordIdfInfoList(const string &filename) {
-    std::string line;
-    std::ifstream ifs(filename);
+vector<WordIdfInfo> readWordIdfInfoList(const vector<vector<string>> &sentences,
+        const vector<bool> &is_in_train_set,
+        const unordered_map<string, float> &word_idfs,
+        const unordered_map<string, int> &word_counts,
+        const unordered_map<string, int> &word_id_table,
+        int cutoff) {
     std::vector<WordIdfInfo> results;
 
-    while (std::getline(ifs, line)) {
-        WordIdfInfo word_idf_info;
-        boost::split(word_idf_info.keywords_behind, line, boost::is_any_of(" "));
-        if (!std::getline(ifs, line)) {
-            cerr << filename << " error" << endl;
-            abort();
-        }
-
-        vector<string> words;
-        boost::split(words, line, boost::is_any_of(" "));
-        for (const string &word : words) {
-            try {
-                word_idf_info.word_idfs.push_back(stof(word));
-            } catch (const std::exception &e) {
-                cerr << word << endl;
-                throw e;
-            }
-        }
-
-        results.push_back(move(word_idf_info));
+    int i = 0;
+    for (const auto &s : sentences) {
+        auto info = getWordIdfInfo(s, is_in_train_set.at(i++), word_idfs, word_id_table,
+                word_counts, cutoff);
+        results.push_back(move(info));
     }
 
     return results;

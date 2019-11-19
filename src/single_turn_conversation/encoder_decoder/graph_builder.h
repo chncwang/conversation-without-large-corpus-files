@@ -32,6 +32,13 @@ struct WordIdAndProbability {
     WordIdAndProbability(int wordid, dtype prob) : word_id(wordid), probability(prob) {}
 };
 
+void print(const vector<string> &words) {
+    for (const string &w : words) {
+        cout << w << " ";
+    }
+    cout << endl;
+}
+
 string getSentence(const vector<int> &word_ids_vector, const ModelParams &model_params) {
     string words;
     for (const int &w : word_ids_vector) {
@@ -567,6 +574,11 @@ struct GraphBuilder {
                 keyword_bound = model_params.lookup_table.elems.from_string(keywords.at(i - 1)) + 1;
             }
             int normal_bound = model_params.lookup_table.elems.from_string(keywords.at(i)) + 1;
+            if (normal_bound > keyword_bound) {
+                print(answer);
+                print(keywords);
+                abort();
+            }
             forwardDecoderByOneStep(graph, decoder_components, i,
                     i == 0 ? nullptr : &answer.at(i - 1), keywords.at(i),
                     i == 0 ||  answer.at(i - 1) == keywords.at(i - 1), hyper_params,
