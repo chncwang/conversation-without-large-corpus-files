@@ -711,13 +711,11 @@ int main(int argc, char *argv[]) {
     int i = 0;
     for (const PostAndResponses &post_and_responses : post_and_responses_vector) {
         auto add_to_train = [&]() {
-            if (default_config.program_mode == ProgramMode::TRAINING) {
-                train_post_and_responses.push_back(post_and_responses);
-                vector<ConversationPair> conversation_pairs =
-                    toConversationPairs(post_and_responses);
-                for (ConversationPair &conversation_pair : conversation_pairs) {
-                    train_conversation_pairs.push_back(move(conversation_pair));
-                }
+            train_post_and_responses.push_back(post_and_responses);
+            vector<ConversationPair> conversation_pairs =
+                toConversationPairs(post_and_responses);
+            for (ConversationPair &conversation_pair : conversation_pairs) {
+                train_conversation_pairs.push_back(move(conversation_pair));
             }
         };
         if (i < default_config.dev_size) {
@@ -731,9 +729,7 @@ int main(int argc, char *argv[]) {
                 add_to_train();
             }
         } else {
-            if (default_config.program_mode == ProgramMode::TRAINING) {
-                add_to_train();
-            }
+            add_to_train();
         }
         ++i;
     }
