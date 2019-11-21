@@ -24,12 +24,14 @@ using namespace std;
 using namespace n3ldg_plus;
 
 struct WordIdAndProbability {
+    int dim;
     int word_id;
     dtype probability;
 
     WordIdAndProbability() = default;
     WordIdAndProbability(const WordIdAndProbability &word_id_and_probability) = default;
-    WordIdAndProbability(int wordid, dtype prob) : word_id(wordid), probability(prob) {}
+    WordIdAndProbability(int dimm, int wordid, dtype prob) : dim(dimm), word_id(wordid),
+    probability(prob) {}
 };
 
 void print(const vector<string> &words) {
@@ -62,25 +64,29 @@ public:
             }
 
     dtype finalScore() const {
-        if (path_.size() % 2 == 0) {
-            for (int n = 2; n < 10; ++n) {
-                if (path_.size() >= n * 4) {
-                    for (int i = path_.size() - n * 4 + 1; i>=0;--i) {
-                        bool ngram_hit = true;
-                        for (int j = 0; j < n; ++j) {
-                            if (path_.at(i + 2 * j).word_id != path_.at(path_.size() - n * 2 + j * 2).word_id) {
-                                ngram_hit = false;
-                                break;
-                            }
-                        }
-                        if (ngram_hit) {
-                            return -1e10;
-                        }
-                    }
-                }
-            }
+//        if (path_.size() % 2 == 0) {
+//            for (int n = 2; n < 10; ++n) {
+//                if (path_.size() >= n * 4) {
+//                    for (int i = path_.size() - n * 4 + 1; i>=0;--i) {
+//                        bool ngram_hit = true;
+//                        for (int j = 0; j < n; ++j) {
+//                            if (path_.at(i + 2 * j).word_id != path_.at(path_.size() - n * 2 + j * 2).word_id) {
+//                                ngram_hit = false;
+//                                break;
+//                            }
+//                        }
+//                        if (ngram_hit) {
+//                            return -1e10;
+//                        }
+//                    }
+//                }
+//            }
+//        }
+        set<int> words;
+        for (auto &w : path_) {
+            words.insert(w.word_id);
         }
-        return final_log_probability;
+        return final_log_probability / std::max<int>(20, words.size());
     }
 
     dtype finalLogProbability() const {
@@ -252,8 +258,9 @@ vector<BeamSearchResult> mostProbableResults(
             if (j == model_params.lookup_table.getElemId(::unknownkey)) {
                 continue;
             }
-            if (j == 0 && !last_results.empty() &&
-                    last_results.at(i).getPath().back().word_id != 0) {
+            int stop_id = model_params.lookup_table.elems.from_string(STOP_SYMBOL);
+            if (j == stop_id && !last_results.empty() &&
+                    last_results.at(i).getPath().back().word_id != stop_id) {
                 continue;
             }
             dtype value = node.getVal().v[j] - get<1>(tuple).second;
@@ -268,28 +275,28 @@ vector<BeamSearchResult> mostProbableResults(
                 cerr << value << " " << log(get<2>(tuple)) << endl;
                 abort();
             }
-            word_ids.push_back(WordIdAndProbability(j, word_probability));
+            word_ids.push_back(WordIdAndProbability(node.getDim(), j, word_probability));
 //            if (log_probability > max_log_prob) {
 //                max_log_prob = log_probability;
             beam_search_result =  BeamSearchResult(beam.at(i), word_ids, log_probability);
-            if (queue.size() < k) {
-                queue.push(beam_search_result);
-            } else if (queue.top().finalScore() < beam_search_result.finalScore()) {
-                queue.pop();
-                queue.push(beam_search_result);
+            int local_size = min(k, 1 + node.getDim() / 1000);
+            if (local_queue.size() < local_size) {
+                local_queue.push(beam_search_result);
+            } else if (local_queue.top().finalScore() < beam_search_result.finalScore()) {
+                local_queue.pop();
+                local_queue.push(beam_search_result);
             }
-//            }
         }
-//        while (!local_queue.empty()) {
-//            auto &e = local_queue.top();
-//            if (queue.size() < k) {
-//                queue.push(e);
-//            } else if (queue.top().finalScore() < e.finalScore()) {
-//                queue.pop();
-//                queue.push(e);
-//            }
-//            local_queue.pop();
-//        }
+        while (!local_queue.empty()) {
+            auto &e = local_queue.top();
+            if (queue.size() < k) {
+                queue.push(e);
+            } else if (queue.top().finalScore() < e.finalScore()) {
+                queue.pop();
+                queue.push(e);
+            }
+            local_queue.pop();
+        }
     }
 
     while (!queue.empty()) {
@@ -410,7 +417,8 @@ vector<BeamSearchResult> mostProbableKeywords(
             vector<WordIdAndProbability> new_id_and_probs = last_results.at(i).getPath();
             WordIdAndProbability &last_keyword = new_id_and_probs.at(new_id_and_probs.size() - 2);
             WordIdAndProbability &last_norm = new_id_and_probs.at(new_id_and_probs.size() - 1);
-            WordIdAndProbability w = {last_keyword.word_id, last_norm.probability};
+            WordIdAndProbability w = {last_keyword.dim, last_keyword.word_id,
+                last_norm.probability};
             new_id_and_probs.push_back(w);
             BeamSearchResult beam_search_result(beam.at(i), new_id_and_probs,
                     last_results.at(i).finalLogProbability());
@@ -425,6 +433,8 @@ vector<BeamSearchResult> mostProbableKeywords(
             auto tuple = toExp(node);
 
             BeamSearchResult beam_search_result;
+            priority_queue<BeamSearchResult, vector<BeamSearchResult>, decltype(cmp)>
+                local_queue(cmp);
             for (int j = 0; j < nodes.at(i)->getDim(); ++j) {
                 bool should_continue = false;
                 if (is_first) {
@@ -467,28 +477,26 @@ vector<BeamSearchResult> mostProbableKeywords(
                     cerr << "param W:" << endl << json_str << endl;
                     abort();
                 }
-                word_ids.push_back(WordIdAndProbability(j, word_probability));
+                word_ids.push_back(WordIdAndProbability(node.getDim(), j, word_probability));
 
                 BeamSearchResult local = BeamSearchResult(beam.at(i), word_ids, log_probability);
-//                if (is_first) {
-//                    if (local.finalScore() > max_score) {
-//                        beam_search_result = local;
-//                        max_score = local.finalScore();
-//                    }
-//                } else {
-                if (queue.size() < k) {
-                    queue.push(local);
-                } else if (queue.top().finalScore() < local.finalScore()) {
-                    queue.pop();
-                    queue.push(local);
+                if (local_queue.size() < min(k, node.getDim() / 1000 + 1)) {
+                    local_queue.push(local);
+                } else if (local_queue.top().finalScore() < local.finalScore()) {
+                    local_queue.pop();
+                    local_queue.push(local);
                 }
-//                }
             }
-//            if (is_first) {
-//                while (queue.size() < k) {
-//                    queue.push(beam_search_result);
-//                }
-//            }
+            while (!local_queue.empty()) {
+                auto &e = local_queue.top();
+                if (queue.size() < k) {
+                    queue.push(e);
+                } else if (queue.top().finalScore() < e.finalScore()) {
+                    queue.pop();
+                    queue.push(e);
+                }
+                local_queue.pop();
+            }
         }
     }
 
