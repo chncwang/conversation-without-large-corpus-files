@@ -254,7 +254,6 @@ vector<BeamSearchResult> mostProbableResults(
 //    for (int i = 0; i < (is_first ? 1 : nodes.size()); ++i) {
     for (int i = 0; i < nodes.size(); ++i) {
         const Node &node = *nodes.at(i);
-        auto tuple = toExp(node);
 
         BeamSearchResult beam_search_result;
         priority_queue<BeamSearchResult, vector<BeamSearchResult>, decltype(cmp)> local_queue(cmp);
@@ -267,23 +266,18 @@ vector<BeamSearchResult> mostProbableResults(
                     last_results.at(i).getPath().back().word_id != stop_id) {
                 continue;
             }
-            dtype value = node.getVal().v[j] - get<1>(tuple).second;
-            dtype log_probability = value - log(get<2>(tuple));
-            dtype word_probability = exp(log_probability);
+            dtype value = node.getVal().v[j];
+            dtype log_probability = log(value);
+            dtype word_probability = value;
             vector<WordIdAndProbability> word_ids;
             if (!last_results.empty()) {
                 log_probability += last_results.at(i).finalLogProbability();
                 word_ids = last_results.at(i).getPath();
             }
-            if (log_probability != log_probability) {
-                cerr << value << " " << log(get<2>(tuple)) << endl;
-                abort();
-            }
             word_ids.push_back(WordIdAndProbability(node.getDim(), j, word_probability));
-//            if (log_probability > max_log_prob) {
-//                max_log_prob = log_probability;
             beam_search_result =  BeamSearchResult(beam.at(i), word_ids, log_probability);
-            int local_size = min(k, 1 + node.getDim() / 1000);
+//            int local_size = min(k, 1 + node.getDim() / 1000);
+            int local_size = k;
             if (local_queue.size() < local_size) {
                 local_queue.push(beam_search_result);
             } else if (local_queue.top().finalScore() < beam_search_result.finalScore()) {
@@ -398,7 +392,7 @@ vector<BeamSearchResult> mostProbableKeywords(
             Node *softmax = n3ldg_plus::softmax(graph, *keyword_vector_to_onehot);
 
             components.keyword_vector_to_onehots.push_back(softmax);
-            node = keyword_vector_to_onehot;
+            node = softmax;
         } else {
             node = nullptr;
             keyword_node = nullptr;
@@ -434,7 +428,6 @@ vector<BeamSearchResult> mostProbableKeywords(
             }
         } else {
             const Node &node = *nodes.at(i);
-            auto tuple = toExp(node);
 
             BeamSearchResult beam_search_result;
             priority_queue<BeamSearchResult, vector<BeamSearchResult>, decltype(cmp)>
@@ -461,9 +454,9 @@ vector<BeamSearchResult> mostProbableKeywords(
                 if (word_pos == 0 && word_idf_table.at(word) <= default_config.keyword_bound) {
                     continue;
                 }
-                dtype value = node.getVal().v[j] - get<1>(tuple).second;
-                dtype log_probability = value - log(get<2>(tuple));
-                dtype word_probability = exp(log_probability);
+                dtype value = node.getVal().v[j];
+                dtype log_probability = log(value);
+                dtype word_probability = value;
                 vector<WordIdAndProbability> word_ids;
                 if (!last_results.empty()) {
                     log_probability += last_results.at(i).finalLogProbability();
@@ -471,7 +464,6 @@ vector<BeamSearchResult> mostProbableKeywords(
                 }
                 if (log_probability != log_probability) {
                     cerr << node.getVal().vec() << endl;
-                    cerr << value << " " << log(get<2>(tuple)) << endl;
                     cerr << "keyword node:" << endl << keyword_nodes.at(i)->getVal().vec() << endl;
                     cerr << "hidden node:" << endl << hiddens.at(i)->getVal().vec() << endl;
                     Json::StreamWriterBuilder builder;
@@ -484,7 +476,8 @@ vector<BeamSearchResult> mostProbableKeywords(
                 word_ids.push_back(WordIdAndProbability(node.getDim(), j, word_probability));
 
                 BeamSearchResult local = BeamSearchResult(beam.at(i), word_ids, log_probability);
-                if (local_queue.size() < min(k, node.getDim() / 1000 + 1)) {
+//                if (local_queue.size() < min(k, node.getDim() / 1000 + 1)) {
+                if (local_queue.size() < k) {
                     local_queue.push(local);
                 } else if (local_queue.top().finalScore() < local.finalScore()) {
                     local_queue.pop();
