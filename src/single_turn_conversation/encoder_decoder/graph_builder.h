@@ -82,11 +82,15 @@ public:
 //                }
 //            }
 //        }
-        set<int> words;
-        for (auto &w : path_) {
-            words.insert(w.word_id);
+        set<int> all_words, normal_words;
+        for (int i = 0; i < path_.size(); ++i) {
+            all_words.insert(path_.at(i).word_id);
+            if (i % 2 == 1) {
+                normal_words.insert(path_.at(i).word_id);
+            }
         }
-        return final_log_probability / std::max<int>(20, words.size());
+        return final_log_probability / (path_.size() % 2 == 1 ? all_words.size() :
+                normal_words.size());
     }
 
     dtype finalLogProbability() const {
