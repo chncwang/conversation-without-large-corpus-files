@@ -201,7 +201,6 @@ vector<BeamSearchResult> mostProbableResults(
         node.val().initOnMemory(node.getDim());
         node.val().copyFromDeviceToHost();
 #endif
-        auto tuple = toExp(node);
 
         for (int j = 0; j < nodes.at(i)->getDim(); ++j) {
             if (is_first) {
@@ -214,9 +213,8 @@ vector<BeamSearchResult> mostProbableResults(
             if (j == model_params.lookup_table.getElemId(::unknownkey)) {
                 continue;
             }
-            dtype value = node.getVal().v[j] - get<1>(tuple).second;
-            dtype log_probability = value - log(get<2>(tuple));
-            dtype word_probability = exp(log_probability);
+            dtype word_probability = node.getVal().v[j];
+            dtype log_probability = log(word_probability);
             vector<WordIdAndProbability> word_ids;
             std::array<int, 3> counts = {0, 0, 0};
             dtype extra_score = 0.0f;
