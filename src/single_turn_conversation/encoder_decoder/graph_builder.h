@@ -241,6 +241,7 @@ vector<BeamSearchResult> mostProbableResults(
         }
     }
 
+    cout << "queue size:" << queue.size() << endl;
     while (!queue.empty()) {
         auto &e = queue.top();
         if (is_first) {
@@ -402,7 +403,6 @@ struct GraphBuilder {
 
             for (int i = 0;; ++i) {
                 cout << boost::format("forwardDecoderUsingBeamSearch i:%1%\n") % i;
-                int left_k = k;
                 if (word_ids_result.size() >= k || i > default_config.cut_length) {
                     break;
                 }
@@ -410,7 +410,7 @@ struct GraphBuilder {
                 last_answers.clear();
                 if (i > 0) {
                     most_probable_results = mostProbableResults(beam, most_probable_results, i,
-                            left_k, model_params, default_config, i == 1, black_list,
+                            k * 2, model_params, default_config, i == 1, black_list,
                             searched_word_ids);
                     cout << boost::format("most_probable_results size:%1%") %
                         most_probable_results.size() << endl;
