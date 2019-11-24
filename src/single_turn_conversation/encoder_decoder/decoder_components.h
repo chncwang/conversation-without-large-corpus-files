@@ -56,7 +56,7 @@ struct DecoderComponents {
                 static_cast<Node*>(decoder_lookups.at(i - 1))};
         concat_node->forward(graph, concat_inputs);
 
-        Node *decoder_to_wordvector = n3ldg_plus::uni(graph,
+        Node *decoder_to_wordvector = n3ldg_plus::linear(graph,
                 model_params.hidden_to_wordvector_params, *concat_node);
         return decoder_to_wordvector;
     }

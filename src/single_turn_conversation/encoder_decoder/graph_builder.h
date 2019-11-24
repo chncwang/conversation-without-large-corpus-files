@@ -53,28 +53,28 @@ public:
             }
 
     dtype finalScore() const {
-//        set<int> unique_words;
-//        for (const auto &p : path_) {
-//            unique_words.insert(p.word_id);
-//        }
-        for (int n = 2; n < 10; ++n) {
-            if (path_.size() >= n * 2) {
-                for (int i = path_.size() - n * 2; i>=0;--i) {
-                    bool ngram_hit = true;
-                    for (int j = 0; j < n; ++j) {
-                        if (path_.at(i + j).word_id != path_.at(path_.size() - n + j).word_id) {
-                            ngram_hit = false;
-                            break;
-                        }
-                    }
-                    if (ngram_hit) {
-                        return -1e10;
-                    }
-                }
-            }
+        set<int> unique_words;
+        for (const auto &p : path_) {
+            unique_words.insert(p.word_id);
         }
-//        return (final_log_probability ) / unique_words.size();
-        return final_log_probability;
+//        for (int n = 2; n < 10; ++n) {
+//            if (path_.size() >= n * 2) {
+//                for (int i = path_.size() - n * 2; i>=0;--i) {
+//                    bool ngram_hit = true;
+//                    for (int j = 0; j < n; ++j) {
+//                        if (path_.at(i + j).word_id != path_.at(path_.size() - n + j).word_id) {
+//                            ngram_hit = false;
+//                            break;
+//                        }
+//                    }
+//                    if (ngram_hit) {
+//                        return -1e10;
+//                    }
+//                }
+//            }
+//        }
+        return (final_log_probability ) / unique_words.size();
+//        return final_log_probability;
     }
 
     dtype finalLogProbability() const {
@@ -201,7 +201,6 @@ vector<BeamSearchResult> mostProbableResults(
         node.val().initOnMemory(node.getDim());
         node.val().copyFromDeviceToHost();
 #endif
-        auto tuple = toExp(node);
 
         for (int j = 0; j < nodes.at(i)->getDim(); ++j) {
             if (is_first) {
@@ -214,9 +213,8 @@ vector<BeamSearchResult> mostProbableResults(
             if (j == model_params.lookup_table.getElemId(::unknownkey)) {
                 continue;
             }
-            dtype value = node.getVal().v[j] - get<1>(tuple).second;
-            dtype log_probability = value - log(get<2>(tuple));
-            dtype word_probability = exp(log_probability);
+            dtype word_probability = node.getVal().v[j];
+            dtype log_probability = log(word_probability);
             vector<WordIdAndProbability> word_ids;
             std::array<int, 3> counts = {0, 0, 0};
             dtype extra_score = 0.0f;
