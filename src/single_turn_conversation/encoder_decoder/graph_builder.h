@@ -276,8 +276,8 @@ vector<BeamSearchResult> mostProbableResults(
             }
             word_ids.push_back(WordIdAndProbability(node.getDim(), j, word_probability));
             beam_search_result =  BeamSearchResult(beam.at(i), word_ids, log_probability);
-//            int local_size = min(k, 1 + node.getDim() / 1000);
-            int local_size = k;
+            int local_size = min(k, 1 + node.getDim() / 100);
+//            int local_size = k;
             if (local_queue.size() < local_size) {
                 local_queue.push(beam_search_result);
             } else if (local_queue.top().finalScore() < beam_search_result.finalScore()) {
