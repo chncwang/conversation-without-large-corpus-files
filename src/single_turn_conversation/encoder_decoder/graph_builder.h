@@ -793,7 +793,6 @@ struct GraphBuilder {
 
             for (int i = 0;; ++i) {
                 cout << boost::format("forwardDecoderUsingBeamSearch i:%1%\n") % i;
-                int left_k = k;
                 if (word_ids_result.size() >= k || i > default_config.cut_length) {
                     break;
                 }
@@ -808,8 +807,8 @@ struct GraphBuilder {
                 graph.compute();
 
                 most_probable_results = mostProbableKeywords(beam, most_probable_results,
-                        word_idf_table, i, k, graph, model_params, hyper_params, default_config,
-                        i == 0, searched_ids, black_list);
+                        word_idf_table, i,  2 * k, graph, model_params, hyper_params,
+                        default_config, i == 0, searched_ids, black_list);
                 for (int beam_i = 0; beam_i < beam.size(); ++beam_i) {
                     DecoderComponents &decoder_components = beam.at(beam_i);
                     int keyword_id = most_probable_results.at(beam_i).getPath().back().word_id;
@@ -846,7 +845,7 @@ struct GraphBuilder {
 
                 last_answers.clear();
                 most_probable_results = mostProbableResults(beam, most_probable_results, i,
-                        left_k, model_params, default_config, i == 0, black_list, word_idf_table);
+                        k * 2, model_params, default_config, i == 0, black_list, word_idf_table);
                 cout << boost::format("most_probable_results size:%1%") %
                     most_probable_results.size() << endl;
                 beam.clear();
