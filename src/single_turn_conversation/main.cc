@@ -476,10 +476,10 @@ float metricTestPosts(const HyperParams &hyper_params, ModelParams &model_params
                 auto keyword_nodes_and_ids = keywordNodesAndIds(decoder_components, idf_info,
                         model_params);
                 int sentence_len = nodes.size();
-//                for (int i = 0; i < keyword_nodes_and_ids.first.size(); ++i) {
-//                    nodes.push_back(keyword_nodes_and_ids.first.at(i));
-//                    word_ids.push_back(keyword_nodes_and_ids.second.at(i));
-//                }
+                for (int i = 0; i < keyword_nodes_and_ids.first.size(); ++i) {
+                    nodes.push_back(keyword_nodes_and_ids.first.at(i));
+                    word_ids.push_back(keyword_nodes_and_ids.second.at(i));
+                }
                 vector<int> filtered_word_ids;
                 vector<Node*> filtered_nodes;
                 for (int i = 0; i < word_ids.size(); ++i) {
