@@ -344,7 +344,7 @@ vector<BeamSearchResult> mostProbableKeywords(
         set<int> &searched_ids,
         const vector<string> &black_list) {
     cout << "black size:" << black_list.size() << endl;
-    vector<Node *> keyword_nodes, hiddens, nodes;
+    vector<Node *> nodes;
     for (int ii = 0; ii < beam.size(); ++ii) {
         bool should_predict_keyword;
         if (last_results.empty()) {
@@ -354,8 +354,7 @@ vector<BeamSearchResult> mostProbableKeywords(
             int size = path.size();
             should_predict_keyword = path.at(size - 2).word_id == path.at(size - 1).word_id;
         }
-        Node *node, *keyword_node, *hidden;
-        hidden = beam.at(ii).decoder._hiddens.at(word_pos);
+        Node *node;
         if (should_predict_keyword) {
             DecoderComponents &components = beam.at(ii);
 
@@ -374,7 +373,6 @@ vector<BeamSearchResult> mostProbableKeywords(
 
             Node *keyword = n3ldg_plus::linear(graph, model_params.hidden_to_keyword_params,
                     *context_concated);
-            keyword_node = keyword;
 
             int last_keyword_id;
             if (last_results.empty()) {
@@ -384,22 +382,23 @@ vector<BeamSearchResult> mostProbableKeywords(
                 last_keyword_id = path.at(path.size() - 2).word_id;
             }
 
-            LinearWordVectorNode *keyword_vector_to_onehot = new LinearWordVectorNode;
-            keyword_vector_to_onehot->init(last_keyword_id + 1);
-            keyword_vector_to_onehot->setParam(model_params.lookup_table.E);
-            keyword_vector_to_onehot->forward(graph, *keyword);
+            Node *keyword_vector_to_onehot = n3ldg_plus::linearWordVector(graph,
+                    last_keyword_id + 1, model_params.lookup_table.E, *keyword);
 
-            Node *softmax = n3ldg_plus::softmax(graph, *keyword_vector_to_onehot);
+            Node *keyword_extra = n3ldg_plus::linear(graph,
+                    model_params.hidden_to_keyword_extra_params, *context_concated);
+            Node *keyword_extra_to_onehot = n3ldg_plus::linearWordVector(graph,
+                    last_keyword_id + 1, model_params.keyword_extra_table.E, *keyword_extra);
+            Node *sum = n3ldg_plus::add(graph,
+                    {keyword_vector_to_onehot, keyword_extra_to_onehot});
+            Node *softmax = n3ldg_plus::softmax(graph, *sum);
 
             components.keyword_vector_to_onehots.push_back(softmax);
             node = softmax;
         } else {
             node = nullptr;
-            keyword_node = nullptr;
         }
         nodes.push_back(node);
-        keyword_nodes.push_back(keyword_node);
-        hiddens.push_back(hidden);
     }
     graph.compute();
 
@@ -464,8 +463,6 @@ vector<BeamSearchResult> mostProbableKeywords(
                 }
                 if (log_probability != log_probability) {
                     cerr << node.getVal().vec() << endl;
-                    cerr << "keyword node:" << endl << keyword_nodes.at(i)->getVal().vec() << endl;
-                    cerr << "hidden node:" << endl << hiddens.at(i)->getVal().vec() << endl;
                     Json::StreamWriterBuilder builder;
                     builder["commentStyle"] = "None";
                     builder["indentation"] = "";
@@ -670,15 +667,20 @@ struct GraphBuilder {
 
         decoder_components.decoder_to_keyword_vectors.push_back(nodes.keyword);
 
-        Node *keyword_vector_to_onehot;
+        Node *probalized;
         if (nodes.keyword == nullptr) {
-            keyword_vector_to_onehot = nullptr;
+            probalized = nullptr;
         } else {
-            keyword_vector_to_onehot = n3ldg_plus::linearWordVector(graph,
+            Node *keyword_vector_to_onehot = n3ldg_plus::linearWordVector(graph,
                     keyword_word_id_upper_open_bound, model_params.lookup_table.E, *nodes.keyword);
-            keyword_vector_to_onehot = n3ldg_plus::softmax(graph, *keyword_vector_to_onehot);
+            Node *keyword_extra_to_onehot = n3ldg_plus::linearWordVector(graph,
+                    keyword_word_id_upper_open_bound, model_params.keyword_extra_table.E,
+                    *nodes.keyword_extra);
+            Node *sum = n3ldg_plus::add(graph,
+                    {keyword_vector_to_onehot, keyword_extra_to_onehot});
+            probalized = n3ldg_plus::softmax(graph, *sum);
         }
-        decoder_components.keyword_vector_to_onehots.push_back(keyword_vector_to_onehot);
+        decoder_components.keyword_vector_to_onehots.push_back(probalized);
     }
 
     void forwardDecoderResultByOneStep(Graph &graph, DecoderComponents &decoder_components, int i,

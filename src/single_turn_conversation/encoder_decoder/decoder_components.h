@@ -9,6 +9,7 @@
 struct ResultAndKeywordVectors {
     Node *result;
     Node *keyword;
+    Node *keyword_extra;
 };
 
 struct DecoderComponents {
@@ -69,7 +70,7 @@ struct DecoderComponents {
         }
         Node *concat_node = n3ldg_plus::concat(graph, concat_inputs);
 
-        Node *keyword;
+        Node *keyword, *keyword_extra;
         if (return_keyword) {
             ConcatNode *context_concated = new ConcatNode;
             context_concated->init(2 * hyper_params.hidden_dim);
@@ -77,8 +78,11 @@ struct DecoderComponents {
 
             keyword = n3ldg_plus::linear(graph, model_params.hidden_to_keyword_params,
                     *context_concated);
+            keyword_extra = n3ldg_plus::linear(graph, model_params.hidden_to_keyword_extra_params,
+                    *context_concated);
         } else {
             keyword = nullptr;
+            keyword_extra = nullptr;
         }
 
         ConcatNode *keyword_concated = new ConcatNode();
@@ -88,7 +92,7 @@ struct DecoderComponents {
         Node *decoder_to_wordvector = n3ldg_plus::linear(graph,
                 model_params.hidden_to_wordvector_params, *keyword_concated);
 
-        return {decoder_to_wordvector, keyword};
+        return {decoder_to_wordvector, keyword, keyword_extra};
     }
 };
 
