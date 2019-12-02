@@ -22,23 +22,30 @@ struct CandidateAndReferences {
     }
 };
 
-// TODO bug remained, the last stop symbol should be removed when comparing
 float mostMatchedCount(const CandidateAndReferences &candidate_and_references,
         int gram_len) {
+    using namespace std;
     int max_mached_count = 0;
     const auto &references = candidate_and_references.references;
     const auto &candidate = candidate_and_references.candidate;
+//    cout << "mostMatchedCount - candidate size:" << candidate.size() << endl;
     if (candidate.size() < gram_len) {
         return 0;
     }
+//    cout << "mostMatchedCount - references size:" << references.size() << endl;
+//    int ref_i = 0;
     for (const std::vector<int> &reference : references) {
+//        cout << "mostMatchedCount - ref_i:" << ref_i++ << endl;
+        if (reference.size() < gram_len) {
+            continue;
+        }
         int matched_count = 0;
+        std::vector<bool> matched;
+//        cout << "mostMatchedCount - ref size:" << reference.size() << endl;
+        for (int j = 0; j < reference.size() + 1 - gram_len; ++j) {
+            matched.push_back(false);
+        }
         for (int i = 0; i < candidate.size() + 1 - gram_len; ++i) {
-            std::vector<bool> matched;
-            for (int j = 0; j < reference.size() + 1 - gram_len; ++j) {
-                matched.push_back(false);
-            }
-
             for (int j = 0; j < reference.size() + 1 - gram_len; ++j) {
                 if (matched.at(j)) {
                     continue;
@@ -79,26 +86,27 @@ int mostMatchedLength(const CandidateAndReferences &candidate_and_references) {
             candidate_and_references.references.end(), cmp)->size();
 }
 
-float computeBleu(const std::vector<CandidateAndReferences> &candidate_and_references_vector) {
-    static const int MAX_GRAM_LEN = 4;
+float computeBleu(const std::vector<CandidateAndReferences> &candidate_and_references_vector,
+        int max_gram_len) {
+    using namespace std;
     float weighted_sum = 0.0f;
     int r_sum = 0;
     int c_sum = 0;
 
-    for (int gram_len = 1; gram_len <= MAX_GRAM_LEN; ++gram_len) {
+    for (int i = 1; i <=max_gram_len; ++i) {
         int matched_count_sum = 0;
         int candidate_count_sum = 0;
         for (const auto &candidate_and_references : candidate_and_references_vector) {
-            int matched_count = mostMatchedCount(candidate_and_references, gram_len);
+            int matched_count = mostMatchedCount(candidate_and_references, i);
             matched_count_sum += matched_count;
-            candidate_count_sum += candidate_and_references.candidate.size() + 1 - gram_len;
+            candidate_count_sum += candidate_and_references.candidate.size() + 1 - i;
 
             int r = mostMatchedLength(candidate_and_references);
             r_sum += r;
         }
         c_sum += candidate_count_sum;
 
-        weighted_sum += 1.0f / MAX_GRAM_LEN * log(static_cast<float>(matched_count_sum) /
+        weighted_sum += 1.0f / max_gram_len * log(static_cast<float>(matched_count_sum) /
                 candidate_count_sum);
     }
 

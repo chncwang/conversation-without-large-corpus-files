@@ -107,7 +107,7 @@ DefaultConfig parseDefaultConfig(INIReader &ini_reader) {
     default_config.test_size = ini_reader.GetInteger(SECTION, "test_size", 0);
     default_config.device_id = ini_reader.GetInteger(SECTION, "device_id", 0);
     default_config.seed = ini_reader.GetInteger(SECTION, "seed", 0);
-    default_config.cut_length = ini_reader.GetInteger(SECTION, "black_list_file", 30);
+    default_config.cut_length = ini_reader.GetInteger(SECTION, "cut_length", 30);
     default_config.output_model_file_prefix = ini_reader.Get(SECTION, "output_model_file_prefix",
             "");
     default_config.input_model_file = ini_reader.Get(SECTION, "input_model_file", "");
@@ -396,6 +396,8 @@ void decodeTestPosts(const HyperParams &hyper_params, ModelParams &model_params,
     hyper_params.print();
     vector<CandidateAndReferences> candidate_and_references_vector;
     for (const PostAndResponses &post_and_responses : post_and_responses_vector) {
+        cout << "post:" << endl;
+        print(post_sentences.at(post_and_responses.post_id));
         Graph graph;
         GraphBuilder graph_builder;
         graph_builder.forward(graph, post_sentences.at(post_and_responses.post_id), hyper_params,
@@ -412,13 +414,15 @@ void decodeTestPosts(const HyperParams &hyper_params, ModelParams &model_params,
         dtype probability = pair.second;
         cout << format("probability:%1%") % probability << endl;
         if (word_ids_and_probability.empty()) {
-            continue;
+            cerr << "empty result" << endl;
+            abort();
         }
 
         vector<int> decoded_word_ids = transferVector<int, WordIdAndProbability>(
                 word_ids_and_probability, [](const WordIdAndProbability &w)->int {
             return w.word_id;
         });
+        decoded_word_ids.pop_back();
         const vector<int> &response_ids = post_and_responses.response_ids;
         vector<vector<string>> str_references =
             transferVector<vector<string>, int>(response_ids,
@@ -431,14 +435,17 @@ void decodeTestPosts(const HyperParams &hyper_params, ModelParams &model_params,
                     [&](const string &w) -> int {
                     return model_params.lookup_table.getElemId(w);
                     });
+            ids.pop_back();
             id_references.push_back(ids);
         }
 
         CandidateAndReferences candidate_and_references(decoded_word_ids, id_references);
         candidate_and_references_vector.push_back(candidate_and_references);
 
-        float bleu_value = computeBleu(candidate_and_references_vector);
-        cout << "bleu_value:" << bleu_value << endl;
+        for (int i = 1; i <5; ++i) {
+            float bleu = computeBleu(candidate_and_references_vector, i);
+            cout << "bleu_:" << i << ":" << bleu << endl;
+        }
     }
 }
 
