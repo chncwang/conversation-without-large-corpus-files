@@ -84,8 +84,9 @@ int mostMatchedLength(const CandidateAndReferences &candidate_and_references) {
         int cb = candidate_len - b.size();
         return abs(ca) < abs(cb);
     };
-    return std::min_element(candidate_and_references.references.begin(),
-            candidate_and_references.references.end(), cmp)->size();
+    const auto &matched = std::min_element(candidate_and_references.references.begin(),
+            candidate_and_references.references.end(), cmp);
+    return matched->size();
 }
 
 float computeBleu(const std::vector<CandidateAndReferences> &candidate_and_references_vector,
@@ -95,7 +96,7 @@ float computeBleu(const std::vector<CandidateAndReferences> &candidate_and_refer
     int r_sum = 0;
     int c_sum = 0;
 
-    for (int i = 1; i <=max_gram_len; ++i) {
+    for (int i = 1; i <=1; ++i) { // TODO
         int matched_count_sum = 0;
         int candidate_count_sum = 0;
         for (const auto &candidate_and_references : candidate_and_references_vector) {
@@ -106,10 +107,12 @@ float computeBleu(const std::vector<CandidateAndReferences> &candidate_and_refer
             int r = mostMatchedLength(candidate_and_references);
             r_sum += r;
         }
-        c_sum += candidate_count_sum;
+        c_sum += candidate_count_sum + i - 1;
 
         weighted_sum += 1.0f / max_gram_len * log(static_cast<float>(matched_count_sum) /
                 candidate_count_sum);
+        cout << boost::format("matched:%1% candidate:%2% sum:%3%") % matched_count_sum %
+            candidate_count_sum % weighted_sum << endl;
     }
 
     float bp = c_sum > r_sum ? 1.0f : exp(1 - static_cast<float>(r_sum) / c_sum);
