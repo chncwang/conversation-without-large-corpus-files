@@ -80,7 +80,9 @@ float mostMatchedCount(const CandidateAndReferences &candidate_and_references,
 int mostMatchedLength(const CandidateAndReferences &candidate_and_references) {
     int candidate_len = candidate_and_references.candidate.size();
     auto cmp = [&](const std::vector<int> &a, const std::vector<int> &b)->bool {
-        return abs(candidate_len - a.size()) < abs(candidate_len - b.size());
+        int ca = candidate_len - a.size();
+        int cb = candidate_len - b.size();
+        return abs(ca) < abs(cb);
     };
     return std::min_element(candidate_and_references.references.begin(),
             candidate_and_references.references.end(), cmp)->size();
