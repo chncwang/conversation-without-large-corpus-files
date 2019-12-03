@@ -410,7 +410,7 @@ struct GraphBuilder {
                 last_answers.clear();
                 if (i > 0) {
                     most_probable_results = mostProbableResults(beam, most_probable_results, i,
-                            k * 2, model_params, default_config, i == 1, black_list,
+                            k, model_params, default_config, i == 1, black_list,
                             searched_word_ids);
                     cout << boost::format("most_probable_results size:%1%") %
                         most_probable_results.size() << endl;
