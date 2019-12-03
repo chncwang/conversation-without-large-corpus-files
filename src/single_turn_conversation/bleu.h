@@ -29,15 +29,11 @@ float mostMatchedCount(const CandidateAndReferences &candidate_and_references,
     int max_mached_count = 0;
     const auto &references = candidate_and_references.references;
     const auto &candidate = candidate_and_references.candidate;
-    cout << "candidate:" << endl;
-    print(candidate);
     if (candidate.size() < gram_len) {
         return 0;
     }
-    cout << "reference count:" << references.size() << endl;
     vector<string> matched_ref;
     for (const vector<string> &reference : references) {
-        cout << "reference:" << endl;
         print(reference);
         if (reference.size() < gram_len) {
             continue;
@@ -93,8 +89,13 @@ int mostMatchedLength(const CandidateAndReferences &candidate_and_references) {
         int dis_b = candidate_len - b.size();
         return abs(dis_a) < abs(dis_b);
     };
-    return min_element(candidate_and_references.references.begin(),
-            candidate_and_references.references.end(), cmp)->size();
+    const auto &e = min_element(candidate_and_references.references.begin(),
+            candidate_and_references.references.end(), cmp);
+    cout << "candidate:" << endl;
+    print(candidate_and_references.candidate);
+    cout << "most match len:" << e->size() << endl;
+    print(*e);
+    return e->size();
 }
 
 float computeBleu(const vector<CandidateAndReferences> &candidate_and_references_vector,
@@ -115,13 +116,16 @@ float computeBleu(const vector<CandidateAndReferences> &candidate_and_references
             int r = mostMatchedLength(candidate_and_references);
             r_sum += r;
         }
-        c_sum += candidate_count_sum;
+        c_sum += candidate_count_sum + i - 1;
 
         weighted_sum += 1.0f / max_gram_len * log(static_cast<float>(matched_count_sum) /
                 candidate_count_sum);
+        cout << boost::format("matched_count:%1% candidate_count:%2% weighted_sum%3%") %
+            matched_count_sum % candidate_count_sum % weighted_sum << endl;
     }
 
     float bp = c_sum > r_sum ? 1.0f : exp(1 - static_cast<float>(r_sum) / c_sum);
+    cout << boost::format("candidate sum:%1% ref:%2% bp:%3%") % c_sum % r_sum % bp << endl;
     return bp * exp(weighted_sum);
 }
 
