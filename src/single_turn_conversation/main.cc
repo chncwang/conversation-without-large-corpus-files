@@ -243,13 +243,6 @@ void printWordIds(const vector<int> &word_ids, const LookupTable<Param> &lookup_
     cout << endl;
 }
 
-void print(const vector<string> &words) {
-    for (const string &w : words) {
-        cout << w << " ";
-    }
-    cout << endl;
-}
-
 void analyze(const vector<int> &results, const vector<int> &answers, Metric &metric) {
     if (results.size() != answers.size()) {
         cerr << "results size is not equal to answers size" << endl;
@@ -418,10 +411,12 @@ void decodeTestPosts(const HyperParams &hyper_params, ModelParams &model_params,
             abort();
         }
 
-        vector<int> decoded_word_ids = transferVector<int, WordIdAndProbability>(
-                word_ids_and_probability, [](const WordIdAndProbability &w)->int {
-            return w.word_id;
-        });
+        vector<string> decoded_word_ids;
+        auto to_str = [&](const WordIdAndProbability &in) ->string {
+            return model_params.lookup_table.elems.from_id(in.word_id);
+        };
+        transform(word_ids_and_probability.begin(), word_ids_and_probability.end(),
+                back_inserter(decoded_word_ids), to_str);
         decoded_word_ids.pop_back();
         const vector<int> &response_ids = post_and_responses.response_ids;
         vector<vector<string>> str_references =
@@ -429,20 +424,17 @@ void decodeTestPosts(const HyperParams &hyper_params, ModelParams &model_params,
                     [&](int response_id) -> vector<string> {
                     return response_sentences.at(response_id);
                     });
-        vector<vector<int>> id_references;
+        vector<vector<string>> id_references;
         for (const vector<string> &strs : str_references) {
-            vector<int> ids = transferVector<int, string>(strs,
-                    [&](const string &w) -> int {
-                    return model_params.lookup_table.getElemId(w);
-                    });
-            ids.pop_back();
-            id_references.push_back(ids);
+            auto stop_removed = strs;
+            stop_removed.pop_back();
+            id_references.push_back(stop_removed);
         }
 
         CandidateAndReferences candidate_and_references(decoded_word_ids, id_references);
         candidate_and_references_vector.push_back(candidate_and_references);
 
-        for (int i = 1; i <5; ++i) {
+        for (int i = 1; i <= 1; ++i) { // TODO
             float bleu = computeBleu(candidate_and_references_vector, i);
             cout << "bleu_:" << i << ":" << bleu << endl;
         }

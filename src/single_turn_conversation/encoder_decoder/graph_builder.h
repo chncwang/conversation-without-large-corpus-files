@@ -73,7 +73,7 @@ public:
 //                }
 //            }
 //        }
-        return (final_log_probability ) / path_.size();
+        return (final_log_probability ) / unique_words.size();
 //        return final_log_probability;
     }
 

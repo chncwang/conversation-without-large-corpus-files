@@ -7,16 +7,17 @@
 #include <cmath>
 #include <boost/format.hpp>
 #include "conversation_structure.h"
+#include "print.h"
 
-const int BLEU_MAX_N = 4;
+using namespace std;
 
 struct CandidateAndReferences {
-    std::vector<int> candidate;
-    std::vector<std::vector<int>> references;
+    vector<string> candidate;
+    vector<vector<string>> references;
 
     CandidateAndReferences() = default;
 
-    CandidateAndReferences(const std::vector<int> &c, const std::vector<std::vector<int>> &ref) {
+    CandidateAndReferences(const vector<string> &c, const vector<vector<string>> &ref) {
         candidate = c;
         references = ref;
     }
@@ -28,20 +29,17 @@ float mostMatchedCount(const CandidateAndReferences &candidate_and_references,
     int max_mached_count = 0;
     const auto &references = candidate_and_references.references;
     const auto &candidate = candidate_and_references.candidate;
-//    cout << "mostMatchedCount - candidate size:" << candidate.size() << endl;
     if (candidate.size() < gram_len) {
         return 0;
     }
-//    cout << "mostMatchedCount - references size:" << references.size() << endl;
-//    int ref_i = 0;
-    for (const std::vector<int> &reference : references) {
-//        cout << "mostMatchedCount - ref_i:" << ref_i++ << endl;
+    vector<string> matched_ref;
+    for (const vector<string> &reference : references) {
+        print(reference);
         if (reference.size() < gram_len) {
             continue;
         }
         int matched_count = 0;
-        std::vector<bool> matched;
-//        cout << "mostMatchedCount - ref size:" << reference.size() << endl;
+        vector<bool> matched;
         for (int j = 0; j < reference.size() + 1 - gram_len; ++j) {
             matched.push_back(false);
         }
@@ -71,7 +69,14 @@ float mostMatchedCount(const CandidateAndReferences &candidate_and_references,
 
         if (matched_count > max_mached_count) {
             max_mached_count = matched_count;
+            matched_ref = reference;
         }
+    }
+    if (max_mached_count > 0) {
+        cout << "candidate:" << endl;
+        print(candidate);
+        cout << "max_mached_count:" << max_mached_count << " gram len:" << gram_len << endl;
+        print(matched_ref);
     }
 
     return max_mached_count;
@@ -79,24 +84,28 @@ float mostMatchedCount(const CandidateAndReferences &candidate_and_references,
 
 int mostMatchedLength(const CandidateAndReferences &candidate_and_references) {
     int candidate_len = candidate_and_references.candidate.size();
-    auto cmp = [&](const std::vector<int> &a, const std::vector<int> &b)->bool {
-        int ca = candidate_len - a.size();
-        int cb = candidate_len - b.size();
-        return abs(ca) < abs(cb);
+    auto cmp = [&](const vector<string> &a, const vector<string> &b)->bool {
+        int dis_a = candidate_len - a.size();
+        int dis_b = candidate_len - b.size();
+        return abs(dis_a) < abs(dis_b);
     };
-    const auto &matched = std::min_element(candidate_and_references.references.begin(),
+    const auto &e = min_element(candidate_and_references.references.begin(),
             candidate_and_references.references.end(), cmp);
-    return matched->size();
+    cout << "candidate:" << endl;
+    print(candidate_and_references.candidate);
+    cout << "most match len:" << e->size() << endl;
+    print(*e);
+    return e->size();
 }
 
-float computeBleu(const std::vector<CandidateAndReferences> &candidate_and_references_vector,
+float computeBleu(const vector<CandidateAndReferences> &candidate_and_references_vector,
         int max_gram_len) {
     using namespace std;
     float weighted_sum = 0.0f;
     int r_sum = 0;
     int c_sum = 0;
 
-    for (int i = 1; i <=1; ++i) { // TODO
+    for (int i = 1; i <=max_gram_len; ++i) {
         int matched_count_sum = 0;
         int candidate_count_sum = 0;
         for (const auto &candidate_and_references : candidate_and_references_vector) {
@@ -111,11 +120,12 @@ float computeBleu(const std::vector<CandidateAndReferences> &candidate_and_refer
 
         weighted_sum += 1.0f / max_gram_len * log(static_cast<float>(matched_count_sum) /
                 candidate_count_sum);
-        cout << boost::format("matched:%1% candidate:%2% sum:%3%") % matched_count_sum %
-            candidate_count_sum % weighted_sum << endl;
+        cout << boost::format("matched_count:%1% candidate_count:%2% weighted_sum%3%") %
+            matched_count_sum % candidate_count_sum % weighted_sum << endl;
     }
 
     float bp = c_sum > r_sum ? 1.0f : exp(1 - static_cast<float>(r_sum) / c_sum);
+    cout << boost::format("candidate sum:%1% ref:%2% bp:%3%") % c_sum % r_sum % bp << endl;
     return bp * exp(weighted_sum);
 }
 
