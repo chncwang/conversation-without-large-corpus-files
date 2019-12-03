@@ -16,6 +16,7 @@
 #include "tinyutf8.h"
 #include "model_params.h"
 #include "hyper_params.h"
+#include "single_turn_conversation/print.h"
 #include "single_turn_conversation/def.h"
 #include "single_turn_conversation/default_config.h"
 #include "single_turn_conversation/encoder_decoder/decoder_components.h"
@@ -33,13 +34,6 @@ struct WordIdAndProbability {
     WordIdAndProbability(int dimm, int wordid, dtype prob) : dim(dimm), word_id(wordid),
     probability(prob) {}
 };
-
-void print(const vector<string> &words) {
-    for (const string &w : words) {
-        cout << w << " ";
-    }
-    cout << endl;
-}
 
 string getSentence(const vector<int> &word_ids_vector, const ModelParams &model_params) {
     string words;
@@ -89,6 +83,11 @@ public:
                 normal_words.insert(path_.at(i).word_id);
             }
         }
+//        set<int> keys;
+//        for (int i = 0; i < path_.size(); i +=2) {
+//            keys.insert(path_.at(i).word_id);
+//        }
+//        return final_log_probability / path_.size();
         return final_log_probability / (path_.size() % 2 == 1 ? all_words.size() :
                 normal_words.size());
     }
@@ -276,8 +275,8 @@ vector<BeamSearchResult> mostProbableResults(
             }
             word_ids.push_back(WordIdAndProbability(node.getDim(), j, word_probability));
             beam_search_result =  BeamSearchResult(beam.at(i), word_ids, log_probability);
-            int local_size = min(k, 1 + node.getDim() / 100);
-//            int local_size = k;
+//            int local_size = min(k, 1 + node.getDim() / 100);
+            int local_size = k;
             if (local_queue.size() < local_size) {
                 local_queue.push(beam_search_result);
             } else if (local_queue.top().finalScore() < beam_search_result.finalScore()) {
