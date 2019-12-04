@@ -572,7 +572,7 @@ void decodeTestPosts(const HyperParams &hyper_params, ModelParams &model_params,
         CandidateAndReferences candidate_and_references(filtered, id_references);
         candidate_and_references_vector.push_back(candidate_and_references);
 
-        for (int ngram = 1; ngram <=1; ++ngram) {
+        for (int ngram = 1; ngram <=4; ++ngram) {
             float bleu_value = computeBleu(candidate_and_references_vector, ngram);
             cout << "bleu_" << ngram << ":" << bleu_value << endl;
         }

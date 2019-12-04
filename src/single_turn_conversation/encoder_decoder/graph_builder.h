@@ -275,7 +275,7 @@ vector<BeamSearchResult> mostProbableResults(
             }
             word_ids.push_back(WordIdAndProbability(node.getDim(), j, word_probability));
             beam_search_result =  BeamSearchResult(beam.at(i), word_ids, log_probability);
-//            int local_size = min(k, 1 + node.getDim() / 100);
+//            int local_size = min(k, 1 + node.getDim() / 10);
             int local_size = k;
             if (local_queue.size() < local_size) {
                 local_queue.push(beam_search_result);
@@ -475,7 +475,7 @@ vector<BeamSearchResult> mostProbableKeywords(
                 word_ids.push_back(WordIdAndProbability(node.getDim(), j, word_probability));
 
                 BeamSearchResult local = BeamSearchResult(beam.at(i), word_ids, log_probability);
-//                if (local_queue.size() < min(k, node.getDim() / 1000 + 1)) {
+//                if (local_queue.size() < min(k, node.getDim() / 10 + 1)) {
                 if (local_queue.size() < k) {
                     local_queue.push(local);
                 } else if (local_queue.top().finalScore() < local.finalScore()) {
@@ -786,13 +786,13 @@ struct GraphBuilder {
 //                auto & r = word_ids_result.at(i);
 //                ++closured_count;
 //            }
-            if (closured_count >= k) {
+            if (closured_count >= 10 * k) {
                 break;
             }
 
             for (int i = 0;; ++i) {
                 cout << boost::format("forwardDecoderUsingBeamSearch i:%1%\n") % i;
-                if (word_ids_result.size() >= k || i > default_config.cut_length) {
+                if (word_ids_result.size() >= k * 10 || i > default_config.cut_length) {
                     break;
                 }
 
@@ -876,7 +876,7 @@ struct GraphBuilder {
             }
         }
 
-        if (word_ids_result.size() < k) {
+        if (word_ids_result.size() < 10 * k) {
             cerr << boost::format("word_ids_result size is %1%, but beam_size is %2%") %
                 word_ids_result.size() % k << endl;
             abort();
