@@ -528,7 +528,7 @@ void decodeTestPosts(const HyperParams &hyper_params, ModelParams &model_params,
         graph_builder.forward(graph, post_sentences.at(post_and_responses.post_id),
                 hyper_params, model_params, false);
         vector<DecoderComponents> decoder_components_vector;
-        decoder_components_vector.resize(2 * hyper_params.beam_size);
+        decoder_components_vector.resize(hyper_params.beam_size);
         auto pair = graph_builder.forwardDecoderUsingBeamSearch(graph, decoder_components_vector,
                 word_idf_table, hyper_params.beam_size, hyper_params, model_params, default_config,
                 black_list);
@@ -544,30 +544,38 @@ void decodeTestPosts(const HyperParams &hyper_params, ModelParams &model_params,
             continue;
         }
 
-        vector<int> decoded_word_ids = transferVector<int, WordIdAndProbability>(
-                word_ids_and_probability, [](const WordIdAndProbability &w)->int {
-            return w.word_id;
-        });
+        auto to_word = [&](const WordIdAndProbability &in) {
+            return model_params.lookup_table.elems.from_id(in.word_id);
+        };
+        vector<string> decoded;
+        transform(word_ids_and_probability.begin(), word_ids_and_probability.end(),
+                back_inserter(decoded), to_word);
+        vector<string> filtered;
+        for (int i = 1; i < decoded.size(); i += 2) {
+            filtered.push_back(decoded.at(i));
+        }
+        filtered.pop_back();
+
         const vector<int> &response_ids = post_and_responses.response_ids;
         vector<vector<string>> str_references =
             transferVector<vector<string>, int>(response_ids,
                     [&](int response_id) -> vector<string> {
                     return response_sentences.at(response_id);
                     });
-        vector<vector<int>> id_references;
+        vector<vector<string>> id_references;
         for (const vector<string> &strs : str_references) {
-            vector<int> ids = transferVector<int, string>(strs,
-                    [&](const string &w) -> int {
-                    return model_params.lookup_table.getElemId(w);
-                    });
-            id_references.push_back(ids);
+            auto stop_removed = strs;
+            stop_removed.pop_back();
+            id_references.push_back(stop_removed);
         }
 
-        CandidateAndReferences candidate_and_references(decoded_word_ids, id_references);
+        CandidateAndReferences candidate_and_references(filtered, id_references);
         candidate_and_references_vector.push_back(candidate_and_references);
 
-        float bleu_value = computeBleu(candidate_and_references_vector);
-        cout << "bleu_value:" << bleu_value << endl;
+        for (int ngram = 1; ngram <=4; ++ngram) {
+            float bleu_value = computeBleu(candidate_and_references_vector, ngram);
+            cout << "bleu_" << ngram << ":" << bleu_value << endl;
+        }
     }
 }
 

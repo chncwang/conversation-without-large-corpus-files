@@ -34,13 +34,6 @@ struct WordIdAndProbability {
     probability(prob) {}
 };
 
-void print(const vector<string> &words) {
-    for (const string &w : words) {
-        cout << w << " ";
-    }
-    cout << endl;
-}
-
 string getSentence(const vector<int> &word_ids_vector, const ModelParams &model_params) {
     string words;
     for (const int &w : word_ids_vector) {
