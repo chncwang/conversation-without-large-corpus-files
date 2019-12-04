@@ -434,7 +434,7 @@ void decodeTestPosts(const HyperParams &hyper_params, ModelParams &model_params,
         CandidateAndReferences candidate_and_references(decoded_word_ids, id_references);
         candidate_and_references_vector.push_back(candidate_and_references);
 
-        for (int i = 1; i <= 1; ++i) { // TODO
+        for (int i = 1; i <= 4; ++i) {
             float bleu = computeBleu(candidate_and_references_vector, i);
             cout << "bleu_:" << i << ":" << bleu << endl;
         }
