@@ -108,15 +108,17 @@ float computeBleu(const vector<CandidateAndReferences> &candidate_and_references
     for (int i = 1; i <=max_gram_len; ++i) {
         int matched_count_sum = 0;
         int candidate_count_sum = 0;
+        int candidate_len_sum = 0;
         for (const auto &candidate_and_references : candidate_and_references_vector) {
             int matched_count = mostMatchedCount(candidate_and_references, i);
             matched_count_sum += matched_count;
             candidate_count_sum += candidate_and_references.candidate.size() + 1 - i;
+            candidate_len_sum += candidate_and_references.candidate.size();
 
             int r = mostMatchedLength(candidate_and_references);
             r_sum += r;
         }
-        c_sum += candidate_count_sum + i - 1;
+        c_sum += candidate_len_sum;
 
         weighted_sum += 1.0f / max_gram_len * log(static_cast<float>(matched_count_sum) /
                 candidate_count_sum);
