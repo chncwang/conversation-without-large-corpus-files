@@ -72,10 +72,13 @@ struct DecoderComponents {
 
         Node *keyword, *keyword_extra;
         if (return_keyword) {
-            ConcatNode *context_concated = new ConcatNode;
-            context_concated->init(2 * hyper_params.hidden_dim);
-            context_concated->forward(graph, {decoder._hiddens.at(i), contexts.at(i)});
-
+            shared_ptr<AdditiveAttentionBuilder> keyword_att_builder(new AdditiveAttentionBuilder);
+            Node *guide = decoder.size() == 0 ? static_cast<Node*>(bucket(hyper_params.hidden_dim,
+                            graph)) : static_cast<Node*>(decoder._hiddens.at(decoder.size() - 1));
+            keyword_att_builder->forward(graph, model_params.keyword_attention_params,
+                    encoder_hiddens, *guide);
+            Node *context_concated = n3ldg_plus::concat(graph,
+                    {decoder._hiddens.at(i), contexts.at(i), keyword_att_builder->_hidden});
             keyword = n3ldg_plus::linear(graph, model_params.hidden_to_keyword_params,
                     *context_concated);
             keyword_extra = n3ldg_plus::linear(graph, model_params.hidden_to_keyword_extra_params,
