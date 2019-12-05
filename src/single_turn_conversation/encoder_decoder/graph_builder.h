@@ -88,8 +88,9 @@ public:
 //            keys.insert(path_.at(i).word_id);
 //        }
 //        return final_log_probability / path_.size();
-        return final_log_probability / (path_.size() % 2 == 1 ? all_words.size() :
-                normal_words.size());
+//        return final_log_probability / (path_.size() % 2 == 1 ? all_words.size() :
+//                normal_words.size());
+        return final_log_probability / (normal_words.size() + 1e-10);
     }
 
     dtype finalLogProbability() const {
@@ -255,7 +256,6 @@ vector<BeamSearchResult> mostProbableResults(
         const Node &node = *nodes.at(i);
 
         BeamSearchResult beam_search_result;
-        priority_queue<BeamSearchResult, vector<BeamSearchResult>, decltype(cmp)> local_queue(cmp);
         for (int j = 0; j < nodes.at(i)->getDim(); ++j) {
             if (j == model_params.lookup_table.getElemId(::unknownkey)) {
                 continue;
@@ -277,22 +277,12 @@ vector<BeamSearchResult> mostProbableResults(
             beam_search_result =  BeamSearchResult(beam.at(i), word_ids, log_probability);
 //            int local_size = min(k, 1 + node.getDim() / 10);
             int local_size = k;
-            if (local_queue.size() < local_size) {
-                local_queue.push(beam_search_result);
-            } else if (local_queue.top().finalScore() < beam_search_result.finalScore()) {
-                local_queue.pop();
-                local_queue.push(beam_search_result);
-            }
-        }
-        while (!local_queue.empty()) {
-            auto &e = local_queue.top();
-            if (queue.size() < k) {
-                queue.push(e);
-            } else if (queue.top().finalScore() < e.finalScore()) {
+            if (queue.size() < local_size) {
+                queue.push(beam_search_result);
+            } else if (queue.top().finalScore() < beam_search_result.finalScore()) {
                 queue.pop();
-                queue.push(e);
+                queue.push(beam_search_result);
             }
-            local_queue.pop();
         }
     }
 
@@ -429,8 +419,6 @@ vector<BeamSearchResult> mostProbableKeywords(
             const Node &node = *nodes.at(i);
 
             BeamSearchResult beam_search_result;
-            priority_queue<BeamSearchResult, vector<BeamSearchResult>, decltype(cmp)>
-                local_queue(cmp);
             for (int j = 0; j < nodes.at(i)->getDim(); ++j) {
                 bool should_continue = false;
                 if (is_first) {
@@ -476,22 +464,12 @@ vector<BeamSearchResult> mostProbableKeywords(
 
                 BeamSearchResult local = BeamSearchResult(beam.at(i), word_ids, log_probability);
 //                if (local_queue.size() < min(k, node.getDim() / 10 + 1)) {
-                if (local_queue.size() < k) {
-                    local_queue.push(local);
-                } else if (local_queue.top().finalScore() < local.finalScore()) {
-                    local_queue.pop();
-                    local_queue.push(local);
-                }
-            }
-            while (!local_queue.empty()) {
-                auto &e = local_queue.top();
                 if (queue.size() < k) {
-                    queue.push(e);
-                } else if (queue.top().finalScore() < e.finalScore()) {
+                    queue.push(local);
+                } else if (queue.top().finalScore() < local.finalScore()) {
                     queue.pop();
-                    queue.push(e);
+                    queue.push(local);
                 }
-                local_queue.pop();
             }
         }
     }
@@ -786,13 +764,13 @@ struct GraphBuilder {
 //                auto & r = word_ids_result.at(i);
 //                ++closured_count;
 //            }
-            if (closured_count >= 10 * k) {
+            if (closured_count >= 2*k) {
                 break;
             }
 
             for (int i = 0;; ++i) {
                 cout << boost::format("forwardDecoderUsingBeamSearch i:%1%\n") % i;
-                if (word_ids_result.size() >= k * 10 || i > default_config.cut_length) {
+                if (word_ids_result.size() >= 2*k || i > default_config.cut_length) {
                     break;
                 }
 
@@ -876,7 +854,7 @@ struct GraphBuilder {
             }
         }
 
-        if (word_ids_result.size() < 10 * k) {
+        if (word_ids_result.size() < 2*k) {
             cerr << boost::format("word_ids_result size is %1%, but beam_size is %2%") %
                 word_ids_result.size() % k << endl;
             abort();
