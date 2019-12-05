@@ -5,9 +5,11 @@
 #include <iostream>
 #include <algorithm>
 #include <cmath>
+#include <set>
 #include <boost/format.hpp>
 #include "conversation_structure.h"
 #include "print.h"
+#include "tinyutf8.h"
 
 using namespace std;
 
@@ -23,9 +25,40 @@ struct CandidateAndReferences {
     }
 };
 
+class PunctuationSet {
+public:
+    set<string> punctuation_set;
+
+    PunctuationSet() {
+        for (int i = 0; i < PUNCTUATIONS.length(); ++i) {
+            utf8_string punc = PUNCTUATIONS.substr(i, 1);
+            punctuation_set.insert(punc.cpp_str());
+            cout << "PunctuationSet - punc:" << punc.cpp_str() << endl;
+        }
+    }
+
+private:
+    static const utf8_string PUNCTUATIONS;
+};
+const utf8_string PunctuationSet::PUNCTUATIONS =
+        "~`!@#$%^&*()_-+={[}]|:;\"'<>,.?/，。！『』；：？、（）「」《》“”";
+
+bool includePunctuation(const string &str) {
+    static PunctuationSet set;
+    utf8_string utf8_str = str;
+    for (int i = 0; i < utf8_str.length(); ++i) {
+        if (set.punctuation_set.find(utf8_str.substr(i, 1).cpp_str()) !=
+                set.punctuation_set.end()) {
+            return true;
+        }
+    }
+    return false;
+}
+
 float mostMatchedCount(const CandidateAndReferences &candidate_and_references,
         int gram_len) {
     using namespace std;
+
     int max_mached_count = 0;
     const auto &references = candidate_and_references.references;
     const auto &candidate = candidate_and_references.candidate;
@@ -51,7 +84,8 @@ float mostMatchedCount(const CandidateAndReferences &candidate_and_references,
 
                 bool finded = false;
                 for (int k = 0; k < gram_len; ++k) {
-                    if (candidate.at(i + k) != reference.at(j + k)) {
+                    if (includePunctuation(candidate.at(i + k))
+                            || candidate.at(i + k) != reference.at(j + k)) {
                         break;
                     }
                     if (k == gram_len - 1) {
