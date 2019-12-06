@@ -88,9 +88,9 @@ public:
 //            keys.insert(path_.at(i).word_id);
 //        }
 //        return final_log_probability / path_.size();
-//        return final_log_probability / (path_.size() % 2 == 1 ? all_words.size() :
-//                normal_words.size());
-        return final_log_probability / (normal_words.size() + 1e-10);
+        return final_log_probability / (path_.size() % 2 == 1 ? all_words.size() :
+                normal_words.size());
+//        return final_log_probability / (normal_words.size() + 1e-10);
     }
 
     dtype finalLogProbability() const {
