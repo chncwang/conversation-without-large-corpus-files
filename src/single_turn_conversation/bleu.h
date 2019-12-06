@@ -140,7 +140,22 @@ int mostMatchedLength(const CandidateAndReferences &candidate_and_references) {
 //    print(candidate_and_references.candidate);
 //    cout << "most match len:" << e->size() << endl;
 //    print(*e);
-    return e->size();
+    return puncRemovedLen(*e);
+}
+
+float ngramCount(const vector<string> sentence, int ngram) {
+    int result = 0;
+    for (int i = 0; i < sentence.size() - ngram; ++i) {
+        for (int j = 0; j < ngram; ++j) {
+            if (includePunctuation(sentence.at(i + j))) {
+                break;
+            }
+            if (j == ngram - 1) {
+                ++result;
+            }
+        }
+    }
+    return result;
 }
 
 float computeBleu(const vector<CandidateAndReferences> &candidate_and_references_vector,
@@ -157,8 +172,8 @@ float computeBleu(const vector<CandidateAndReferences> &candidate_and_references
         for (const auto &candidate_and_references : candidate_and_references_vector) {
             int matched_count = mostMatchedCount(candidate_and_references, i);
             matched_count_sum += matched_count;
-            candidate_count_sum += candidate_and_references.candidate.size() + 1 - i;
-            candidate_len_sum += candidate_and_references.candidate.size();
+            candidate_count_sum += ngramCount(candidate_and_references.candidate, i);
+            candidate_len_sum += puncRemovedLen(candidate_and_references.candidate);
 
             int r = mostMatchedLength(candidate_and_references);
             r_sum += r;
