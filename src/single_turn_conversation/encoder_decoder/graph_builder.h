@@ -322,6 +322,7 @@ vector<BeamSearchResult> mostProbableResults(
 vector<BeamSearchResult> mostProbableKeywords(
         vector<DecoderComponents> &beam,
         const vector<BeamSearchResult> &last_results,
+        vector<Node*> &encoder_hiddens,
         const unordered_map<string ,float> word_idf_table,
         int word_pos,
         int k,
@@ -356,10 +357,15 @@ vector<BeamSearchResult> mostProbableKeywords(
                 abort();
             }
 
-            ConcatNode *context_concated = new ConcatNode;
-            context_concated->init(2 * hyper_params.hidden_dim);
-            context_concated->forward(graph, {components.decoder._hiddens.at(word_pos),
-                    components.contexts.at(word_pos)});
+            shared_ptr<AdditiveAttentionBuilder> keyword_att_builder(new AdditiveAttentionBuilder);
+            Node *guide = components.decoder.size() == 0 ?
+                static_cast<Node*>(n3ldg_plus::bucket(graph, hyper_params.hidden_dim, 0.0f)) :
+                static_cast<Node*>(components.decoder._hiddens.at(components.decoder.size() - 1));
+            keyword_att_builder->forward(graph, model_params.keyword_attention_params,
+                    encoder_hiddens, *guide);
+
+            Node *context_concated = n3ldg_plus::concat(graph,
+                    {components.decoder._hiddens.at(word_pos), components.contexts.at(word_pos)});
 
             Node *keyword = n3ldg_plus::linear(graph, model_params.hidden_to_keyword_params,
                     *context_concated);
@@ -784,8 +790,9 @@ struct GraphBuilder {
                 cout << "forwardDecoderHiddenByOneStep:" << endl;
                 graph.compute();
 
+                vector<Node*> &encoder_hiddens = left_to_right_encoder._hiddens;
                 most_probable_results = mostProbableKeywords(beam, most_probable_results,
-                        word_idf_table, i, k, graph, model_params, hyper_params,
+                        encoder_hiddens, word_idf_table, i, k, graph, model_params, hyper_params,
                         default_config, i == 0, searched_ids, black_list);
                 for (int beam_i = 0; beam_i < beam.size(); ++beam_i) {
                     DecoderComponents &decoder_components = beam.at(beam_i);
