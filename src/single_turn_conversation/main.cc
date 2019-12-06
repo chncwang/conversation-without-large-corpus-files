@@ -117,6 +117,7 @@ DefaultConfig parseDefaultConfig(INIReader &ini_reader) {
     default_config.ngram_penalty_1 = ini_reader.GetReal(SECTION, "ngram_penalty_1", 0.0f);
     default_config.ngram_penalty_2 = ini_reader.GetReal(SECTION, "ngram_penalty_2", 0.0f);
     default_config.ngram_penalty_3 = ini_reader.GetReal(SECTION, "ngram_penalty_3", 0.0f);
+    default_config.result_count_factor = ini_reader.GetReal(SECTION, "result_count_factor", 1.0f);
 
     return default_config;
 }
