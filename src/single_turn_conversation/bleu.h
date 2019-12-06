@@ -67,7 +67,6 @@ float mostMatchedCount(const CandidateAndReferences &candidate_and_references,
     }
     vector<string> matched_ref;
     for (const vector<string> &reference : references) {
-        print(reference);
         if (reference.size() < gram_len) {
             continue;
         }
