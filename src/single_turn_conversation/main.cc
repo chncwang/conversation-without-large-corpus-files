@@ -520,7 +520,11 @@ void decodeTestPosts(const HyperParams &hyper_params, ModelParams &model_params,
     cout << "decodeTestPosts begin" << endl;
     hyper_params.print();
     vector<CandidateAndReferences> candidate_and_references_vector;
+    int cc = 0;
     for (const PostAndResponses &post_and_responses : post_and_responses_vector) {
+        if (cc++ < 905) {
+            continue;
+        }
         cout << "post:" << endl;
         auto post_sentence = post_sentences.at(post_and_responses.post_id);
         print(post_sentence);

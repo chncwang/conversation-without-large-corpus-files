@@ -145,7 +145,7 @@ int mostMatchedLength(const CandidateAndReferences &candidate_and_references) {
 
 float ngramCount(const vector<string> sentence, int ngram) {
     int result = 0;
-    for (int i = 0; i < sentence.size() - ngram; ++i) {
+    for (int i = 0; i < 1 + sentence.size() - ngram; ++i) {
         for (int j = 0; j < ngram; ++j) {
             if (includePunctuation(sentence.at(i + j))) {
                 break;
