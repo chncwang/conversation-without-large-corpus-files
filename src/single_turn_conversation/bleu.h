@@ -83,7 +83,8 @@ float mostMatchedCount(const CandidateAndReferences &candidate_and_references,
 
                 bool finded = false;
                 for (int k = 0; k < gram_len; ++k) {
-                    if (candidate.at(i + k) != reference.at(j + k)) {
+                    if (includePunctuation(candidate.at(i + k)) ||
+                            candidate.at(i + k) != reference.at(j + k)) {
                         break;
                     }
                     if (k == gram_len - 1) {
@@ -114,11 +115,23 @@ float mostMatchedCount(const CandidateAndReferences &candidate_and_references,
     return max_mached_count;
 }
 
+int puncRemovedLen(const vector<string> &sentence) {
+    int len = 0;
+    for (const string &w : sentence) {
+        if (!includePunctuation(w)) {
+            ++len;
+        }
+    }
+    return len;
+}
+
 int mostMatchedLength(const CandidateAndReferences &candidate_and_references) {
-    int candidate_len = candidate_and_references.candidate.size();
+    int candidate_len = puncRemovedLen(candidate_and_references.candidate);
     auto cmp = [&](const vector<string> &a, const vector<string> &b)->bool {
-        int dis_a = candidate_len - a.size();
-        int dis_b = candidate_len - b.size();
+        int a_len = puncRemovedLen(a);
+        int dis_a = candidate_len - a_len;
+        int b_len = puncRemovedLen(b);
+        int dis_b = candidate_len - b_len;
         return abs(dis_a) < abs(dis_b);
     };
     const auto &e = min_element(candidate_and_references.references.begin(),
