@@ -521,6 +521,7 @@ float metricTestPosts(const HyperParams &hyper_params, ModelParams &model_params
 void decodeTestPosts(const HyperParams &hyper_params, ModelParams &model_params,
         DefaultConfig &default_config,
         const unordered_map<string, float> & word_idf_table,
+        const vector<int> &bound_table,
         const vector<PostAndResponses> &post_and_responses_vector,
         const vector<vector<string>> &post_sentences,
         const vector<vector<string>> &response_sentences,
@@ -539,8 +540,8 @@ void decodeTestPosts(const HyperParams &hyper_params, ModelParams &model_params,
         vector<DecoderComponents> decoder_components_vector;
         decoder_components_vector.resize(hyper_params.beam_size);
         auto pair = graph_builder.forwardDecoderUsingBeamSearch(graph, decoder_components_vector,
-                word_idf_table, hyper_params.beam_size, hyper_params, model_params, default_config,
-                black_list);
+                word_idf_table, bound_table, hyper_params.beam_size, hyper_params, model_params,
+                default_config, black_list);
         const vector<WordIdAndProbability> &word_ids_and_probability = pair.first;
         cout << "post:" << endl;
         print(post_sentences.at(post_and_responses.post_id));
@@ -832,6 +833,7 @@ int main(int argc, char *argv[]) {
         cout << all_word_list.at(i) << ":" ;
         cout << all_idf.at(all_word_list.at(i)) << endl;
     }
+    abort();
 
     float occur_sum = 0.0f;
     vector<int> idf_range;
@@ -917,7 +919,7 @@ int main(int argc, char *argv[]) {
                 hyper_params.word_cutoff, black_list);
     } else if (default_config.program_mode == ProgramMode::DECODING) {
         hyper_params.beam_size = beam_size;
-        decodeTestPosts(hyper_params, model_params, default_config, all_idf,
+        decodeTestPosts(hyper_params, model_params, default_config, all_idf, word_id_bound_table,
                 test_post_and_responses, post_sentences,
                 response_sentences, black_list);
     } else if (default_config.program_mode == ProgramMode::METRIC) {
