@@ -83,8 +83,7 @@ float mostMatchedCount(const CandidateAndReferences &candidate_and_references,
 
                 bool finded = false;
                 for (int k = 0; k < gram_len; ++k) {
-                    if (includePunctuation(candidate.at(i + k))
-                            || candidate.at(i + k) != reference.at(j + k)) {
+                    if (candidate.at(i + k) != reference.at(j + k)) {
                         break;
                     }
                     if (k == gram_len - 1) {
@@ -105,12 +104,12 @@ float mostMatchedCount(const CandidateAndReferences &candidate_and_references,
             matched_ref = reference;
         }
     }
-    if (max_mached_count > 0) {
-        cout << "candidate:" << endl;
-        print(candidate);
-        cout << "max_mached_count:" << max_mached_count << " gram len:" << gram_len << endl;
-        print(matched_ref);
-    }
+//    if (max_mached_count > 0) {
+//        cout << "candidate:" << endl;
+//        print(candidate);
+//        cout << "max_mached_count:" << max_mached_count << " gram len:" << gram_len << endl;
+//        print(matched_ref);
+//    }
 
     return max_mached_count;
 }
@@ -124,10 +123,10 @@ int mostMatchedLength(const CandidateAndReferences &candidate_and_references) {
     };
     const auto &e = min_element(candidate_and_references.references.begin(),
             candidate_and_references.references.end(), cmp);
-    cout << "candidate:" << endl;
-    print(candidate_and_references.candidate);
-    cout << "most match len:" << e->size() << endl;
-    print(*e);
+//    cout << "candidate:" << endl;
+//    print(candidate_and_references.candidate);
+//    cout << "most match len:" << e->size() << endl;
+//    print(*e);
     return e->size();
 }
 
