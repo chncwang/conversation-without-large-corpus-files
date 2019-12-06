@@ -397,13 +397,14 @@ struct GraphBuilder {
             cout << boost::format("beam size:%1%\n") % beam.size();
 
             int ended_count = word_ids_result.size();
-            if (ended_count >= k) {
+            if (ended_count >= default_config.result_count_factor * k) {
                 break;
             }
 
             for (int i = 0;; ++i) {
                 cout << boost::format("forwardDecoderUsingBeamSearch i:%1%\n") % i;
-                if (word_ids_result.size() >= k || i > default_config.cut_length) {
+                if (word_ids_result.size() >= default_config.result_count_factor * k ||
+                        i > default_config.cut_length) {
                     break;
                 }
 
@@ -458,7 +459,7 @@ struct GraphBuilder {
             }
         }
 
-        if (word_ids_result.size() < k) {
+        if (word_ids_result.size() < default_config.result_count_factor * k) {
             cerr << boost::format("word_ids_result size is %1%, but beam_size is %2%") %
                 word_ids_result.size() % k << endl;
             abort();
