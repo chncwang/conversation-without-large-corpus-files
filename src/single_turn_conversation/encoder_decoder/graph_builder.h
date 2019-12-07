@@ -550,6 +550,7 @@ struct GraphBuilder {
     void forwardDecoder(Graph &graph, DecoderComponents &decoder_components,
             const std::vector<std::string> &answer,
             const std::vector<std::string> &keywords,
+            const std::vector<int> bounds,
             const HyperParams &hyper_params,
             ModelParams &model_params,
             bool is_training) {
