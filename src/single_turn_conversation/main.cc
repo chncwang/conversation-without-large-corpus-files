@@ -459,6 +459,7 @@ float metricTestPosts(const HyperParams &hyper_params, ModelParams &model_params
                 graph_builder.forwardDecoder(graph, decoder_components,
                         response_sentences.at(response_id),
                         idf_info.keywords_behind,
+                        bound_table,
                         hyper_params, model_params, false);
                 profiler.EndEvent();
                 graph.compute();
@@ -907,8 +908,7 @@ int main(int argc, char *argv[]) {
     cout << "completed" << endl;
     cout << "reading response idf info ..." << endl;
     vector<WordIdfInfo> response_idf_info_list = readWordIdfInfoList(response_sentences,
-            is_response_in_train_set, all_idf, word_counts,
-            model_params.lookup_table.elems.m_string_to_id, hyper_params.word_cutoff);
+            model_params.lookup_table.elems.m_string_to_id, word_id_bound_table);
     cout << "completed" << endl;
 
     if (default_config.program_mode == ProgramMode::INTERACTING) {
@@ -1039,7 +1039,8 @@ int main(int argc, char *argv[]) {
                             model_params.lookup_table.elems.m_string_to_id, word_id_bound_table);
                     DecoderComponents decoder_components;
                     graph_builder->forwardDecoder(graph, decoder_components, response_sentence,
-                            idf_info.keywords_behind, hyper_params, model_params, true);
+                            idf_info.keywords_behind, word_id_bound_table, hyper_params,
+                            model_params, true);
                     decoder_components_vector.push_back(decoder_components);
                 }
 
@@ -1132,7 +1133,7 @@ int main(int argc, char *argv[]) {
                                 word_id_bound_table);
                         graph_builder.forwardDecoder(graph, decoder_components,
                                 response_sentences.at(conversation_pair.response_id),
-                                response_idf_info.keywords_behind,
+                                response_idf_info.keywords_behind, word_id_bound_table,
                                 hyper_params, model_params, true);
 
                         graph.compute();

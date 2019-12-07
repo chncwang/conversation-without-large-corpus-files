@@ -274,11 +274,6 @@ WordIdfInfo getWordIdfInfo(const vector<string> &sentence,
     for (int i = 0; i < word_id_bounds.size(); ++i) {
         auto it = std::max_element(word_id_bounds.begin() + i, word_id_bounds.end());
         string word = sentence.at(it - word_id_bounds.begin());
-        if (word == ::unknownkey) {
-            cerr << "keyword is set as unknownkey" << endl;
-            abort();
-        }
-//        cout << "word:" << word <<" id:" << max_id << endl;
 
         word_idf_info.keywords_behind.push_back(word);
     }
@@ -287,17 +282,12 @@ WordIdfInfo getWordIdfInfo(const vector<string> &sentence,
 }
 
 vector<WordIdfInfo> readWordIdfInfoList(const vector<vector<string>> &sentences,
-        const vector<bool> &is_in_train_set,
-        const unordered_map<string, float> &word_idfs,
-        const unordered_map<string, int> &word_counts,
         const unordered_map<string, int> &word_id_table,
         const vector<int> &word_id_bound_table) {
     std::vector<WordIdfInfo> results;
 
-    int i = 0;
     for (const auto &s : sentences) {
-        auto info = getWordIdfInfo(s, is_in_train_set.at(i++), word_idfs, word_id_table,
-                word_counts, word_id_bound_table);
+        auto info = getWordIdfInfo(s, word_id_table, word_id_bound_table);
         results.push_back(move(info));
     }
 
