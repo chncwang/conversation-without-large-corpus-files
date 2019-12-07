@@ -429,6 +429,11 @@ vector<BeamSearchResult> mostProbableKeywords(
                 if (j == model_params.lookup_table.getElemId(::unknownkey)) {
                     continue;
                 }
+
+                if (word_idf_table.at(model_params.lookup_table.elems.from_id(j)) >= 9.0f) {
+                    break;
+                }
+
                 for (const string &black : black_list) {
                     if (black == model_params.lookup_table.elems.from_id(j)) {
                         should_continue = true;
