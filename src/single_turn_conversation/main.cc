@@ -831,9 +831,8 @@ int main(int argc, char *argv[]) {
     cout << "all_word_list size:" << all_word_list.size() << endl;
     for (int i = 0; i < all_word_list.size() - 1; ++i) {
         cout << all_word_list.at(i) << ":" ;
-        cout << all_idf.at(all_word_list.at(i)) << endl;
+        cout << all_idf.at(all_word_list.at(i)) << " " ;
     }
-    abort();
 
     float occur_sum = 0.0f;
     vector<int> idf_range;
@@ -857,6 +856,7 @@ int main(int argc, char *argv[]) {
 
     alphabet.init(all_word_list);
     cout << boost::format("alphabet size:%1%") % alphabet.size() << endl;
+    abort();
 
     ModelParams model_params;
     int beam_size = hyper_params.beam_size;
