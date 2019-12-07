@@ -57,22 +57,17 @@ struct DecoderComponents {
             vector<Node *> &encoder_hiddens,
             int i,
             bool return_keyword) {
-        ConcatNode *concat_node = new ConcatNode();
-        int context_dim = contexts.at(0)->getDim();
-        concat_node->init(context_dim + hyper_params.hidden_dim + 2 * hyper_params.word_dim);
         vector<Node *> concat_inputs = {
             contexts.at(i), decoder._hiddens.at(i),
             i == 0 ? bucket(hyper_params.word_dim, graph) :
-                static_cast<Node*>(decoder_lookups.at(i - 1)),
-            i == 0 ? bucket(hyper_params.word_dim, graph) :
-                static_cast<Node*>(decoder_keyword_lookups.at(i - 1))
+                static_cast<Node*>(decoder_lookups.at(i - 1))
         };
         if (decoder_lookups.size() != i) {
             cerr << boost::format("decoder_lookups size:%1% i:%2%") % decoder_lookups.size() %
                 i << endl;
             abort();
         }
-        concat_node->forward(graph, concat_inputs);
+        Node *concat_node = n3ldg_plus::concat(graph, concat_inputs);
 
         Node *keyword;
         if (return_keyword) {
@@ -80,7 +75,7 @@ struct DecoderComponents {
             context_concated->init(2 * hyper_params.hidden_dim);
             context_concated->forward(graph, {decoder._hiddens.at(i), contexts.at(i)});
 
-            keyword = n3ldg_plus::uni(graph, model_params.hidden_to_keyword_params,
+            keyword = n3ldg_plus::linear(graph, model_params.hidden_to_keyword_params,
                     *context_concated);
         } else {
             keyword = nullptr;
@@ -90,7 +85,7 @@ struct DecoderComponents {
         keyword_concated->init(concat_node->getDim() + hyper_params.word_dim);
         keyword_concated->forward(graph, {concat_node, decoder_keyword_lookups.at(i)});
 
-        Node *decoder_to_wordvector = n3ldg_plus::uni(graph,
+        Node *decoder_to_wordvector = n3ldg_plus::linear(graph,
                 model_params.hidden_to_wordvector_params, *keyword_concated);
 
         return {decoder_to_wordvector, keyword};

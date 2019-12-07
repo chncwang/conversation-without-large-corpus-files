@@ -16,6 +16,7 @@
 #include "tinyutf8.h"
 #include "model_params.h"
 #include "hyper_params.h"
+#include "single_turn_conversation/print.h"
 #include "single_turn_conversation/def.h"
 #include "single_turn_conversation/default_config.h"
 #include "single_turn_conversation/encoder_decoder/decoder_components.h"
@@ -24,12 +25,14 @@ using namespace std;
 using namespace n3ldg_plus;
 
 struct WordIdAndProbability {
+    int dim;
     int word_id;
     dtype probability;
 
     WordIdAndProbability() = default;
     WordIdAndProbability(const WordIdAndProbability &word_id_and_probability) = default;
-    WordIdAndProbability(int wordid, dtype prob) : word_id(wordid), probability(prob) {}
+    WordIdAndProbability(int dimm, int wordid, dtype prob) : dim(dimm), word_id(wordid),
+    probability(prob) {}
 };
 
 string getSentence(const vector<int> &word_ids_vector, const ModelParams &model_params) {
@@ -55,25 +58,39 @@ public:
             }
 
     dtype finalScore() const {
-        if (path_.size() % 2 == 0) {
-            for (int n = 2; n < 10; ++n) {
-                if (path_.size() >= n * 4) {
-                    for (int i = path_.size() - n * 4 + 1; i>=0;--i) {
-                        bool ngram_hit = true;
-                        for (int j = 0; j < n; ++j) {
-                            if (path_.at(i + 2 * j).word_id != path_.at(path_.size() - n * 2 + j * 2).word_id) {
-                                ngram_hit = false;
-                                break;
-                            }
-                        }
-                        if (ngram_hit) {
-                            return -1e10;
-                        }
-                    }
-                }
+//        if (path_.size() % 2 == 0) {
+//            for (int n = 2; n < 10; ++n) {
+//                if (path_.size() >= n * 4) {
+//                    for (int i = path_.size() - n * 4 + 1; i>=0;--i) {
+//                        bool ngram_hit = true;
+//                        for (int j = 0; j < n; ++j) {
+//                            if (path_.at(i + 2 * j).word_id != path_.at(path_.size() - n * 2 + j * 2).word_id) {
+//                                ngram_hit = false;
+//                                break;
+//                            }
+//                        }
+//                        if (ngram_hit) {
+//                            return -1e10;
+//                        }
+//                    }
+//                }
+//            }
+//        }
+        set<int> all_words, normal_words;
+        for (int i = 0; i < path_.size(); ++i) {
+            all_words.insert(path_.at(i).word_id);
+            if (i % 2 == 1) {
+                normal_words.insert(path_.at(i).word_id);
             }
         }
-        return final_log_probability;
+//        set<int> keys;
+//        for (int i = 0; i < path_.size(); i +=2) {
+//            keys.insert(path_.at(i).word_id);
+//        }
+//        return final_log_probability / path_.size();
+        int len = (path_.size() % 2 == 1 ? all_words.size() : normal_words.size());
+        return final_log_probability / pow(len, 1);
+//        return final_log_probability / (normal_words.size() + 1e-10);
     }
 
     dtype finalLogProbability() const {
@@ -228,52 +245,36 @@ vector<BeamSearchResult> mostProbableResults(
 //    for (int i = 0; i < (is_first ? 1 : nodes.size()); ++i) {
     for (int i = 0; i < nodes.size(); ++i) {
         const Node &node = *nodes.at(i);
-        auto tuple = toExp(node);
 
         BeamSearchResult beam_search_result;
-        priority_queue<BeamSearchResult, vector<BeamSearchResult>, decltype(cmp)> local_queue(cmp);
         for (int j = 0; j < nodes.at(i)->getDim(); ++j) {
             if (j == model_params.lookup_table.getElemId(::unknownkey)) {
                 continue;
             }
-            if (j == 0 && !last_results.empty() &&
-                    last_results.at(i).getPath().back().word_id != 0) {
+            int stop_id = model_params.lookup_table.elems.from_string(STOP_SYMBOL);
+            if (j == stop_id && !last_results.empty() &&
+                    last_results.at(i).getPath().back().word_id != stop_id) {
                 continue;
             }
-            dtype value = node.getVal().v[j] - get<1>(tuple).second;
-            dtype log_probability = value - log(get<2>(tuple));
-            dtype word_probability = exp(log_probability);
+            dtype value = node.getVal().v[j];
+            dtype log_probability = log(value);
+            dtype word_probability = value;
             vector<WordIdAndProbability> word_ids;
             if (!last_results.empty()) {
                 log_probability += last_results.at(i).finalLogProbability();
                 word_ids = last_results.at(i).getPath();
             }
-            if (log_probability != log_probability) {
-                cerr << value << " " << log(get<2>(tuple)) << endl;
-                abort();
-            }
-            word_ids.push_back(WordIdAndProbability(j, word_probability));
-//            if (log_probability > max_log_prob) {
-//                max_log_prob = log_probability;
+            word_ids.push_back(WordIdAndProbability(node.getDim(), j, word_probability));
             beam_search_result =  BeamSearchResult(beam.at(i), word_ids, log_probability);
-            if (queue.size() < k) {
+//            int local_size = min(k, 1 + node.getDim() / 10);
+            int local_size = k;
+            if (queue.size() < local_size) {
                 queue.push(beam_search_result);
             } else if (queue.top().finalScore() < beam_search_result.finalScore()) {
                 queue.pop();
                 queue.push(beam_search_result);
             }
-//            }
         }
-//        while (!local_queue.empty()) {
-//            auto &e = local_queue.top();
-//            if (queue.size() < k) {
-//                queue.push(e);
-//            } else if (queue.top().finalScore() < e.finalScore()) {
-//                queue.pop();
-//                queue.push(e);
-//            }
-//            local_queue.pop();
-//        }
     }
 
     while (!queue.empty()) {
@@ -352,7 +353,7 @@ vector<BeamSearchResult> mostProbableKeywords(
             context_concated->forward(graph, {components.decoder._hiddens.at(word_pos),
                     components.contexts.at(word_pos)});
 
-            Node *keyword = n3ldg_plus::uni(graph, model_params.hidden_to_keyword_params,
+            Node *keyword = n3ldg_plus::linear(graph, model_params.hidden_to_keyword_params,
                     *context_concated);
             keyword_node = keyword;
 
@@ -373,7 +374,7 @@ vector<BeamSearchResult> mostProbableKeywords(
             Node *softmax = n3ldg_plus::softmax(graph, *keyword_vector_to_onehot);
 
             components.keyword_vector_to_onehots.push_back(softmax);
-            node = keyword_vector_to_onehot;
+            node = softmax;
         } else {
             node = nullptr;
             keyword_node = nullptr;
@@ -396,7 +397,8 @@ vector<BeamSearchResult> mostProbableKeywords(
             vector<WordIdAndProbability> new_id_and_probs = last_results.at(i).getPath();
             WordIdAndProbability &last_keyword = new_id_and_probs.at(new_id_and_probs.size() - 2);
             WordIdAndProbability &last_norm = new_id_and_probs.at(new_id_and_probs.size() - 1);
-            WordIdAndProbability w = {last_keyword.word_id, last_norm.probability};
+            WordIdAndProbability w = {last_keyword.dim, last_keyword.word_id,
+                last_norm.probability};
             new_id_and_probs.push_back(w);
             BeamSearchResult beam_search_result(beam.at(i), new_id_and_probs,
                     last_results.at(i).finalLogProbability());
@@ -408,7 +410,6 @@ vector<BeamSearchResult> mostProbableKeywords(
             }
         } else {
             const Node &node = *nodes.at(i);
-            auto tuple = toExp(node);
 
             BeamSearchResult beam_search_result;
             for (int j = 0; j < nodes.at(i)->getDim(); ++j) {
@@ -421,6 +422,11 @@ vector<BeamSearchResult> mostProbableKeywords(
                 if (j == model_params.lookup_table.getElemId(::unknownkey)) {
                     continue;
                 }
+
+                if (word_idf_table.at(model_params.lookup_table.elems.from_id(j)) >= 9.0f) {
+                    break;
+                }
+
                 for (const string &black : black_list) {
                     if (black == model_params.lookup_table.elems.from_id(j)) {
                         should_continue = true;
@@ -433,9 +439,9 @@ vector<BeamSearchResult> mostProbableKeywords(
                 if (word_pos == 0 && word_idf_table.at(word) <= default_config.keyword_bound) {
                     continue;
                 }
-                dtype value = node.getVal().v[j] - get<1>(tuple).second;
-                dtype log_probability = value - log(get<2>(tuple));
-                dtype word_probability = exp(log_probability);
+                dtype value = node.getVal().v[j];
+                dtype log_probability = log(value);
+                dtype word_probability = value;
                 vector<WordIdAndProbability> word_ids;
                 if (!last_results.empty()) {
                     log_probability += last_results.at(i).finalLogProbability();
@@ -443,7 +449,6 @@ vector<BeamSearchResult> mostProbableKeywords(
                 }
                 if (log_probability != log_probability) {
                     cerr << node.getVal().vec() << endl;
-                    cerr << value << " " << log(get<2>(tuple)) << endl;
                     cerr << "keyword node:" << endl << keyword_nodes.at(i)->getVal().vec() << endl;
                     cerr << "hidden node:" << endl << hiddens.at(i)->getVal().vec() << endl;
                     Json::StreamWriterBuilder builder;
@@ -453,28 +458,17 @@ vector<BeamSearchResult> mostProbableKeywords(
                     cerr << "param W:" << endl << json_str << endl;
                     abort();
                 }
-                word_ids.push_back(WordIdAndProbability(j, word_probability));
+                word_ids.push_back(WordIdAndProbability(node.getDim(), j, word_probability));
 
                 BeamSearchResult local = BeamSearchResult(beam.at(i), word_ids, log_probability);
-//                if (is_first) {
-//                    if (local.finalScore() > max_score) {
-//                        beam_search_result = local;
-//                        max_score = local.finalScore();
-//                    }
-//                } else {
+//                if (local_queue.size() < min(k, node.getDim() / 10 + 1)) {
                 if (queue.size() < k) {
                     queue.push(local);
                 } else if (queue.top().finalScore() < local.finalScore()) {
                     queue.pop();
                     queue.push(local);
                 }
-//                }
             }
-//            if (is_first) {
-//                while (queue.size() < k) {
-//                    queue.push(beam_search_result);
-//                }
-//            }
         }
     }
 
@@ -557,7 +551,15 @@ struct GraphBuilder {
         int keyword_bound = model_params.lookup_table.nVSize;
 
         for (int i = 0; i < answer.size(); ++i) {
+            if (i > 0) {
+                keyword_bound = model_params.lookup_table.elems.from_string(keywords.at(i - 1)) + 1;
+            }
             int normal_bound = model_params.lookup_table.elems.from_string(keywords.at(i)) + 1;
+            if (normal_bound > keyword_bound) {
+                print(answer);
+                print(keywords);
+                abort();
+            }
             forwardDecoderByOneStep(graph, decoder_components, i,
                     i == 0 ? nullptr : &answer.at(i - 1), keywords.at(i),
                     i == 0 ||  answer.at(i - 1) == keywords.at(i - 1), hyper_params,
@@ -762,14 +764,14 @@ struct GraphBuilder {
 //                auto & r = word_ids_result.at(i);
 //                ++closured_count;
 //            }
-            if (closured_count >= k) {
+            if (closured_count >= default_config.result_count_factor * k) {
                 break;
             }
 
             for (int i = 0;; ++i) {
                 cout << boost::format("forwardDecoderUsingBeamSearch i:%1%\n") % i;
-                int left_k = k;
-                if (word_ids_result.size() >= k || i > default_config.cut_length) {
+                if (word_ids_result.size() >= default_config.result_count_factor * k ||
+                        i > default_config.cut_length) {
                     break;
                 }
 
@@ -821,7 +823,7 @@ struct GraphBuilder {
 
                 last_answers.clear();
                 most_probable_results = mostProbableResults(beam, most_probable_results, i,
-                        left_k, model_params, default_config, i == 0, black_list, word_idf_table);
+                        k, model_params, default_config, i == 0, black_list, word_idf_table);
                 cout << boost::format("most_probable_results size:%1%") %
                     most_probable_results.size() << endl;
                 beam.clear();
@@ -853,7 +855,7 @@ struct GraphBuilder {
             }
         }
 
-        if (word_ids_result.size() < k) {
+        if (word_ids_result.size() < default_config.result_count_factor * k) {
             cerr << boost::format("word_ids_result size is %1%, but beam_size is %2%") %
                 word_ids_result.size() % k << endl;
             abort();

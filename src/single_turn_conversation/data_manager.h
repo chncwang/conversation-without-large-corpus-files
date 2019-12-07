@@ -278,37 +278,27 @@ WordIdfInfo getWordIdfInfo(const vector<string> &sentence,
             cerr << "keyword is set as unknownkey" << endl;
             abort();
         }
+//        cout << "word:" << word <<" id:" << max_id << endl;
+
         word_idf_info.keywords_behind.push_back(word);
     }
 
     return word_idf_info;
 }
 
-vector<WordIdfInfo> readWordIdfInfoList(const string &filename) {
-    std::string line;
-    std::ifstream ifs(filename);
+vector<WordIdfInfo> readWordIdfInfoList(const vector<vector<string>> &sentences,
+        const vector<bool> &is_in_train_set,
+        const unordered_map<string, float> &word_idfs,
+        const unordered_map<string, int> &word_counts,
+        const unordered_map<string, int> &word_id_table,
+        const vector<int> &word_id_bound_table) {
     std::vector<WordIdfInfo> results;
 
-    while (std::getline(ifs, line)) {
-        WordIdfInfo word_idf_info;
-        boost::split(word_idf_info.keywords_behind, line, boost::is_any_of(" "));
-        if (!std::getline(ifs, line)) {
-            cerr << filename << " error" << endl;
-            abort();
-        }
-
-        vector<string> words;
-        boost::split(words, line, boost::is_any_of(" "));
-        for (const string &word : words) {
-            try {
-                word_idf_info.word_id_bounds.push_back(stoi(word));
-            } catch (const std::exception &e) {
-                cerr << word << endl;
-                throw e;
-            }
-        }
-
-        results.push_back(move(word_idf_info));
+    int i = 0;
+    for (const auto &s : sentences) {
+        auto info = getWordIdfInfo(s, is_in_train_set.at(i++), word_idfs, word_id_table,
+                word_counts, word_id_bound_table);
+        results.push_back(move(info));
     }
 
     return results;

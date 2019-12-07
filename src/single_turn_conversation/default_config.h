@@ -46,7 +46,7 @@ struct DefaultConfig {
     float ngram_penalty_1;
     float ngram_penalty_2;
     float ngram_penalty_3;
-
+    float result_count_factor;
 
     NgramPenalty toNgramPenalty() const {
         return {ngram_penalty_1, ngram_penalty_2, ngram_penalty_3};
@@ -80,7 +80,8 @@ struct DefaultConfig {
             << "memory_in_gb:" << memory_in_gb << std::endl
             << "ngram_penalty_1:" << ngram_penalty_1 << std::endl
             << "ngram_penalty_2:" << ngram_penalty_2 << std::endl
-            << "ngram_penalty_3:" << ngram_penalty_3 << std::endl;
+            << "ngram_penalty_3:" << ngram_penalty_3 << std::endl
+            << "result_count_factor:" << result_count_factor << std::endl;
     }
 };
 
