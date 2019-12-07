@@ -552,9 +552,12 @@ struct GraphBuilder {
 
         for (int i = 0; i < answer.size(); ++i) {
             if (i > 0) {
-                keyword_bound = model_params.lookup_table.elems.from_string(keywords.at(i - 1)) + 1;
+                int last_keyword_id =
+                    model_params.lookup_table.elems.from_string(keywords.at(i - 1));
+                keyword_bound = bounds.at(last_keyword_id) + 1;
             }
-            int normal_bound = model_params.lookup_table.elems.from_string(keywords.at(i)) + 1;
+            int keyword_id = model_params.lookup_table.elems.from_string(keywords.at(i));
+            int normal_bound = bounds.at(keyword_id) + 1;
             if (normal_bound > keyword_bound) {
                 print(answer);
                 print(keywords);

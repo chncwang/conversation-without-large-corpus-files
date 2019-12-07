@@ -410,7 +410,7 @@ pair<vector<Node *>, vector<int>> keywordNodesAndIds(const DecoderComponents &de
         const WordIdfInfo &idf_info,
         const ModelParams &model_params) {
     vector<Node *> keyword_result_nodes = decoder_components.keyword_vector_to_onehots;
-    vector<int> keyword_ids = toIds(idf_info.keywords_behind, model_params.lookup_table, false);
+    vector<int> keyword_ids = toIds(idf_info.keywords_behind, model_params.lookup_table, true);
     vector<Node *> non_null_nodes;
     vector<int> chnanged_keyword_ids;
     for (int j = 0; j < keyword_result_nodes.size(); ++j) {
@@ -845,10 +845,10 @@ int main(int argc, char *argv[]) {
             idf_range.push_back(i);
         }
     }
-    idf_range.push_back(all_word_list.size());
+    idf_range.push_back(all_word_list.size() - 1);
     vector<int> word_id_bound_table;
     int idf_range_i = 0;
-    for (int i = 0; i < all_word_list.size() - 1; ++i) {
+    for (int i = 0; i < all_word_list.size(); ++i) {
         int bound = idf_range.at(idf_range_i);
         word_id_bound_table.push_back(bound);
         if (i == bound) ++idf_range_i;
@@ -856,7 +856,6 @@ int main(int argc, char *argv[]) {
 
     alphabet.init(all_word_list);
     cout << boost::format("alphabet size:%1%") % alphabet.size() << endl;
-    abort();
 
     ModelParams model_params;
     int beam_size = hyper_params.beam_size;
