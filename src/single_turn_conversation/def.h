@@ -5,5 +5,6 @@
 
 std::string STOP_SYMBOL = "_stop_symbol__";
 std::string BEGIN_SYMBOL = "_begin_symbol__";
+std::string SEP_SYMBOL = "_sep_symbol__";
 
 #endif

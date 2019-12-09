@@ -41,7 +41,7 @@ private:
     static const utf8_string PUNCTUATIONS;
 };
 const utf8_string PunctuationSet::PUNCTUATIONS =
-        "~`!@#$%^&*()_-+={[}]|:;\"'<>,.?/，。！『』；：？、（）「」《》“”";
+        "~`!@#$%^&*()-+={[}]|:;\"'<>,.?/，。！『』；：？、（）「」《》“”";
 
 bool includePunctuation(const string &str) {
     static PunctuationSet set;

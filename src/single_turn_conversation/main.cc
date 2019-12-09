@@ -291,10 +291,10 @@ vector<int> toIds(const vector<string> &sentence, const LookupTable<Param> &look
     vector<int> ids;
     for (const string &word : sentence) {
 	int xid = lookup_table.getElemId(word);
-        if (!permit_unkown && xid == lookup_table.elems.from_string(::unknownkey)) {
-            cerr << "toIds error: unknown word " << word << endl;
-            abort();
-        }
+//        if (!permit_unkown && xid == lookup_table.elems.from_string(::unknownkey)) {
+//            cerr << "toIds error: unknown word " << word << endl;
+//            abort();
+//        }
         if (xid >= lookup_table.nVSize) {
             cerr << "xid:" << xid << " word:" << word << endl;
             for (const string &w :sentence) {

@@ -14,6 +14,7 @@
 #include <atomic>
 #include <mutex>
 #include "N3LDG.h"
+#include "bleu.h"
 #include "single_turn_conversation/conversation_structure.h"
 #include "single_turn_conversation/def.h"
 #include "single_turn_conversation/default_config.h"
@@ -150,7 +151,12 @@ std::vector<std::vector<std::string>> readSentences(const std::string &filename)
         }
 
         std::vector<std::string> characters;
+        utf8_string last_word = "";
         for (const utf8_string &word : utf8_words) {
+//            if (includePunctuation(last_word.cpp_str()) && !includePunctuation(word.cpp_str())) {
+//                characters.push_back(SEP_SYMBOL);
+//            }
+
             if (isPureEnglish(word) && !isPureNumber(word)) {
                 string w;
                 for (int i = 0; i < word.length(); ++i) {
@@ -164,6 +170,8 @@ std::vector<std::vector<std::string>> readSentences(const std::string &filename)
             } else {
                 characters.push_back(word.cpp_str());
             }
+
+            last_word = word;
         }
 
         characters.push_back(STOP_SYMBOL);
@@ -289,6 +297,13 @@ WordIdfInfo getWordIdfInfo(const vector<string> &sentence,
                 word = sentence.at(j);
                 max_id = it->second;
             }
+            if (includePunctuation(sentence.at(j))) {
+                break;
+            }
+        }
+        if (max_id == -1) {
+            cerr << "getWordIdfInfo - max_id is still -1" << endl;
+            abort();
         }
 //        cout << "word:" << word <<" id:" << max_id << endl;
 

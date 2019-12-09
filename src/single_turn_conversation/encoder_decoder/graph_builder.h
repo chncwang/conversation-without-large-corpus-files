@@ -20,6 +20,7 @@
 #include "single_turn_conversation/def.h"
 #include "single_turn_conversation/default_config.h"
 #include "single_turn_conversation/encoder_decoder/decoder_components.h"
+#include "single_turn_conversation/bleu.h"
 
 using namespace std;
 using namespace n3ldg_plus;
@@ -554,11 +555,14 @@ struct GraphBuilder {
             const HyperParams &hyper_params,
             ModelParams &model_params,
             bool is_training) {
-        int keyword_bound = model_params.lookup_table.nVSize;
+        int keyword_bound;
 
         for (int i = 0; i < answer.size(); ++i) {
-            if (i > 0) {
-                keyword_bound = model_params.lookup_table.elems.from_string(keywords.at(i - 1)) + 1;
+            if (i > 0 && !includePunctuation(answer.at(i - 1))) {
+                keyword_bound =
+                    model_params.lookup_table.elems.from_string(keywords.at(i - 1)) + 1;
+            } else {
+                keyword_bound = model_params.lookup_table.nVSize;
             }
             int normal_bound = model_params.lookup_table.elems.from_string(keywords.at(i)) + 1;
             if (normal_bound > keyword_bound) {
