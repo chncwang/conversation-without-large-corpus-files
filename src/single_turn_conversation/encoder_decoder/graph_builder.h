@@ -649,13 +649,16 @@ struct GraphBuilder {
 
         decoder_components.decoder_to_keyword_vectors.push_back(nodes.keyword);
 
-        Node *keyword_vector_to_onehot;
+        Node *keyword_vector_to_onehot, *bow_to_onehot;
         if (nodes.keyword == nullptr) {
             keyword_vector_to_onehot = nullptr;
+            bow_to_onehot = nullptr;
         } else {
             keyword_vector_to_onehot = n3ldg_plus::linearWordVector(graph,
                     keyword_word_id_upper_open_bound, model_params.lookup_table.E, *nodes.keyword);
             keyword_vector_to_onehot = n3ldg_plus::softmax(graph, *keyword_vector_to_onehot);
+
+            bow_to_onehot = n3ldg_plus::linearWordVector(graph, 
         }
         decoder_components.keyword_vector_to_onehots.push_back(keyword_vector_to_onehot);
     }

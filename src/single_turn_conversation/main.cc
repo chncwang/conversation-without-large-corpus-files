@@ -879,9 +879,11 @@ int main(int argc, char *argv[]) {
         model_params.left_to_right_encoder_params.init(hyper_params.hidden_dim,
                 2 * hyper_params.word_dim + hyper_params.hidden_dim);
         model_params.hidden_to_wordvector_params.init(hyper_params.word_dim,
-                2 * hyper_params.hidden_dim + 2 * hyper_params.word_dim, false);
+                2 * hyper_params.hidden_dim + 2 * hyper_params.word_dim, true);
         model_params.hidden_to_keyword_params.init(hyper_params.word_dim,
-                2 * hyper_params.hidden_dim, false);
+                3 * hyper_params.hidden_dim, true);
+        model_params.hidden_to_bow_params.init(hyper_params.word_dim, 2 * hyper_params.hidden_dim,
+                true);
     };
 
     if (default_config.program_mode != ProgramMode::METRIC) {
