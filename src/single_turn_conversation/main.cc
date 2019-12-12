@@ -431,6 +431,7 @@ float metricTestPosts(const HyperParams &hyper_params, ModelParams &model_params
         const vector<PostAndResponses> &post_and_responses_vector,
         const vector<vector<string>> &post_sentences,
         const vector<vector<string>> &response_sentences,
+        const vector<WordIdfInfo> &post_idf_info_list,
         const vector<WordIdfInfo> &response_idf_info_list) {
     cout << "metricTestPosts begin" << endl;
     hyper_params.print();
@@ -460,6 +461,7 @@ float metricTestPosts(const HyperParams &hyper_params, ModelParams &model_params
                 Graph graph;
                 GraphBuilder graph_builder;
                 graph_builder.forward(graph, post_sentences.at(post_and_responses.post_id),
+                        post_idf_info_list.at(post_and_responses.post_id).keywords_behind,
                         hyper_params, model_params, false);
                 DecoderComponents decoder_components;
                 graph_builder.forwardDecoder(graph, decoder_components,
@@ -512,6 +514,7 @@ float metricTestPosts(const HyperParams &hyper_params, ModelParams &model_params
 void decodeTestPosts(const HyperParams &hyper_params, ModelParams &model_params,
         DefaultConfig &default_config,
         const unordered_map<string, float> & word_idf_table,
+        const vector<WordIdfInfo> &post_idf_info_list,
         const vector<WordIdfInfo> &response_idf_info_list,
         const vector<PostAndResponses> &post_and_responses_vector,
         const vector<vector<string>> &post_sentences,
@@ -527,6 +530,7 @@ void decodeTestPosts(const HyperParams &hyper_params, ModelParams &model_params,
         Graph graph;
         GraphBuilder graph_builder;
         graph_builder.forward(graph, post_sentences.at(post_and_responses.post_id),
+                post_idf_info_list.at(post_and_responses.post_id).keywords_behind,
                 hyper_params, model_params, false);
         vector<DecoderComponents> decoder_components_vector;
         decoder_components_vector.resize(hyper_params.beam_size);
@@ -749,9 +753,12 @@ int main(int argc, char *argv[]) {
     vector<vector<string>> post_sentences = readSentences(default_config.post_file);
     vector<vector<string>> response_sentences = readSentences(default_config.response_file);
     vector<bool> is_response_in_train_set;
+    vector<bool> is_post_in_train_set;
+    is_post_in_train_set.resize(post_sentences.size(), false);
     is_response_in_train_set.resize(response_sentences.size(), false);
     for (const auto &p : train_conversation_pairs) {
         is_response_in_train_set.at(p.response_id) = true;
+        is_post_in_train_set.at(p.post_id) = true;
     }
 
     cout << "dev set:" << endl;
@@ -896,6 +903,10 @@ int main(int argc, char *argv[]) {
     vector<WordIdfInfo> response_idf_info_list = readWordIdfInfoList(response_sentences,
             is_response_in_train_set, all_idf, word_counts,
             model_params.lookup_table.elems.m_string_to_id, hyper_params.word_cutoff);
+    cout << "reading post idf info ..." << endl;
+    vector<WordIdfInfo> post_idf_info_list = readWordIdfInfoList(post_sentences,
+            is_post_in_train_set, all_idf, word_counts,
+            model_params.lookup_table.elems.m_string_to_id, hyper_params.word_cutoff);
     cout << "completed" << endl;
 
     if (default_config.program_mode == ProgramMode::INTERACTING) {
@@ -904,7 +915,7 @@ int main(int argc, char *argv[]) {
                 hyper_params.word_cutoff, black_list);
     } else if (default_config.program_mode == ProgramMode::DECODING) {
         hyper_params.beam_size = beam_size;
-        decodeTestPosts(hyper_params, model_params, default_config, all_idf,
+        decodeTestPosts(hyper_params, model_params, default_config, all_idf, post_idf_info_list,
                 response_idf_info_list, test_post_and_responses, post_sentences,
                 response_sentences, black_list);
     } else if (default_config.program_mode == ProgramMode::METRIC) {
@@ -939,7 +950,8 @@ int main(int argc, char *argv[]) {
             loadModel(default_config, hyper_params, model_params, root_ptr.get(),
                     allocate_model_params);
             float rep_perplex = metricTestPosts(hyper_params, model_params, dev_post_and_responses,
-                    post_sentences, response_sentences, response_idf_info_list);
+                    post_sentences, response_sentences, post_idf_info_list,
+                    response_idf_info_list);
             cout << format("model %1% rep_perplex is %2%") % model_file_path % rep_perplex << endl;
             if (max_rep_perplex < rep_perplex) {
                 max_rep_perplex = rep_perplex;
@@ -1019,7 +1031,9 @@ int main(int argc, char *argv[]) {
                     conversation_pair_in_batch.push_back(train_conversation_pairs.at(
                                 instance_index));
                     auto post_sentence = post_sentences.at(post_id);
-                    graph_builder->forward(graph, post_sentence, hyper_params, model_params, true);
+                    graph_builder->forward(graph, post_sentence,
+                            post_idf_info_list.at(post_id).keywords_behind,
+                            hyper_params, model_params, true);
                     int response_id = train_conversation_pairs.at(instance_index).response_id;
                     auto response_sentence = response_sentences.at(response_id);
                     const WordIdfInfo &idf_info = response_idf_info_list.at(response_id);
@@ -1082,6 +1096,9 @@ int main(int argc, char *argv[]) {
                         int post_id = train_conversation_pairs.at(instance_index).post_id;
                         cout << "post:" << post_id << endl;
                         print(post_sentences.at(post_id));
+                        
+                        cout << "post keywords:" << endl;
+                        print(post_idf_info_list.at(post_id).keywords_behind);
 
                         cout << "golden answer:" << endl;
                         printWordIds(word_ids, model_params.lookup_table);
@@ -1109,6 +1126,7 @@ int main(int argc, char *argv[]) {
                         Graph graph;
 
                         graph_builder.forward(graph, post_sentences.at(conversation_pair.post_id),
+                                post_idf_info_list.at(conversation_pair.post_id).keywords_behind,
                                 hyper_params, model_params, true);
 
                         DecoderComponents decoder_components;

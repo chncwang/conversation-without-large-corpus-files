@@ -518,7 +518,8 @@ vector<BeamSearchResult> mostProbableKeywords(
 struct GraphBuilder {
     DynamicLSTMBuilder left_to_right_encoder;
 
-    void forward(Graph &graph, const vector<string> &sentence, const HyperParams &hyper_params,
+    void forward(Graph &graph, const vector<string> &sentence, const vector<string> &keywords,
+            const HyperParams &hyper_params,
             ModelParams &model_params,
             bool is_training) {
         BucketNode *hidden_bucket = new BucketNode;
@@ -538,11 +539,12 @@ struct GraphBuilder {
             dropout_node->init(hyper_params.word_dim);
             dropout_node->forward(graph, *input_lookup);
 
-            BucketNode *bucket = new BucketNode();
-            bucket->init(hyper_params.hidden_dim + hyper_params.word_dim);
-            bucket->forward(graph);
+            Node *bucket = n3ldg_plus::bucket(graph, hyper_params.hidden_dim, 0);
 
-            Node *concat = n3ldg_plus::concat(graph, {dropout_node, bucket});
+            Node *keyword_embedding = n3ldg_plus::embedding(graph, model_params.lookup_table,
+                    hyper_params.word_dim, keywords.at(i));
+
+            Node *concat = n3ldg_plus::concat(graph, {dropout_node, bucket, keyword_embedding});
 
             left_to_right_encoder.forward(graph, model_params.left_to_right_encoder_params,
                     *concat, *hidden_bucket, *hidden_bucket, hyper_params.dropout, is_training);
