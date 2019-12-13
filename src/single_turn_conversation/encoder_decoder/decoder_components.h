@@ -14,7 +14,7 @@ struct ResultAndKeywordVectors {
 struct DecoderComponents {
     std::vector<LookupNode<Param> *> decoder_lookups_before_dropout;
     std::vector<DropoutNode *> decoder_lookups;
-    std::vector<LookupNode<Param> *> decoder_keyword_lookups;
+    std::vector<Node *> decoder_keyword_lookups;
     std::vector<Node *> decoder_to_wordvectors;
     std::vector<Node *> decoder_to_keyword_vectors;
     std::vector<Node *> wordvector_to_onehots;
@@ -50,6 +50,28 @@ struct DecoderComponents {
                 *bucket(hyper_params.hidden_dim, graph),
                 *bucket(hyper_params.hidden_dim, graph),
                 hyper_params.dropout, is_training);
+    }
+
+    Node* decoderToWordVectors(Graph &graph, const HyperParams &hyper_params,
+            ModelParams &model_params,
+            vector<Node *> &encoder_hiddens,
+            int i) {
+        vector<Node *> concat_inputs = {
+            contexts.at(i), decoder._hiddens.at(i),
+            i == 0 ? bucket(2 * hyper_params.word_dim, graph) :
+                static_cast<Node*>(decoder_lookups.at(i - 1))
+        };
+        if (decoder_lookups.size() != i) {
+            cerr << boost::format("decoder_lookups size:%1% i:%2%") % decoder_lookups.size() %
+                i << endl;
+            abort();
+        }
+        Node *concat_node = n3ldg_plus::concat(graph, concat_inputs);
+
+        Node *decoder_to_wordvector = n3ldg_plus::linear(graph,
+                model_params.hidden_to_wordvector_params, *concat_node);
+
+        return decoder_to_wordvector;
     }
 
     ResultAndKeywordVectors decoderToWordVectors(Graph &graph, const HyperParams &hyper_params,

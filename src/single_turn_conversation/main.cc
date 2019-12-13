@@ -455,18 +455,16 @@ float metricTestPosts(const HyperParams &hyper_params, ModelParams &model_params
 //                print(response);
                 const WordIdfInfo &idf_info = response_idf_info_list.at(response_id);
 //                print(idf_info.keywords_behind);
-                n3ldg_cuda::Profiler &profiler = n3ldg_cuda::Profiler::Ins();
-                profiler.BeginEvent("build computation graph");
                 Graph graph;
                 GraphBuilder graph_builder;
                 graph_builder.forward(graph, post_sentences.at(post_and_responses.post_id),
                         hyper_params, model_params, false);
+                graph.compute();
                 DecoderComponents decoder_components;
                 graph_builder.forwardDecoder(graph, decoder_components,
                         response_sentences.at(response_id),
                         idf_info.keywords_behind,
                         hyper_params, model_params, false);
-                profiler.EndEvent();
                 graph.compute();
                 vector<Node*> nodes = toNodePointers(decoder_components.wordvector_to_onehots);
                 vector<int> word_ids = transferVector<int, string>(
@@ -1004,13 +1002,15 @@ int main(int argc, char *argv[]) {
                             hyper_params.learning_rate << endl;
                     }
                 }
-                Graph graph(false);
+                Graph graph;
                 vector<shared_ptr<GraphBuilder>> graph_builders;
                 vector<DecoderComponents> decoder_components_vector;
+                vector<DecoderComponents> normal_decoder_components_vector;
                 vector<ConversationPair> conversation_pair_in_batch;
                 auto getSentenceIndex = [batch_i, batch_count](int i) {
                     return i * batch_count + batch_i;
                 };
+
                 for (int i = 0; i < hyper_params.batch_size; ++i) {
                     shared_ptr<GraphBuilder> graph_builder(new GraphBuilder);
                     graph_builders.push_back(graph_builder);
@@ -1019,14 +1019,21 @@ int main(int argc, char *argv[]) {
                     conversation_pair_in_batch.push_back(train_conversation_pairs.at(
                                 instance_index));
                     auto post_sentence = post_sentences.at(post_id);
-                    graph_builder->forward(graph, post_sentence, hyper_params, model_params, true);
+                    graph_builder->forward(graph, post_sentence, hyper_params,
+                            model_params, true);
                     int response_id = train_conversation_pairs.at(instance_index).response_id;
                     auto response_sentence = response_sentences.at(response_id);
                     const WordIdfInfo &idf_info = response_idf_info_list.at(response_id);
+
                     DecoderComponents decoder_components;
-                    graph_builder->forwardDecoder(graph, decoder_components, response_sentence,
-                            idf_info.keywords_behind, hyper_params, model_params, true);
+                    graph_builder->forwardDecoder(graph, decoder_components,
+                            response_sentence, idf_info.keywords_behind, hyper_params,
+                            model_params, true);
                     decoder_components_vector.push_back(decoder_components);
+
+                    DecoderComponents normal_components;
+                    graph_builder->forwardDecoder(graph, normal_components, response_sentence,
+                            hyper_params, model_params, true);
                 }
 
                 graph.compute();

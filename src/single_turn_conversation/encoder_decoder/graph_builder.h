@@ -577,6 +577,17 @@ struct GraphBuilder {
         }
     }
 
+    void forwardDecoder(Graph &graph, DecoderComponents &decoder_components,
+            const std::vector<std::string> &answer,
+            const HyperParams &hyper_params,
+            ModelParams &model_params,
+            bool is_training) {
+        for (int i = 0; i < answer.size(); ++i) {
+            forwardDecoderByOneStep(graph, decoder_components, i,
+                    i == 0 ? nullptr : &answer.at(i - 1), hyper_params, model_params, is_training);
+        }
+    }
+
     void forwardDecoderByOneStep(Graph &graph, DecoderComponents &decoder_components, int i,
             const std::string *answer,
             const std::string &keyword,
@@ -665,6 +676,63 @@ struct GraphBuilder {
             keyword_vector_to_onehot = n3ldg_plus::softmax(graph, *keyword_vector_to_onehot);
         }
         decoder_components.keyword_vector_to_onehots.push_back(keyword_vector_to_onehot);
+    }
+
+    void forwardDecoderByOneStep(Graph &graph, DecoderComponents &decoder_components, int i,
+            const std::string *answer,
+            const HyperParams &hyper_params,
+            ModelParams &model_params,
+            bool is_training) {
+        Node *last_input, *last_keyword;
+        if (i > 0) {
+            LookupNode<Param>* before_dropout(new LookupNode<Param>);
+            before_dropout->init(hyper_params.word_dim);
+            before_dropout->setParam(model_params.lookup_table);
+            before_dropout->forward(graph, *answer);
+
+            DropoutNode* decoder_lookup(new DropoutNode(hyper_params.dropout, is_training));
+            decoder_lookup->init(hyper_params.word_dim);
+            decoder_lookup->forward(graph, *before_dropout);
+            decoder_components.decoder_lookups.push_back(decoder_lookup);
+            if (decoder_components.decoder_lookups.size() != i) {
+                cerr << boost::format("decoder_lookups size:%1% i:%2%") %
+                    decoder_components.decoder_lookups.size() % i << endl;
+                abort();
+            }
+            last_input = decoder_components.decoder_lookups.back();
+
+            int size = decoder_components.decoder_keyword_lookups.size();
+            if (i != size) {
+                cerr << boost::format("i is not equal to keyword lookup size i:%1% size:%2%") % i %
+                    size << endl;
+                abort();
+            }
+            last_keyword = decoder_components.decoder_keyword_lookups.back();
+        } else {
+            BucketNode *bucket = new BucketNode;
+            bucket->init(hyper_params.word_dim);
+            bucket->forward(graph);
+            last_input = bucket;
+            last_keyword = bucket;
+        }
+
+        Node *bucket = n3ldg_plus::bucket(graph, hyper_params.word_dim, 0);
+        decoder_components.decoder_keyword_lookups.push_back(bucket);
+
+        decoder_components.forward(graph, hyper_params, model_params, *last_input, *last_keyword,
+                left_to_right_encoder._hiddens, is_training);
+
+        Node *decoder_to_wordvector = decoder_components.decoderToWordVectors(graph, hyper_params,
+                model_params, left_to_right_encoder._hiddens, i);
+        decoder_components.decoder_to_wordvectors.push_back(decoder_to_wordvector);
+
+        LinearWordVectorNode *wordvector_to_onehot(new LinearWordVectorNode);
+        wordvector_to_onehot->init(model_params.lookup_table.nVSize);
+        wordvector_to_onehot->setParam(model_params.lookup_table.E);
+        wordvector_to_onehot->forward(graph, *decoder_to_wordvector);
+
+        Node *softmax = n3ldg_plus::softmax(graph, *wordvector_to_onehot);
+        decoder_components.wordvector_to_onehots.push_back(softmax);
     }
 
     void forwardDecoderResultByOneStep(Graph &graph, DecoderComponents &decoder_components, int i,
