@@ -644,6 +644,8 @@ struct GraphBuilder {
                 model_params, left_to_right_encoder._hiddens, i, should_predict_keyword);
         Node *decoder_to_wordvector = nodes.result;
         decoder_components.decoder_to_wordvectors.push_back(decoder_to_wordvector);
+        decoder_components.decoder_to_keyword_vectors.push_back(nodes.keyword);
+        decoder_components.decoder_to_bow_vectors.push_back(nodes.bow);
 
         LinearWordVectorNode *wordvector_to_onehot(new LinearWordVectorNode);
         wordvector_to_onehot->init(normal_word_id_upper_open_bound);
@@ -654,17 +656,21 @@ struct GraphBuilder {
 
         decoder_components.wordvector_to_onehots.push_back(softmax);
 
-        decoder_components.decoder_to_keyword_vectors.push_back(nodes.keyword);
-
-        Node *keyword_vector_to_onehot;
+        Node *keyword_vector_to_onehot, *voc_vector_to_onehot;
         if (nodes.keyword == nullptr) {
             keyword_vector_to_onehot = nullptr;
+            voc_vector_to_onehot = nullptr;
         } else {
             keyword_vector_to_onehot = n3ldg_plus::linearWordVector(graph,
                     keyword_word_id_upper_open_bound, model_params.lookup_table.E, *nodes.keyword);
             keyword_vector_to_onehot = n3ldg_plus::softmax(graph, *keyword_vector_to_onehot);
+
+            voc_vector_to_onehot = n3ldg_plus::linearWordVector(graph,
+                    keyword_word_id_upper_open_bound, model_params.lookup_table.E, *nodes.bow);
+            voc_vector_to_onehot = n3ldg_plus::sigmoid(graph, *voc_vector_to_onehot);
         }
         decoder_components.keyword_vector_to_onehots.push_back(keyword_vector_to_onehot);
+        decoder_components.voc_vector_to_onehots.push_back(voc_vector_to_onehot);
     }
 
     void forwardDecoderResultByOneStep(Graph &graph, DecoderComponents &decoder_components, int i,

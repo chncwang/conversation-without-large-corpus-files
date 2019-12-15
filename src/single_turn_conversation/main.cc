@@ -409,21 +409,36 @@ void loadModel(const DefaultConfig &default_config, HyperParams &hyper_params,
 #endif
 }
 
-pair<vector<Node *>, vector<int>> keywordNodesAndIds(const DecoderComponents &decoder_components,
+struct KeywordVocProbsAndAnswers{
+    vector<Node *> keyword_probs;
+    vector<Node *> voc_probs;
+    vector<int> answers;
+};
+
+KeywordVocProbsAndAnswers keywordNodesAndIds(
+        const DecoderComponents &decoder_components,
         const WordIdfInfo &idf_info,
         const ModelParams &model_params) {
-    vector<Node *> keyword_result_nodes = decoder_components.keyword_vector_to_onehots;
-    vector<int> keyword_ids = toIds(idf_info.keywords_behind, model_params.lookup_table, false);
+    const vector<Node *> &keyword_result_nodes = decoder_components.keyword_vector_to_onehots;
+    const vector<Node *> &voc_probs = decoder_components.voc_vector_to_onehots;
+    const vector<int> &keyword_ids = toIds(idf_info.keywords_behind, model_params.lookup_table,
+            false);
     vector<Node *> non_null_nodes;
+    vector<Node *> non_null_vocs;
     vector<int> chnanged_keyword_ids;
     for (int j = 0; j < keyword_result_nodes.size(); ++j) {
         if (keyword_result_nodes.at(j) != nullptr) {
+            if (voc_probs.at(j) == nullptr) {
+                cerr << "keywordNodesAndIds - keyword is not nullptr, but voc is" << endl;
+                abort();
+            }
             non_null_nodes.push_back(keyword_result_nodes.at(j));
+            non_null_vocs.push_back(voc_probs.at(j));
             chnanged_keyword_ids.push_back(keyword_ids.at(j));
         }
     }
 
-    return {non_null_nodes, chnanged_keyword_ids};
+    return {non_null_nodes, non_null_vocs, chnanged_keyword_ids};
 }
 
 
@@ -477,19 +492,11 @@ float metricTestPosts(const HyperParams &hyper_params, ModelParams &model_params
                 auto keyword_nodes_and_ids = keywordNodesAndIds(decoder_components, idf_info,
                         model_params);
                 int sentence_len = nodes.size();
-                for (int i = 0; i < keyword_nodes_and_ids.first.size(); ++i) {
-                    nodes.push_back(keyword_nodes_and_ids.first.at(i));
-                    word_ids.push_back(keyword_nodes_and_ids.second.at(i));
+                for (int i = 0; i < keyword_nodes_and_ids.keyword_probs.size(); ++i) {
+                    nodes.push_back(keyword_nodes_and_ids.keyword_probs.at(i));
+                    word_ids.push_back(keyword_nodes_and_ids.answers.at(i));
                 }
-                vector<int> filtered_word_ids;
-                vector<Node*> filtered_nodes;
-                for (int i = 0; i < word_ids.size(); ++i) {
-                    int word_id = word_ids.at(i);
-                    filtered_word_ids.push_back(word_id);
-                    filtered_nodes.push_back(nodes.at(i));
-                }
-
-                float perplex = computePerplex(filtered_nodes, filtered_word_ids, sentence_len);
+                float perplex = computePerplex(nodes, word_ids, sentence_len);
                 avg_perplex += perplex;
                 sum += word_ids_size;
             }
@@ -637,11 +644,40 @@ vector<string> getAllWordsByIdfAscendingly(const unordered_map<string, float> &i
     return result;
 }
 
-std::pair<dtype, std::vector<int>> MaxLogProbabilityLossWithInconsistentDims(
+pair<dtype, dtype> vocabularyLoss(const vector<Node *> &result_nodes, const vector<int> &voc_sizes,
+        int batchsize) {
+    if (result_nodes.size() != voc_sizes.size()) {
+        cerr << "vocabularyLoss - result node size is not equal to voc size" << endl;
+        abort();
+    }
+
+    dtype loss_sum = 0;
+    dtype raw_loss_sum = 0;
+
+    for (int i = 0; i < result_nodes.size(); ++i) {
+        Node &node = *result_nodes.at(i);
+        int dim = node.getDim();
+        vector<int> answer;
+        answer.resize(dim);
+        int voc_size = voc_sizes.at(i);
+        for (int j = 0; j < voc_size; ++j) {
+            answer.at(j) = true;
+        }
+
+        vector<Node*> nodes = {&node};
+        vector<vector<int>> answers = {answer};
+        dtype loss = multiCrossEntropyLoss(nodes, answers, 1.0 / batchsize / node.getDim());
+        loss_sum += loss;
+        raw_loss_sum += loss * batchsize * node.getDim();
+    }
+
+    return make_pair(loss_sum, raw_loss_sum);
+}
+
+std::pair<dtype, std::vector<int>> maxLogProbabilityLossWithInconsistentDims(
         const std::vector<Node*> &result_nodes,
         const std::vector<int> &ids,
         int batchsize,
-        const std::function<bool(int)> &is_unkown,
         int vocabulary_size) {
     if (ids.size() != result_nodes.size()) {
         cerr << "ids size is not equal to result_nodes'." << endl;
@@ -660,7 +696,7 @@ std::pair<dtype, std::vector<int>> MaxLogProbabilityLossWithInconsistentDims(
             info["i"] = i;
             throw InformedRuntimeError(info);
         }
-        auto result = maxLogProbabilityLoss(node, id, batchsize);
+        auto result = maxLogProbabilityLoss(node, id, 1.0 / batchsize);
         if (result.second.size() != 1) {
             cerr << "result second size:" << result.second.size() << endl;
             abort();
@@ -869,6 +905,8 @@ int main(int argc, char *argv[]) {
                 2 * hyper_params.hidden_dim + 2 * hyper_params.word_dim, false);
         model_params.hidden_to_keyword_params.init(hyper_params.word_dim,
                 2 * hyper_params.hidden_dim, false);
+        model_params.hidden_to_bow_params.init(hyper_params.word_dim, 2 * hyper_params.hidden_dim,
+                false);
     };
 
     if (default_config.program_mode != ProgramMode::METRIC) {
@@ -965,6 +1003,8 @@ int main(int argc, char *argv[]) {
         string last_saved_model;
 
         for (int epoch = 0; ; ++epoch) {
+            dtype voc_loss_sum = 0;
+            int voc_size_sum = 0;
             cout << "epoch:" << epoch << endl;
             model_params.lookup_table.E.is_fixed = (epoch == 0 &&
                     default_config.input_model_file != "");
@@ -1038,13 +1078,10 @@ int main(int argc, char *argv[]) {
                     vector<int> word_ids = toIds(response_sentence, model_params.lookup_table);
                     vector<Node*> result_nodes =
                         toNodePointers(decoder_components_vector.at(i).wordvector_to_onehots);
-                    auto is_unkown = [&](int id) {
-                        return model_params.lookup_table.elems.from_string(unknownkey) == id;
-                    };
                     std::pair<dtype, std::vector<int>> result;
                     try {
-                        result = MaxLogProbabilityLossWithInconsistentDims(result_nodes,
-                                word_ids, hyper_params.batch_size, is_unkown,
+                        result = maxLogProbabilityLossWithInconsistentDims(result_nodes,
+                                word_ids, hyper_params.batch_size,
                                 model_params.lookup_table.nVSize);
                     } catch (const InformedRuntimeError &e) {
                         cerr << e.what() << endl;
@@ -1070,12 +1107,23 @@ int main(int argc, char *argv[]) {
                     auto keyword_nodes_and_ids = keywordNodesAndIds(
                             decoder_components_vector.at(i), response_idf, model_params);
                     profiler.BeginEvent("loss");
-                    auto keyword_result = MaxLogProbabilityLossWithInconsistentDims(
-                            keyword_nodes_and_ids.first, keyword_nodes_and_ids.second,
-                            hyper_params.batch_size, is_unkown, model_params.lookup_table.nVSize);
+                    auto keyword_result = maxLogProbabilityLossWithInconsistentDims(
+                            keyword_nodes_and_ids.keyword_probs, keyword_nodes_and_ids.answers,
+                            hyper_params.batch_size, model_params.lookup_table.nVSize);
                     profiler.EndCudaEvent();
                     loss_sum += keyword_result.first;
-                    analyze(keyword_result.second, keyword_nodes_and_ids.second, *keyword_metric);
+                    analyze(keyword_result.second, keyword_nodes_and_ids.answers, *keyword_metric);
+
+                    auto voc_pair = vocabularyLoss(keyword_nodes_and_ids.voc_probs,
+                            keyword_nodes_and_ids.answers, hyper_params.batch_size);
+                    voc_loss_sum += voc_pair.second;
+
+                    auto &nodes =decoder_components_vector.at(i).voc_vector_to_onehots;
+                    for (const Node *node : nodes) {
+                        if (node != nullptr){
+                            voc_size_sum += node->getDim();
+                        }
+                    }
 
                     static int count_for_print;
                     if (++count_for_print % 100 == 1) {
@@ -1089,13 +1137,16 @@ int main(int argc, char *argv[]) {
                         printWordIds(result.second, model_params.lookup_table);
 
                         cout << "golden keywords:" << endl;
-                        printWordIds(keyword_nodes_and_ids.second, model_params.lookup_table);
+                        printWordIds(keyword_nodes_and_ids.answers, model_params.lookup_table);
                         cout << "output:" << endl;
                         printWordIds(keyword_result.second, model_params.lookup_table);
                     }
                 }
 
-                cout << "loss:" << loss_sum << endl;
+                cout << "loss:" << loss_sum << " ppl:" <<
+                    exp(loss_sum * hyper_params.batch_size / metric->overall_label_count) <<
+                    " voc_loss:" << voc_loss_sum
+                    << " voc precise ppl:" << exp(voc_loss_sum / voc_size_sum) << endl;
                 cout << "normal:" << endl;
                 metric->print();
                 cout << "keyword:" << endl;
@@ -1128,14 +1179,13 @@ int main(int argc, char *argv[]) {
                                 conversation_pair.response_id);
                         auto keyword_nodes_and_ids = keywordNodesAndIds(
                                 decoder_components, response_idf, model_params);
-                        auto is_unkown = [&](int id) {
-                            return model_params.lookup_table.elems.from_string(unknownkey) == id;
-                        };
-                        return MaxLogProbabilityLossWithInconsistentDims(
-                                keyword_nodes_and_ids.first, keyword_nodes_and_ids.second, 1,
-                                is_unkown, model_params.lookup_table.nVSize).first +
-                            MaxLogProbabilityLossWithInconsistentDims( result_nodes, word_ids, 1,
-                                    is_unkown, model_params.lookup_table.nVSize).first;
+                        return maxLogProbabilityLossWithInconsistentDims(
+                                keyword_nodes_and_ids.keyword_probs, keyword_nodes_and_ids.answers,
+                                1, model_params.lookup_table.nVSize).first +
+                            maxLogProbabilityLossWithInconsistentDims(result_nodes, word_ids, 1,
+                                    model_params.lookup_table.nVSize).first + 
+                            vocabularyLoss(keyword_nodes_and_ids.voc_probs,
+                                    keyword_nodes_and_ids.answers, 1).first;
                     };
                     cout << format("checking grad - conversation_pair size:%1%") %
                         conversation_pair_in_batch.size() << endl;

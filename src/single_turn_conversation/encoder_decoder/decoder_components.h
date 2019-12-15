@@ -9,6 +9,7 @@
 struct ResultAndKeywordVectors {
     Node *result;
     Node *keyword;
+    Node *bow;
 };
 
 struct DecoderComponents {
@@ -17,8 +18,10 @@ struct DecoderComponents {
     std::vector<LookupNode<Param> *> decoder_keyword_lookups;
     std::vector<Node *> decoder_to_wordvectors;
     std::vector<Node *> decoder_to_keyword_vectors;
+    std::vector<Node *> decoder_to_bow_vectors;
     std::vector<Node *> wordvector_to_onehots;
     std::vector<Node *> keyword_vector_to_onehots;
+    std::vector<Node *> voc_vector_to_onehots;
     DynamicLSTMBuilder decoder;
     vector<Node*> contexts;
 
@@ -69,7 +72,7 @@ struct DecoderComponents {
         }
         Node *concat_node = n3ldg_plus::concat(graph, concat_inputs);
 
-        Node *keyword;
+        Node *keyword, *bow;
         if (return_keyword) {
             ConcatNode *context_concated = new ConcatNode;
             context_concated->init(2 * hyper_params.hidden_dim);
@@ -77,7 +80,10 @@ struct DecoderComponents {
 
             keyword = n3ldg_plus::linear(graph, model_params.hidden_to_keyword_params,
                     *context_concated);
+
+            bow = n3ldg_plus::linear(graph, model_params.hidden_to_bow_params, *context_concated);
         } else {
+            bow = nullptr;
             keyword = nullptr;
         }
 
@@ -88,7 +94,7 @@ struct DecoderComponents {
         Node *decoder_to_wordvector = n3ldg_plus::linear(graph,
                 model_params.hidden_to_wordvector_params, *keyword_concated);
 
-        return {decoder_to_wordvector, keyword};
+        return {decoder_to_wordvector, keyword, bow};
     }
 };
 
