@@ -898,13 +898,15 @@ int main(int argc, char *argv[]) {
                 model_params.lookup_table.init(*alphabet, hyper_params.word_dim, true);
             }
         }
+        model_params.voc_bias.initAsBias(model_params.lookup_table.nVSize);
+        cout << "voc outdim:" << model_params.voc_bias.outDim() << endl;
         model_params.attention_params.init(hyper_params.hidden_dim, hyper_params.hidden_dim);
         model_params.left_to_right_encoder_params.init(hyper_params.hidden_dim,
                 2 * hyper_params.word_dim + hyper_params.hidden_dim);
         model_params.hidden_to_wordvector_params.init(hyper_params.word_dim,
                 2 * hyper_params.hidden_dim + 2 * hyper_params.word_dim, false);
         model_params.hidden_to_keyword_params.init(hyper_params.word_dim,
-                2 * hyper_params.hidden_dim, false);
+                2 * hyper_params.hidden_dim + hyper_params.word_dim, false);
         model_params.hidden_to_bow_params.init(hyper_params.word_dim, 2 * hyper_params.hidden_dim,
                 false);
     };
@@ -1146,7 +1148,8 @@ int main(int argc, char *argv[]) {
                 cout << "loss:" << loss_sum << " ppl:" <<
                     exp(loss_sum * hyper_params.batch_size / metric->overall_label_count) <<
                     " voc_loss:" << voc_loss_sum
-                    << " voc precise ppl:" << exp(voc_loss_sum / voc_size_sum) << endl;
+                    << " voc precise ppl:" << exp(voc_loss_sum / voc_size_sum) << " voc size sum:"
+                    << voc_size_sum << endl;
                 cout << "normal:" << endl;
                 metric->print();
                 cout << "keyword:" << endl;

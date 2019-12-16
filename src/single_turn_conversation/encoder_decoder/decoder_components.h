@@ -78,10 +78,9 @@ struct DecoderComponents {
             context_concated->init(2 * hyper_params.hidden_dim);
             context_concated->forward(graph, {decoder._hiddens.at(i), contexts.at(i)});
 
-            keyword = n3ldg_plus::linear(graph, model_params.hidden_to_keyword_params,
-                    *context_concated);
-
             bow = n3ldg_plus::linear(graph, model_params.hidden_to_bow_params, *context_concated);
+            Node *concat = n3ldg_plus::concat(graph, {context_concated, bow});
+            keyword = n3ldg_plus::linear(graph, model_params.hidden_to_keyword_params, *concat);
         } else {
             bow = nullptr;
             keyword = nullptr;
