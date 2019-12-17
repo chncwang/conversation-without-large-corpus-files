@@ -646,7 +646,7 @@ std::pair<dtype, std::vector<int>> MaxLogProbabilityLoss(
     }
     validateEqualNodeDims(result_nodes);
 
-    auto result = maxLogProbabilityLoss(result_nodes, ids, batchsize);
+    auto result = maxLogProbabilityLoss(result_nodes, ids, 1.0 / batchsize);
     pair<dtype, std::vector<int>> final_result;
     final_result.first = result.first;
 
@@ -680,7 +680,7 @@ std::pair<dtype, std::vector<int>> MaxLogProbabilityLossWithInconsistentDims(
             info["i"] = i;
             throw InformedRuntimeError(info);
         }
-        auto result = maxLogProbabilityLoss(node, id, batchsize);
+        auto result = maxLogProbabilityLoss(node, id, 1.0 / batchsize);
         if (result.second.size() != 1) {
             cerr << "result second size:" << result.second.size() << endl;
             abort();
