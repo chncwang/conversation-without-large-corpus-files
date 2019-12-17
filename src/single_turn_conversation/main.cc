@@ -897,9 +897,8 @@ int main(int argc, char *argv[]) {
             } else {
                 model_params.lookup_table.init(*alphabet, hyper_params.word_dim, true);
             }
+            model_params.voc_table.init(*alphabet, hyper_params.word_dim, true);
         }
-        model_params.voc_bias.initAsBias(model_params.lookup_table.nVSize);
-        cout << "voc outdim:" << model_params.voc_bias.outDim() << endl;
         model_params.attention_params.init(hyper_params.hidden_dim, hyper_params.hidden_dim);
         model_params.left_to_right_encoder_params.init(hyper_params.hidden_dim,
                 2 * hyper_params.word_dim + hyper_params.hidden_dim);
@@ -909,6 +908,8 @@ int main(int argc, char *argv[]) {
                 2 * hyper_params.hidden_dim + hyper_params.word_dim, false);
         model_params.hidden_to_bow_params.init(hyper_params.word_dim, 2 * hyper_params.hidden_dim,
                 false);
+        model_params.hidden_to_voc_params.init(hyper_params.word_dim, 2 * hyper_params.hidden_dim +
+                hyper_params.word_dim, false);
     };
 
     if (default_config.program_mode != ProgramMode::METRIC) {
@@ -1006,7 +1007,7 @@ int main(int argc, char *argv[]) {
 
         for (int epoch = 0; ; ++epoch) {
             dtype voc_loss_sum = 0;
-            int voc_size_sum = 0;
+            int64_t voc_size_sum = 0;
             cout << "epoch:" << epoch << endl;
             model_params.lookup_table.E.is_fixed = (epoch == 0 &&
                     default_config.input_model_file != "");

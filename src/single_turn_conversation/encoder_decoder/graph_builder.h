@@ -658,14 +658,17 @@ struct GraphBuilder {
             keyword_vector_to_onehot = nullptr;
             voc_vector_to_onehot = nullptr;
         } else {
-            keyword_vector_to_onehot = n3ldg_plus::linearWordVector(graph,
+            Node *semantic_keyword = n3ldg_plus::linearWordVector(graph,
                     keyword_word_id_upper_open_bound, model_params.lookup_table.E, *nodes.keyword);
-            keyword_vector_to_onehot = n3ldg_plus::softmax(graph, *keyword_vector_to_onehot);
+            Node *voc_keyword = n3ldg_plus::linearWordVector(graph,
+                    keyword_word_id_upper_open_bound, model_params.voc_table.E,
+                    *nodes.keyowrd_voc);
+            Node *sum = n3ldg_plus::add(graph, {semantic_keyword, voc_keyword});
+
+            keyword_vector_to_onehot = n3ldg_plus::softmax(graph, *sum);
 
             voc_vector_to_onehot = n3ldg_plus::linearWordVector(graph,
-                    keyword_word_id_upper_open_bound, model_params.lookup_table.E, *nodes.bow);
-            voc_vector_to_onehot = n3ldg_plus::bias(graph, model_params.voc_bias,
-                    *voc_vector_to_onehot);
+                    keyword_word_id_upper_open_bound, model_params.voc_table.E, *nodes.bow);
             voc_vector_to_onehot = n3ldg_plus::sigmoid(graph, *voc_vector_to_onehot);
         }
         decoder_components.keyword_vector_to_onehots.push_back(keyword_vector_to_onehot);
