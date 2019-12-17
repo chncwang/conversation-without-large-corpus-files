@@ -371,7 +371,11 @@ vector<BeamSearchResult> mostProbableKeywords(
                 last_keyword_id = model_params.lookup_table.nVSize - 1;
             } else {
                 vector<WordIdAndProbability> path = last_results.at(ii).getPath();
-                last_keyword_id = path.at(path.size() - 2).word_id;
+                int last_normal_word_id = path.at(path.size() - 1).word_id;
+                string last_normal_word = model_params.lookup_table.elems.from_id(
+                        last_normal_word_id);
+                last_keyword_id = includePunctuation(last_normal_word) ?
+                    model_params.lookup_table.nVSize - 1 : path.at(path.size() - 2).word_id;
             }
 
             LinearWordVectorNode *keyword_vector_to_onehot = new LinearWordVectorNode;
@@ -399,7 +403,6 @@ vector<BeamSearchResult> mostProbableKeywords(
     priority_queue<BeamSearchResult, vector<BeamSearchResult>, decltype(cmp)> queue(cmp);
     vector<BeamSearchResult> results;
     for (int i = 0; i < (is_first ? 1 : nodes.size()); ++i) {
-//    for (int i = 0; i < nodes.size(); ++i) {
         const Node *node_ptr = nodes.at(i);
         if (node_ptr == nullptr) {
             vector<WordIdAndProbability> new_id_and_probs = last_results.at(i).getPath();
@@ -769,10 +772,6 @@ struct GraphBuilder {
             most_probable_results.clear();
             auto beam = decoder_components_beam;
             int closured_count = word_ids_result.size();
-//            for (int i = 0; i < closured_count; ++i) {
-//                auto & r = word_ids_result.at(i);
-//                ++closured_count;
-//            }
             if (closured_count >= default_config.result_count_factor * k) {
                 break;
             }
