@@ -57,9 +57,11 @@ struct DecoderComponents {
             vector<Node *> &encoder_hiddens,
             int i) {
         vector<Node *> concat_inputs = {
-            contexts.at(i), decoder._hiddens.at(i),
-            i == 0 ? bucket(2 * hyper_params.word_dim, graph) :
-                static_cast<Node*>(decoder_lookups.at(i - 1))
+            contexts.at(i),
+            decoder._hiddens.at(i),
+            (i == 0 ? bucket(hyper_params.word_dim, graph) :
+                static_cast<Node*>(decoder_lookups.at(i - 1))),
+            bucket(hyper_params.word_dim, graph)
         };
         if (decoder_lookups.size() != i) {
             cerr << boost::format("decoder_lookups size:%1% i:%2%") % decoder_lookups.size() %

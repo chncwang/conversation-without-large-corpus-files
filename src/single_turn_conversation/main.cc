@@ -635,11 +635,33 @@ vector<string> getAllWordsByIdfAscendingly(const unordered_map<string, float> &i
     return result;
 }
 
+std::pair<dtype, std::vector<int>> MaxLogProbabilityLoss(
+        std::vector<Node*> &result_nodes,
+        const std::vector<int> &ids,
+        int batchsize,
+        int vocabulary_size) {
+    if (ids.size() != result_nodes.size()) {
+        cerr << "ids size is not equal to result_nodes'." << endl;
+        abort();
+    }
+    validateEqualNodeDims(result_nodes);
+
+    auto result = maxLogProbabilityLoss(result_nodes, ids, batchsize);
+    pair<dtype, std::vector<int>> final_result;
+    final_result.first = result.first;
+
+    for (int i = 0; i < result_nodes.size(); ++i) {
+        int word_id = result.second.front();
+        final_result.second.push_back(word_id);
+    }
+
+    return final_result;
+}
+
 std::pair<dtype, std::vector<int>> MaxLogProbabilityLossWithInconsistentDims(
         const std::vector<Node*> &result_nodes,
         const std::vector<int> &ids,
         int batchsize,
-        const std::function<bool(int)> &is_unkown,
         int vocabulary_size) {
     if (ids.size() != result_nodes.size()) {
         cerr << "ids size is not equal to result_nodes'." << endl;
@@ -958,6 +980,7 @@ int main(int argc, char *argv[]) {
 
         dtype last_loss_sum = 1e10f;
         dtype loss_sum = 0.0f;
+        dtype normal_loss_sum = 0.0f;
 
         int iteration = 0;
         string last_saved_model;
@@ -986,6 +1009,7 @@ int main(int argc, char *argv[]) {
 
             unique_ptr<Metric> metric = unique_ptr<Metric>(new Metric);
             unique_ptr<Metric> keyword_metric = unique_ptr<Metric>(new Metric);
+            unique_ptr<Metric> normal_metric = unique_ptr<Metric>(new Metric);
             n3ldg_cuda::Profiler::Reset();
             n3ldg_cuda::Profiler &profiler = n3ldg_cuda::Profiler::Ins();
             profiler.SetEnabled(false);
@@ -1002,7 +1026,7 @@ int main(int argc, char *argv[]) {
                             hyper_params.learning_rate << endl;
                     }
                 }
-                Graph graph;
+                Graph graph(false);
                 vector<shared_ptr<GraphBuilder>> graph_builders;
                 vector<DecoderComponents> decoder_components_vector;
                 vector<DecoderComponents> normal_decoder_components_vector;
@@ -1034,6 +1058,7 @@ int main(int argc, char *argv[]) {
                     DecoderComponents normal_components;
                     graph_builder->forwardDecoder(graph, normal_components, response_sentence,
                             hyper_params, model_params, true);
+                    normal_decoder_components_vector.push_back(normal_components);
                 }
 
                 graph.compute();
@@ -1045,13 +1070,10 @@ int main(int argc, char *argv[]) {
                     vector<int> word_ids = toIds(response_sentence, model_params.lookup_table);
                     vector<Node*> result_nodes =
                         toNodePointers(decoder_components_vector.at(i).wordvector_to_onehots);
-                    auto is_unkown = [&](int id) {
-                        return model_params.lookup_table.elems.from_string(unknownkey) == id;
-                    };
                     std::pair<dtype, std::vector<int>> result;
                     try {
                         result = MaxLogProbabilityLossWithInconsistentDims(result_nodes,
-                                word_ids, hyper_params.batch_size, is_unkown,
+                                word_ids, hyper_params.batch_size, 
                                 model_params.lookup_table.nVSize);
                     } catch (const InformedRuntimeError &e) {
                         cerr << e.what() << endl;
@@ -1079,10 +1101,18 @@ int main(int argc, char *argv[]) {
                     profiler.BeginEvent("loss");
                     auto keyword_result = MaxLogProbabilityLossWithInconsistentDims(
                             keyword_nodes_and_ids.first, keyword_nodes_and_ids.second,
-                            hyper_params.batch_size, is_unkown, model_params.lookup_table.nVSize);
+                            hyper_params.batch_size, model_params.lookup_table.nVSize);
                     profiler.EndCudaEvent();
                     loss_sum += keyword_result.first;
                     analyze(keyword_result.second, keyword_nodes_and_ids.second, *keyword_metric);
+
+                    vector<Node *> normal_results =
+                        normal_decoder_components_vector.at(i).wordvector_to_onehots;
+                    std::pair<dtype, std::vector<int>> normal_result;
+                    normal_result = MaxLogProbabilityLoss(normal_results, word_ids,
+                            hyper_params.batch_size, model_params.lookup_table.nVSize);
+                    normal_loss_sum += result.first;
+                    analyze(normal_result.second, word_ids, *normal_metric);
 
                     static int count_for_print;
                     if (++count_for_print % 100 == 1) {
@@ -1094,6 +1124,8 @@ int main(int argc, char *argv[]) {
                         printWordIds(word_ids, model_params.lookup_table);
                         cout << "output:" << endl;
                         printWordIds(result.second, model_params.lookup_table);
+                        cout << "base output:" << endl;
+                        printWordIds(normal_result.second, model_params.lookup_table);
 
                         cout << "golden keywords:" << endl;
                         printWordIds(keyword_nodes_and_ids.second, model_params.lookup_table);
@@ -1102,9 +1134,11 @@ int main(int argc, char *argv[]) {
                     }
                 }
 
-                cout << "loss:" << loss_sum << endl;
+                cout << "loss:" << loss_sum << " base loss:" << normal_loss_sum << endl;
                 cout << "normal:" << endl;
                 metric->print();
+                cout << "base:" << endl;
+                normal_metric->print();
                 cout << "keyword:" << endl;
                 keyword_metric->print();
 
@@ -1135,14 +1169,11 @@ int main(int argc, char *argv[]) {
                                 conversation_pair.response_id);
                         auto keyword_nodes_and_ids = keywordNodesAndIds(
                                 decoder_components, response_idf, model_params);
-                        auto is_unkown = [&](int id) {
-                            return model_params.lookup_table.elems.from_string(unknownkey) == id;
-                        };
                         return MaxLogProbabilityLossWithInconsistentDims(
                                 keyword_nodes_and_ids.first, keyword_nodes_and_ids.second, 1,
-                                is_unkown, model_params.lookup_table.nVSize).first +
+                                model_params.lookup_table.nVSize).first +
                             MaxLogProbabilityLossWithInconsistentDims( result_nodes, word_ids, 1,
-                                    is_unkown, model_params.lookup_table.nVSize).first;
+                                    model_params.lookup_table.nVSize).first;
                     };
                     cout << format("checking grad - conversation_pair size:%1%") %
                         conversation_pair_in_batch.size() << endl;
