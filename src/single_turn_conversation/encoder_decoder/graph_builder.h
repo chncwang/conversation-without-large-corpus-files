@@ -683,7 +683,7 @@ struct GraphBuilder {
             const HyperParams &hyper_params,
             ModelParams &model_params,
             bool is_training) {
-        Node *last_input, *last_keyword;
+        Node *last_input;
         if (i > 0) {
             LookupNode<Param>* before_dropout(new LookupNode<Param>);
             before_dropout->init(hyper_params.word_dim);
@@ -707,19 +707,17 @@ struct GraphBuilder {
                     size << endl;
                 abort();
             }
-            last_keyword = decoder_components.decoder_keyword_lookups.back();
         } else {
             BucketNode *bucket = new BucketNode;
             bucket->init(hyper_params.word_dim);
             bucket->forward(graph);
             last_input = bucket;
-            last_keyword = bucket;
         }
 
         Node *bucket = n3ldg_plus::bucket(graph, hyper_params.word_dim, 0);
         decoder_components.decoder_keyword_lookups.push_back(bucket);
 
-        decoder_components.forward(graph, hyper_params, model_params, *last_input, *last_keyword,
+        decoder_components.forward(graph, hyper_params, model_params, *last_input, *bucket,
                 left_to_right_encoder._hiddens, is_training);
 
         Node *decoder_to_wordvector = decoder_components.decoderToWordVectors(graph, hyper_params,

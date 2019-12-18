@@ -1050,9 +1050,9 @@ int main(int argc, char *argv[]) {
                     const WordIdfInfo &idf_info = response_idf_info_list.at(response_id);
 
                     DecoderComponents decoder_components;
-                    graph_builder->forwardDecoder(graph, decoder_components,
-                            response_sentence, idf_info.keywords_behind, hyper_params,
-                            model_params, true);
+//                    graph_builder->forwardDecoder(graph, decoder_components,
+//                            response_sentence, idf_info.keywords_behind, hyper_params,
+//                            model_params, true);
                     decoder_components_vector.push_back(decoder_components);
 
                     DecoderComponents normal_components;
@@ -1068,13 +1068,13 @@ int main(int argc, char *argv[]) {
                     int response_id = train_conversation_pairs.at(instance_index).response_id;
                     auto response_sentence = response_sentences.at(response_id);
                     vector<int> word_ids = toIds(response_sentence, model_params.lookup_table);
-                    vector<Node*> result_nodes =
-                        toNodePointers(decoder_components_vector.at(i).wordvector_to_onehots);
+//                    vector<Node*> result_nodes =
+//                        toNodePointers(decoder_components_vector.at(i).wordvector_to_onehots);
                     std::pair<dtype, std::vector<int>> result;
                     try {
-                        result = MaxLogProbabilityLossWithInconsistentDims(result_nodes,
-                                word_ids, hyper_params.batch_size, 
-                                model_params.lookup_table.nVSize);
+//                        result = MaxLogProbabilityLossWithInconsistentDims(result_nodes,
+//                                word_ids, hyper_params.batch_size, 
+//                                model_params.lookup_table.nVSize);
                     } catch (const InformedRuntimeError &e) {
                         cerr << e.what() << endl;
                         int i = e.getInfo()["i"].asInt();
@@ -1094,24 +1094,24 @@ int main(int argc, char *argv[]) {
                     }
                     profiler.EndCudaEvent();
                     loss_sum += result.first;
-                    analyze(result.second, word_ids, *metric);
-                    const WordIdfInfo &response_idf = response_idf_info_list.at(response_id);
-                    auto keyword_nodes_and_ids = keywordNodesAndIds(
-                            decoder_components_vector.at(i), response_idf, model_params);
+//                    analyze(result.second, word_ids, *metric);
+//                    const WordIdfInfo &response_idf = response_idf_info_list.at(response_id);
+//                    auto keyword_nodes_and_ids = keywordNodesAndIds(
+//                            decoder_components_vector.at(i), response_idf, model_params);
                     profiler.BeginEvent("loss");
-                    auto keyword_result = MaxLogProbabilityLossWithInconsistentDims(
-                            keyword_nodes_and_ids.first, keyword_nodes_and_ids.second,
-                            hyper_params.batch_size, model_params.lookup_table.nVSize);
-                    profiler.EndCudaEvent();
-                    loss_sum += keyword_result.first;
-                    analyze(keyword_result.second, keyword_nodes_and_ids.second, *keyword_metric);
+//                    auto keyword_result = MaxLogProbabilityLossWithInconsistentDims(
+//                            keyword_nodes_and_ids.first, keyword_nodes_and_ids.second,
+//                            hyper_params.batch_size, model_params.lookup_table.nVSize);
+//                    profiler.EndCudaEvent();
+//                    loss_sum += keyword_result.first;
+//                    analyze(keyword_result.second, keyword_nodes_and_ids.second, *keyword_metric);
 
                     vector<Node *> normal_results =
                         normal_decoder_components_vector.at(i).wordvector_to_onehots;
                     std::pair<dtype, std::vector<int>> normal_result;
-                    normal_result = MaxLogProbabilityLoss(normal_results, word_ids,
-                            hyper_params.batch_size, model_params.lookup_table.nVSize);
-                    normal_loss_sum += result.first;
+                    normal_result = MaxLogProbabilityLossWithInconsistentDims(normal_results,
+                            word_ids, hyper_params.batch_size, model_params.lookup_table.nVSize);
+                    normal_loss_sum += normal_result.first;
                     analyze(normal_result.second, word_ids, *normal_metric);
 
                     static int count_for_print;
@@ -1127,10 +1127,10 @@ int main(int argc, char *argv[]) {
                         cout << "base output:" << endl;
                         printWordIds(normal_result.second, model_params.lookup_table);
 
-                        cout << "golden keywords:" << endl;
-                        printWordIds(keyword_nodes_and_ids.second, model_params.lookup_table);
-                        cout << "output:" << endl;
-                        printWordIds(keyword_result.second, model_params.lookup_table);
+//                        cout << "golden keywords:" << endl;
+//                        printWordIds(keyword_nodes_and_ids.second, model_params.lookup_table);
+//                        cout << "output:" << endl;
+//                        printWordIds(keyword_result.second, model_params.lookup_table);
                     }
                 }
 
