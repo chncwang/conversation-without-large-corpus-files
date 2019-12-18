@@ -841,7 +841,7 @@ int main(int argc, char *argv[]) {
                     vector<Node*> result_nodes =
                         toNodePointers(decoder_components_vector.at(i).wordvector_to_onehots);
                     auto result = maxLogProbabilityLoss(result_nodes, word_ids,
-                            hyper_params.batch_size);
+                            1.0 / hyper_params.batch_size);
                     loss_sum += result.first;
 
                     analyze(result.second, word_ids, *metric);
