@@ -155,6 +155,7 @@ DefaultConfig parseDefaultConfig(INIReader &ini_reader) {
             false);
     default_config.split_unknown_words = ini_reader.GetBoolean(SECTION, "split_unknown_words",
             true);
+    default_config.eager = ini_reader.GetBoolean(SECTION, "eager", false);
 
     default_config.max_sample_count = ini_reader.GetInteger(SECTION, "max_sample_count",
             1000000000);
@@ -1026,7 +1027,7 @@ int main(int argc, char *argv[]) {
                             hyper_params.learning_rate << endl;
                     }
                 }
-                Graph graph(false);
+                Graph graph(default_config.eager);
                 vector<shared_ptr<GraphBuilder>> graph_builders;
                 vector<DecoderComponents> decoder_components_vector;
                 vector<DecoderComponents> normal_decoder_components_vector;
@@ -1050,13 +1051,13 @@ int main(int argc, char *argv[]) {
                     const WordIdfInfo &idf_info = response_idf_info_list.at(response_id);
 
                     DecoderComponents decoder_components;
-//                    graph_builder->forwardDecoder(graph, decoder_components,
-//                            response_sentence, idf_info.keywords_behind, hyper_params,
-//                            model_params, true);
+                    graph_builder->forwardDecoder(graph, decoder_components,
+                            response_sentence, idf_info.keywords_behind, hyper_params,
+                            model_params, true);
                     decoder_components_vector.push_back(decoder_components);
 
                     DecoderComponents normal_components;
-                    graph_builder->forwardDecoder(graph, normal_components, response_sentence,
+                    graph_builder->forwardBaseDecoder(graph, normal_components, response_sentence,
                             hyper_params, model_params, true);
                     normal_decoder_components_vector.push_back(normal_components);
                 }
@@ -1068,13 +1069,13 @@ int main(int argc, char *argv[]) {
                     int response_id = train_conversation_pairs.at(instance_index).response_id;
                     auto response_sentence = response_sentences.at(response_id);
                     vector<int> word_ids = toIds(response_sentence, model_params.lookup_table);
-//                    vector<Node*> result_nodes =
-//                        toNodePointers(decoder_components_vector.at(i).wordvector_to_onehots);
+                    vector<Node*> result_nodes =
+                        toNodePointers(decoder_components_vector.at(i).wordvector_to_onehots);
                     std::pair<dtype, std::vector<int>> result;
                     try {
-//                        result = MaxLogProbabilityLossWithInconsistentDims(result_nodes,
-//                                word_ids, hyper_params.batch_size, 
-//                                model_params.lookup_table.nVSize);
+                        result = MaxLogProbabilityLossWithInconsistentDims(result_nodes,
+                                word_ids, hyper_params.batch_size, 
+                                model_params.lookup_table.nVSize);
                     } catch (const InformedRuntimeError &e) {
                         cerr << e.what() << endl;
                         int i = e.getInfo()["i"].asInt();
@@ -1094,17 +1095,17 @@ int main(int argc, char *argv[]) {
                     }
                     profiler.EndCudaEvent();
                     loss_sum += result.first;
-//                    analyze(result.second, word_ids, *metric);
-//                    const WordIdfInfo &response_idf = response_idf_info_list.at(response_id);
-//                    auto keyword_nodes_and_ids = keywordNodesAndIds(
-//                            decoder_components_vector.at(i), response_idf, model_params);
+                    analyze(result.second, word_ids, *metric);
+                    const WordIdfInfo &response_idf = response_idf_info_list.at(response_id);
+                    auto keyword_nodes_and_ids = keywordNodesAndIds(
+                            decoder_components_vector.at(i), response_idf, model_params);
                     profiler.BeginEvent("loss");
-//                    auto keyword_result = MaxLogProbabilityLossWithInconsistentDims(
-//                            keyword_nodes_and_ids.first, keyword_nodes_and_ids.second,
-//                            hyper_params.batch_size, model_params.lookup_table.nVSize);
-//                    profiler.EndCudaEvent();
-//                    loss_sum += keyword_result.first;
-//                    analyze(keyword_result.second, keyword_nodes_and_ids.second, *keyword_metric);
+                    auto keyword_result = MaxLogProbabilityLossWithInconsistentDims(
+                            keyword_nodes_and_ids.first, keyword_nodes_and_ids.second,
+                            hyper_params.batch_size, model_params.lookup_table.nVSize);
+                    profiler.EndCudaEvent();
+                    loss_sum += keyword_result.first;
+                    analyze(keyword_result.second, keyword_nodes_and_ids.second, *keyword_metric);
 
                     vector<Node *> normal_results =
                         normal_decoder_components_vector.at(i).wordvector_to_onehots;
@@ -1127,10 +1128,10 @@ int main(int argc, char *argv[]) {
                         cout << "base output:" << endl;
                         printWordIds(normal_result.second, model_params.lookup_table);
 
-//                        cout << "golden keywords:" << endl;
-//                        printWordIds(keyword_nodes_and_ids.second, model_params.lookup_table);
-//                        cout << "output:" << endl;
-//                        printWordIds(keyword_result.second, model_params.lookup_table);
+                        cout << "golden keywords:" << endl;
+                        printWordIds(keyword_nodes_and_ids.second, model_params.lookup_table);
+                        cout << "output:" << endl;
+                        printWordIds(keyword_result.second, model_params.lookup_table);
                     }
                 }
 
@@ -1147,17 +1148,20 @@ int main(int argc, char *argv[]) {
                 if (default_config.check_grad) {
                     auto loss_function = [&](const ConversationPair &conversation_pair) -> dtype {
                         GraphBuilder graph_builder;
-                        Graph graph;
+                        Graph graph(default_config.eager);
 
                         graph_builder.forward(graph, post_sentences.at(conversation_pair.post_id),
                                 hyper_params, model_params, true);
 
                         DecoderComponents decoder_components;
-                        graph_builder.forwardDecoder(graph, decoder_components,
+                        graph_builder.forwardBaseDecoder(graph, decoder_components,
                                 response_sentences.at(conversation_pair.response_id),
-                                response_idf_info_list.at(
-                                    conversation_pair.response_id).keywords_behind,
-                                hyper_params, model_params, true);
+                            hyper_params, model_params, true);
+//                        graph_builder.forwardDecoder(graph, decoder_components,
+//                                response_sentences.at(conversation_pair.response_id),
+//                                response_idf_info_list.at(
+//                                    conversation_pair.response_id).keywords_behind,
+//                                hyper_params, model_params, true);
 
                         graph.compute();
 
@@ -1165,15 +1169,17 @@ int main(int argc, char *argv[]) {
                                     conversation_pair.response_id), model_params.lookup_table);
                         vector<Node*> result_nodes = toNodePointers(
                                 decoder_components.wordvector_to_onehots);
-                        const WordIdfInfo &response_idf = response_idf_info_list.at(
-                                conversation_pair.response_id);
-                        auto keyword_nodes_and_ids = keywordNodesAndIds(
-                                decoder_components, response_idf, model_params);
-                        return MaxLogProbabilityLossWithInconsistentDims(
-                                keyword_nodes_and_ids.first, keyword_nodes_and_ids.second, 1,
-                                model_params.lookup_table.nVSize).first +
-                            MaxLogProbabilityLossWithInconsistentDims( result_nodes, word_ids, 1,
-                                    model_params.lookup_table.nVSize).first;
+//                        const WordIdfInfo &response_idf = response_idf_info_list.at(
+//                                conversation_pair.response_id);
+//                        auto keyword_nodes_and_ids = keywordNodesAndIds(
+//                                decoder_components, response_idf, model_params);
+                        return MaxLogProbabilityLoss(result_nodes, word_ids, 1,
+                                model_params.lookup_table.nVSize).first;
+//                        return MaxLogProbabilityLossWithInconsistentDims(
+//                                keyword_nodes_and_ids.first, keyword_nodes_and_ids.second, 1,
+//                                model_params.lookup_table.nVSize).first +
+//                            MaxLogProbabilityLossWithInconsistentDims( result_nodes, word_ids, 1,
+//                                    model_params.lookup_table.nVSize).first;
                     };
                     cout << format("checking grad - conversation_pair size:%1%") %
                         conversation_pair_in_batch.size() << endl;

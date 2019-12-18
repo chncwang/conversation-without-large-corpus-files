@@ -577,17 +577,6 @@ struct GraphBuilder {
         }
     }
 
-    void forwardDecoder(Graph &graph, DecoderComponents &decoder_components,
-            const std::vector<std::string> &answer,
-            const HyperParams &hyper_params,
-            ModelParams &model_params,
-            bool is_training) {
-        for (int i = 0; i < answer.size(); ++i) {
-            forwardDecoderByOneStep(graph, decoder_components, i,
-                    i == 0 ? nullptr : &answer.at(i - 1), hyper_params, model_params, is_training);
-        }
-    }
-
     void forwardDecoderByOneStep(Graph &graph, DecoderComponents &decoder_components, int i,
             const std::string *answer,
             const std::string &keyword,
@@ -678,7 +667,18 @@ struct GraphBuilder {
         decoder_components.keyword_vector_to_onehots.push_back(keyword_vector_to_onehot);
     }
 
-    void forwardDecoderByOneStep(Graph &graph, DecoderComponents &decoder_components, int i,
+    void forwardBaseDecoder(Graph &graph, DecoderComponents &decoder_components,
+            const std::vector<std::string> &answer,
+            const HyperParams &hyper_params,
+            ModelParams &model_params,
+            bool is_training) {
+        for (int i = 0; i < answer.size(); ++i) {
+            forwardBaseDecoderByOneStep(graph, decoder_components, i,
+                    i == 0 ? nullptr : &answer.at(i - 1), hyper_params, model_params, is_training);
+        }
+    }
+
+    void forwardBaseDecoderByOneStep(Graph &graph, DecoderComponents &decoder_components, int i,
             const std::string *answer,
             const HyperParams &hyper_params,
             ModelParams &model_params,
