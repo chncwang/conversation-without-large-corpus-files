@@ -56,10 +56,12 @@ bool includePunctuation(const string &str) {
 }
 
 float mostMatchedCount(const CandidateAndReferences &candidate_and_references,
-        int gram_len) {
+        int gram_len,
+        bool print_log = false) {
     using namespace std;
 
     int max_mached_count = 0;
+    string max_matched_log;
     const auto &references = candidate_and_references.references;
     const auto &candidate = candidate_and_references.candidate;
     if (candidate.size() < gram_len) {
@@ -67,6 +69,7 @@ float mostMatchedCount(const CandidateAndReferences &candidate_and_references,
     }
     vector<string> matched_ref;
     for (const vector<string> &reference : references) {
+        string log;
         if (reference.size() < gram_len) {
             continue;
         }
@@ -95,6 +98,11 @@ float mostMatchedCount(const CandidateAndReferences &candidate_and_references,
                 if (finded) {
                     matched.at(j) = true;
                     matched_count++;
+                    log += (boost::format("%1%gram match:") % gram_len).str();
+                    for (int k = 0; k < gram_len; ++k) {
+                        log += candidate.at(i + k) + " ";
+                    }
+                    log += "\n";
                     break;
                 }
             }
@@ -103,14 +111,16 @@ float mostMatchedCount(const CandidateAndReferences &candidate_and_references,
         if (matched_count > max_mached_count) {
             max_mached_count = matched_count;
             matched_ref = reference;
+            max_matched_log = log;
         }
     }
-//    if (max_mached_count > 0) {
-//        cout << "candidate:" << endl;
-//        print(candidate);
-//        cout << "max_mached_count:" << max_mached_count << " gram len:" << gram_len << endl;
-//        print(matched_ref);
-//    }
+    if (max_mached_count > 0 && print_log) {
+        cout << "candidate:" << endl;
+        print(candidate);
+        cout << max_matched_log;
+        cout << "max_mached_count:" << max_mached_count << " gram len:" << gram_len << endl;
+        print(matched_ref);
+    }
 
     return max_mached_count;
 }
@@ -169,8 +179,10 @@ float computeBleu(const vector<CandidateAndReferences> &candidate_and_references
         int matched_count_sum = 0;
         int candidate_count_sum = 0;
         int candidate_len_sum = 0;
+        int j = 0;
         for (const auto &candidate_and_references : candidate_and_references_vector) {
-            int matched_count = mostMatchedCount(candidate_and_references, i);
+            int matched_count = mostMatchedCount(candidate_and_references, i,
+                    ++j == candidate_and_references_vector.size() && 4 == max_gram_len);
             matched_count_sum += matched_count;
             candidate_count_sum += ngramCount(candidate_and_references.candidate, i);
             candidate_len_sum += puncRemovedLen(candidate_and_references.candidate);
