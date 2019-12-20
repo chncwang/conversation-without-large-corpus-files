@@ -43,6 +43,10 @@ std::vector<PostAndResponses> readPostAndResponsesVector(const std::string &file
         post_and_responses.post_id = post_id;
         std::vector<std::string> strs2;
         boost::split(strs2, strs.at(1), boost::is_any_of(","));
+        if (strs2.empty()) {
+            cerr << "readPostAndResponsesVector - no response id found!" << line << endl;
+            abort();
+        }
         for (std::string &str : strs2) {
             post_and_responses.response_ids.push_back(stoi(str));
             if (default_config.one_response) {

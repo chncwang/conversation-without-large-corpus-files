@@ -58,8 +58,20 @@ void addWord(unordered_map<string, int> &word_counts, const vector<string> &sent
 DefaultConfig parseDefaultConfig(INIReader &ini_reader) {
     DefaultConfig default_config;
     static const string SECTION = "default";
-    default_config.pair_file = ini_reader.Get(SECTION, "pair_file", "");
-    if (default_config.pair_file.empty()) {
+    default_config.train_pair_file = ini_reader.Get(SECTION, "train_pair_file", "");
+    if (default_config.train_pair_file.empty()) {
+        cerr << "pair file empty" << endl;
+        abort();
+    }
+
+    default_config.dev_pair_file = ini_reader.Get(SECTION, "dev_pair_file", "");
+    if (default_config.dev_pair_file.empty()) {
+        cerr << "pair file empty" << endl;
+        abort();
+    }
+
+    default_config.test_pair_file = ini_reader.Get(SECTION, "test_pair_file", "");
+    if (default_config.test_pair_file.empty()) {
         cerr << "pair file empty" << endl;
         abort();
     }
@@ -103,8 +115,6 @@ DefaultConfig parseDefaultConfig(INIReader &ini_reader) {
     default_config.max_sample_count = ini_reader.GetInteger(SECTION, "max_sample_count",
             1000000000);
     default_config.hold_batch_size = ini_reader.GetInteger(SECTION, "hold_batch_size", 100);
-    default_config.dev_size = ini_reader.GetInteger(SECTION, "dev_size", 0);
-    default_config.test_size = ini_reader.GetInteger(SECTION, "test_size", 0);
     default_config.device_id = ini_reader.GetInteger(SECTION, "device_id", 0);
     default_config.seed = ini_reader.GetInteger(SECTION, "seed", 0);
     default_config.cut_length = ini_reader.GetInteger(SECTION, "cut_length", 30);
@@ -539,44 +549,24 @@ int main(int argc, char *argv[]) {
     cout << "hyper_params:" << endl;
     hyper_params.print();
 
-    vector<PostAndResponses> post_and_responses_vector = readPostAndResponsesVector(
-            default_config.pair_file);
-    cout << "post_and_responses_vector size:" << post_and_responses_vector.size() << endl;
-
-    default_random_engine engine(default_config.seed);
-    shuffle(begin(post_and_responses_vector), end(post_and_responses_vector),
-            engine);
-    vector<PostAndResponses> dev_post_and_responses, test_post_and_responses,
-        train_post_and_responses;
+    vector<PostAndResponses> train_post_and_responses = readPostAndResponsesVector(
+            default_config.train_pair_file);
+    cout << "train_post_and_responses_vector size:" << train_post_and_responses.size()
+        << endl;
+    vector<PostAndResponses> dev_post_and_responses = readPostAndResponsesVector(
+            default_config.dev_pair_file);
+    cout << "dev_post_and_responses_vector size:" << dev_post_and_responses.size()
+        << endl;
+    vector<PostAndResponses> test_post_and_responses = readPostAndResponsesVector(
+            default_config.test_pair_file);
+    cout << "test_post_and_responses_vector size:" << test_post_and_responses.size()
+        << endl;
     vector<ConversationPair> train_conversation_pairs;
-    int i = 0;
-    for (const PostAndResponses &post_and_responses : post_and_responses_vector) {
-        auto add_to_train = [&]() {
-            if (default_config.program_mode == ProgramMode::TRAINING) {
-                train_post_and_responses.push_back(post_and_responses);
-                vector<ConversationPair> conversation_pairs =
-                    toConversationPairs(post_and_responses);
-                for (ConversationPair &conversation_pair : conversation_pairs) {
-                    train_conversation_pairs.push_back(move(conversation_pair));
-                }
-            }
-        };
-        if (i < default_config.dev_size) {
-            dev_post_and_responses.push_back(post_and_responses);
-            if (default_config.learn_test) {
-                add_to_train();
-            }
-        } else if (i < default_config.dev_size + default_config.test_size) {
-            test_post_and_responses.push_back(post_and_responses);
-            if (default_config.learn_test) {
-                add_to_train();
-            }
-        } else {
-            if (default_config.program_mode == ProgramMode::TRAINING) {
-                add_to_train();
-            }
+    for (const PostAndResponses &post_and_responses : train_post_and_responses) {
+        vector<ConversationPair> conversation_pairs = toConversationPairs(post_and_responses);
+        for (ConversationPair &conversation_pair : conversation_pairs) {
+            train_conversation_pairs.push_back(move(conversation_pair));
         }
-        ++i;
     }
 
     cout << "train size:" << train_conversation_pairs.size() << " dev size:" <<
@@ -634,18 +624,6 @@ int main(int argc, char *argv[]) {
             }
         };
         wordStat();
-        if (default_config.split_unknown_words) {
-            unordered_set<string> word_set = knownWords(word_counts, hyper_params.word_cutoff);
-
-            auto post_ids_and_response_ids = PostAndResponseIds(post_and_responses_vector);
-            post_sentences = reprocessSentences(post_sentences, word_set,
-                    post_ids_and_response_ids.first);
-            response_sentences = reprocessSentences(response_sentences, word_set,
-                    post_ids_and_response_ids.second);
-            word_counts.clear();
-            wordStat();
-        }
-
         word_counts[unknownkey] = 1000000000;
         alphabet.init(word_counts, hyper_params.word_cutoff);
         cout << boost::format("alphabet size:%1%") % alphabet.size() << endl;
@@ -789,6 +767,7 @@ int main(int argc, char *argv[]) {
             int batch_count = valid_len / hyper_params.batch_size;
             cout << boost::format("valid_len:%1% batch_count:%2%") % valid_len % batch_count <<
                 endl;
+            default_random_engine engine(default_config.seed);
             for (int i = 0; i < hyper_params.batch_size; ++i) {
                 auto begin_pos = begin(train_conversation_pairs) + i * batch_count;
                 shuffle(begin_pos, begin_pos + batch_count, engine);
