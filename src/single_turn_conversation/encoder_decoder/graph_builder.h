@@ -554,46 +554,19 @@ struct GraphBuilder {
             const HyperParams &hyper_params,
             ModelParams &model_params,
             bool is_training) {
-        int keyword_bound = model_params.lookup_table.nVSize;
-
         for (int i = 0; i < answer.size(); ++i) {
-            if (i > 0) {
-                keyword_bound = model_params.lookup_table.elems.from_string(keywords.at(i - 1)) + 1;
-            }
-            int normal_bound = model_params.lookup_table.elems.from_string(keywords.at(i)) + 1;
-            if (normal_bound > keyword_bound) {
-                print(answer);
-                print(keywords);
-                abort();
-            }
             forwardDecoderByOneStep(graph, decoder_components, i,
-                    i == 0 ? nullptr : &answer.at(i - 1), keywords.at(i),
-                    i == 0 ||  answer.at(i - 1) == keywords.at(i - 1), hyper_params,
-                    model_params, is_training, keyword_bound, normal_bound);
+                    i == 0 ? nullptr : &answer.at(i - 1), keywords.at(i), hyper_params,
+                    model_params, is_training);
         }
     }
 
     void forwardDecoderByOneStep(Graph &graph, DecoderComponents &decoder_components, int i,
             const std::string *answer,
             const std::string &keyword,
-            bool should_predict_keyword,
             const HyperParams &hyper_params,
             ModelParams &model_params,
-            bool is_training,
-            int keyword_word_id_upper_open_bound,
-            int normal_word_id_upper_open_bound) {
-        if (keyword_word_id_upper_open_bound > model_params.lookup_table.nVSize) {
-            cerr << boost::format("word_id_upper_open_bound:%1% vsize:%2%") %
-                keyword_word_id_upper_open_bound % model_params.lookup_table.nVSize << endl;
-            abort();
-        }
-
-        if (normal_word_id_upper_open_bound > keyword_word_id_upper_open_bound) {
-            cerr << boost::format("normal:%1% keyword:%2%") %
-                normal_word_id_upper_open_bound % keyword_word_id_upper_open_bound << endl;
-            abort();
-        }
-
+            bool is_training) {
         Node *last_input, *last_keyword;
         if (i > 0) {
             LookupNode<Param>* before_dropout(new LookupNode<Param>);
@@ -637,19 +610,15 @@ struct GraphBuilder {
                 left_to_right_encoder._hiddens, is_training);
 
         auto nodes = decoder_components.decoderToWordVectors(graph, hyper_params,
-                model_params, left_to_right_encoder._hiddens, i, should_predict_keyword);
+                model_params, left_to_right_encoder._hiddens, i, true);
         Node *decoder_to_wordvector = nodes.result;
         decoder_components.decoder_to_wordvectors.push_back(decoder_to_wordvector);
 
-        LinearWordVectorNode *wordvector_to_onehot(new LinearWordVectorNode);
-        wordvector_to_onehot->init(normal_word_id_upper_open_bound);
-        wordvector_to_onehot->setParam(model_params.lookup_table.E);
-        wordvector_to_onehot->forward(graph, *decoder_to_wordvector);
-
+        Node *wordvector_to_onehot = n3ldg_plus::linearWordVector(graph,
+                model_params.lookup_table.nVSize, model_params.lookup_table.E,
+                *decoder_to_wordvector);
         Node *softmax = n3ldg_plus::softmax(graph, *wordvector_to_onehot);
-
         decoder_components.wordvector_to_onehots.push_back(softmax);
-
         decoder_components.decoder_to_keyword_vectors.push_back(nodes.keyword);
 
         Node *keyword_vector_to_onehot;
@@ -657,7 +626,7 @@ struct GraphBuilder {
             keyword_vector_to_onehot = nullptr;
         } else {
             keyword_vector_to_onehot = n3ldg_plus::linearWordVector(graph,
-                    keyword_word_id_upper_open_bound, model_params.lookup_table.E, *nodes.keyword);
+                    model_params.lookup_table.nVSize, model_params.lookup_table.E, *nodes.keyword);
             keyword_vector_to_onehot = n3ldg_plus::softmax(graph, *keyword_vector_to_onehot);
         }
         decoder_components.keyword_vector_to_onehots.push_back(keyword_vector_to_onehot);

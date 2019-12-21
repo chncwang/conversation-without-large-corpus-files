@@ -1,6 +1,7 @@
 #ifndef SINGLE_TURN_CONVERSATION_SRC_BASIC_DATA_MANAGER_H
 #define SINGLE_TURN_CONVERSATION_SRC_BASIC_DATA_MANAGER_H
 
+#include <cstdlib>
 #include <string>
 #include <unordered_map>
 #include <unordered_set>
@@ -17,6 +18,7 @@
 #include "single_turn_conversation/conversation_structure.h"
 #include "single_turn_conversation/def.h"
 #include "single_turn_conversation/default_config.h"
+#include "single_turn_conversation/print.h"
 #include "tinyutf8.h"
 #include <boost/format.hpp>
 #include <boost/algorithm/string.hpp>
@@ -151,6 +153,9 @@ std::vector<std::vector<std::string>> readSentences(const std::string &filename)
 
         std::vector<std::string> characters;
         for (const utf8_string &word : utf8_words) {
+            if (word.empty()) {
+                continue;
+            }
             if (isPureEnglish(word) && !isPureNumber(word)) {
                 string w;
                 for (int i = 0; i < word.length(); ++i) {
@@ -244,6 +249,7 @@ vector<vector<string>> reprocessSentences(const vector<vector<string>> &sentence
 struct WordIdfInfo {
     vector<float> word_idfs;
     vector<string> keywords_behind;
+    vector<vector<dtype>> keyword_distibutions;
 
     WordIdfInfo() noexcept = default;
     WordIdfInfo(const WordIdfInfo&) = delete;
@@ -251,69 +257,59 @@ struct WordIdfInfo {
         keywords_behind(move(w.keywords_behind)) {}
 };
 
-WordIdfInfo getWordIdfInfo(const vector<string> &sentence,
-        bool is_in_train_set,
+shared_ptr<WordIdfInfo> getWordIdfInfo(const vector<string> &sentence,
         const unordered_map<string, float> &word_idfs,
         const unordered_map<string, int> &word_id_table,
         const unordered_map<string, int> &word_counts,
-        int cutoff) {
-    WordIdfInfo word_idf_info;
-    word_idf_info.word_idfs.reserve(sentence.size());
-    word_idf_info.keywords_behind.reserve(sentence.size());
+        int vocabulary_size) {
+    shared_ptr<WordIdfInfo> word_idf_info(new WordIdfInfo);
+    word_idf_info->word_idfs.reserve(sentence.size());
+    word_idf_info->keywords_behind.reserve(sentence.size());
 
     for (const string &word : sentence) {
         float idf;
         auto it = word_counts.find(word);
         if (it == word_counts.end()) {
             idf = 0;
-        } else if (it->second <= cutoff) {
-            idf = 0;
         } else {
             auto it = word_idfs.find(word);
             idf = it->second;
         }
-        word_idf_info.word_idfs.push_back(idf);
+        word_idf_info->word_idfs.push_back(idf);
     }
 
-    auto &word_frequencies = word_idf_info.word_idfs;
+    auto &word_frequencies = word_idf_info->word_idfs;
     for (int i = 0; i < word_frequencies.size(); ++i) {
-        int max_id = -1;
+        float idf_sum = 0;
+        for (int j = i; j < word_frequencies.size(); ++j) {
+            idf_sum += word_frequencies.at(j);
+        }
+        vector<dtype> distribution(vocabulary_size, 0.0);
+        for (int j = i; j < word_frequencies.size(); ++j) {
+            int word_id = word_id_table.at(sentence.at(j));
+            distribution.at(word_id) = idf_sum > 1e-3 ? (word_frequencies.at(j) / idf_sum) : 1;
+        }
+        word_idf_info->keyword_distibutions.push_back(move(distribution));
+        float rand_value = (rand() / (float)RAND_MAX) * idf_sum;
+        float sum = 0;
         string word;
         for (int j = i; j < word_frequencies.size(); ++j) {
-            const auto &it  = word_id_table.find(sentence.at(j));
-            if (is_in_train_set && it == word_id_table.end()) {
-                cerr << sentence.at(j) << " not found" << endl;
-                abort();
-            }
-            if (it->second >= max_id) {
+            sum += word_frequencies.at(j);
+            if (rand_value <= sum) {
                 word = sentence.at(j);
-                max_id = it->second;
+                break;
             }
         }
-//        cout << "word:" << word <<" id:" << max_id << endl;
-
-        word_idf_info.keywords_behind.push_back(word);
+        if (word.empty()) {
+            cerr << "getWordIdfInfo - empty word" << endl;
+            cerr << "idf_sum:" << idf_sum << " rand_value:" << rand_value << endl;
+            print(sentence);
+            abort();
+        }
+        word_idf_info->keywords_behind.push_back(word);
     }
 
     return word_idf_info;
-}
-
-vector<WordIdfInfo> readWordIdfInfoList(const vector<vector<string>> &sentences,
-        const vector<bool> &is_in_train_set,
-        const unordered_map<string, float> &word_idfs,
-        const unordered_map<string, int> &word_counts,
-        const unordered_map<string, int> &word_id_table,
-        int cutoff) {
-    std::vector<WordIdfInfo> results;
-
-    int i = 0;
-    for (const auto &s : sentences) {
-        auto info = getWordIdfInfo(s, is_in_train_set.at(i++), word_idfs, word_id_table,
-                word_counts, cutoff);
-        results.push_back(move(info));
-    }
-
-    return results;
 }
 
 std::vector<std::string> readBlackList(const std::string &filename) {
