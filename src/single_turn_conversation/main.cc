@@ -999,13 +999,13 @@ int main(int argc, char *argv[]) {
             grad_checker.init(model_params.tunableParams());
         }
 
-        dtype last_loss_sum = 1e10f;
-        dtype loss_sum = 0.0f;
+        dtype last_loss_sum = 1e20f;
 
         int iteration = 0;
         string last_saved_model;
 
         for (int epoch = 0; ; ++epoch) {
+            dtype loss_sum = 0.0f;
             dtype voc_loss_sum = 0;
             int64_t voc_size_sum = 0;
             cout << "epoch:" << epoch << endl;
@@ -1219,7 +1219,7 @@ int main(int argc, char *argv[]) {
             profiler.Print();
 
             cout << "loss_sum:" << loss_sum << " last_loss_sum:" << last_loss_sum << endl;
-            if (loss_sum > last_loss_sum) {
+            if (loss_sum + voc_loss_sum > last_loss_sum) {
                 if (epoch == 0) {
                     cerr << "loss is larger than last epoch but epoch is 0" << endl;
                     abort();
@@ -1241,8 +1241,7 @@ int main(int argc, char *argv[]) {
                         default_config.output_model_file_prefix, epoch);
             }
 
-            last_loss_sum = loss_sum;
-            loss_sum = 0;
+            last_loss_sum = loss_sum + voc_loss_sum;
         }
     } else {
         abort();
