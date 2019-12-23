@@ -642,7 +642,17 @@ std::pair<dtype, std::vector<int>> MaxLogProbabilityLoss(
         abort();
     }
     validateEqualNodeDims(result_nodes);
-    auto result = maxLogProbabilityLoss(result_nodes, ids, batchsize);
+    auto result = maxLogProbabilityLoss(result_nodes, ids, 1.0 / batchsize);
+    return result;
+}
+
+pair<dtype, vector<int>> KLLoss_(std::vector<Node*> &result_nodes, const WordIdfInfo &info,
+        int batchsize) {
+    vector<shared_ptr<vector<dtype>>> answers;
+    for (const auto dis : info.keyword_distibutions) {
+        answers.push_back(dis);
+    }
+    auto result = KLLoss(result_nodes, answers, 1.0 / batchsize);
     return result;
 }
 
@@ -1036,12 +1046,12 @@ int main(int argc, char *argv[]) {
                     auto keyword_nodes_and_ids = keywordNodesAndIds(
                             decoder_components_vector.at(i), response_idf, model_params);
                     profiler.BeginEvent("loss");
-                    auto keyword_result = MaxLogProbabilityLoss(
-                            keyword_nodes_and_ids.first, keyword_nodes_and_ids.second,
-                            hyper_params.batch_size, is_unkown, model_params.lookup_table.nVSize);
+                    auto keyword_loss_result = KLLoss_(keyword_nodes_and_ids.first,
+                            *word_idf_info_vec.at(i), hyper_params.batch_size);
+                    vector<int> keyword_ids = toIds(response_sentence, model_params.lookup_table);
+                    analyze(keyword_loss_result.second, keyword_ids, *keyword_metric);
                     profiler.EndCudaEvent();
-                    loss_sum += keyword_result.first;
-                    analyze(keyword_result.second, keyword_nodes_and_ids.second, *keyword_metric);
+                    loss_sum += keyword_loss_result.first;
 
                     static int count_for_print;
                     if (++count_for_print % 100 == 1) {
@@ -1056,8 +1066,10 @@ int main(int argc, char *argv[]) {
 
                         cout << "golden keywords:" << endl;
                         printWordIds(keyword_nodes_and_ids.second, model_params.lookup_table);
-                        cout << "output:" << endl;
-                        printWordIds(keyword_result.second, model_params.lookup_table);
+                        cout << "keyword ppl:" <<
+                            exp(hyper_params.batch_size * keyword_loss_result.first /
+                                    response_sentence.size()) << endl;
+                        printWordIds(keyword_loss_result.second, model_params.lookup_table);
                     }
                 }
 
@@ -1069,44 +1081,44 @@ int main(int argc, char *argv[]) {
 
                 graph.backward();
 
-                if (default_config.check_grad) {
-//                    auto loss_function = [&](const ConversationPair &conversation_pair) -> dtype {
-//                        GraphBuilder graph_builder;
-//                        Graph graph;
+                if (default_config.check_grad && batch_i > 1000) {
+                    auto loss_function = [&](const pair<ConversationPair,
+                            shared_ptr<WordIdfInfo>> &pair) -> dtype {
+                        GraphBuilder graph_builder;
+                        Graph graph;
 
-//                        graph_builder.forward(graph, post_sentences.at(conversation_pair.post_id),
-//                                hyper_params, model_params, true);
+                        graph_builder.forward(graph, post_sentences.at(pair.first.post_id),
+                                hyper_params, model_params, true);
 
-//                        DecoderComponents decoder_components;
-//                        graph_builder.forwardDecoder(graph, decoder_components,
-//                                response_sentences.at(conversation_pair.response_id),
-//                                response_idf_info_list.at(
-//                                    conversation_pair.response_id).keywords_behind,
-//                                hyper_params, model_params, true);
+                        DecoderComponents decoder_components;
+                        graph_builder.forwardDecoder(graph, decoder_components,
+                                response_sentences.at(pair.first.response_id),
+                                pair.second->keywords_behind, hyper_params, model_params, true);
 
-//                        graph.compute();
+                        graph.compute();
 
-//                        vector<int> word_ids = toIds(response_sentences.at(
-//                                    conversation_pair.response_id), model_params.lookup_table);
-//                        vector<Node*> result_nodes = toNodePointers(
-//                                decoder_components.wordvector_to_onehots);
-//                        const WordIdfInfo &response_idf = response_idf_info_list.at(
-//                                conversation_pair.response_id);
-//                        auto keyword_nodes_and_ids = keywordNodesAndIds(
-//                                decoder_components, response_idf, model_params);
-//                        auto is_unkown = [&](int id) {
-//                            return model_params.lookup_table.elems.from_string(unknownkey) == id;
-//                        };
-//                        return MaxLogProbabilityLossWithInconsistentDims(
-//                                keyword_nodes_and_ids.first, keyword_nodes_and_ids.second, 1,
-//                                is_unkown, model_params.lookup_table.nVSize).first +
-//                            MaxLogProbabilityLossWithInconsistentDims( result_nodes, word_ids, 1,
-//                                    is_unkown, model_params.lookup_table.nVSize).first;
-//                    };
-//                    cout << format("checking grad - conversation_pair size:%1%") %
-//                        conversation_pair_in_batch.size() << endl;
-//                    grad_checker.check<ConversationPair>(loss_function, conversation_pair_in_batch,
-//                            "");
+                        vector<int> word_ids = toIds(response_sentences.at(
+                                    pair.first.response_id), model_params.lookup_table);
+                        vector<Node*> result_nodes = toNodePointers(
+                                decoder_components.wordvector_to_onehots);
+                        auto keyword_nodes_and_ids = keywordNodesAndIds(
+                                decoder_components, *pair.second, model_params);
+                        auto is_unkown = [&](int id) {
+                            return model_params.lookup_table.elems.from_string(unknownkey) == id;
+                        };
+                        return MaxLogProbabilityLoss(result_nodes, word_ids, 1,
+                                is_unkown, model_params.lookup_table.nVSize).first +
+                            KLLoss_(keyword_nodes_and_ids.first, *pair.second, 1).first;
+                    };
+                    cout << format("checking grad - conversation_pair size:%1%") %
+                        conversation_pair_in_batch.size() << endl;
+                    vector<pair<ConversationPair, shared_ptr<WordIdfInfo>>> pair;
+                    for (int i = 0; i < conversation_pair_in_batch.size(); ++i) {
+                        pair.push_back(make_pair(conversation_pair_in_batch.at(i),
+                                    word_idf_info_vec.at(i)));
+                    }
+                    grad_checker.check<::pair<ConversationPair, shared_ptr<WordIdfInfo>>>(
+                            loss_function, pair, "");
                 }
 
                 if (hyper_params.optimizer == Optimizer::ADAM) {
