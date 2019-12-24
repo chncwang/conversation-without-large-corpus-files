@@ -102,9 +102,21 @@ void addWord(unordered_map<string, int> &word_counts, const vector<string> &sent
 DefaultConfig parseDefaultConfig(INIReader &ini_reader) {
     DefaultConfig default_config;
     static const string SECTION = "default";
-    default_config.pair_file = ini_reader.Get(SECTION, "pair_file", "");
-    if (default_config.pair_file.empty()) {
+    default_config.train_pair_file = ini_reader.Get(SECTION, "train_pair_file", "");
+    if (default_config.train_pair_file.empty()) {
         cerr << "pair file empty" << endl;
+        abort();
+    }
+
+    default_config.dev_pair_file = ini_reader.Get(SECTION, "dev_pair_file", "");
+    if (default_config.dev_pair_file.empty()) {
+        cerr << "dev file empty" << endl;
+        abort();
+    }
+
+    default_config.test_pair_file = ini_reader.Get(SECTION, "test_pair_file", "");
+    if (default_config.test_pair_file.empty()) {
+        cerr << "test file empty" << endl;
         abort();
     }
 
@@ -116,19 +128,7 @@ DefaultConfig parseDefaultConfig(INIReader &ini_reader) {
 
     default_config.response_file = ini_reader.Get(SECTION, "response_file", "");
     if (default_config.post_file.empty()) {
-        cerr << "post file empty" << endl;
-        abort();
-    }
-
-    default_config.post_idf_file = ini_reader.Get(SECTION, "post_idf_file", "");
-    if (default_config.post_idf_file.empty()) {
-        cerr << "post idf file empty" << endl;
-        abort();
-    }
-
-    default_config.response_idf_file = ini_reader.Get(SECTION, "response_idf_file", "");
-    if (default_config.response_idf_file.empty()) {
-        cerr << "response idf file empty" << endl;
+        cerr << "response file empty" << endl;
         abort();
     }
 
@@ -159,8 +159,6 @@ DefaultConfig parseDefaultConfig(INIReader &ini_reader) {
     default_config.max_sample_count = ini_reader.GetInteger(SECTION, "max_sample_count",
             1000000000);
     default_config.hold_batch_size = ini_reader.GetInteger(SECTION, "hold_batch_size", 100);
-    default_config.dev_size = ini_reader.GetInteger(SECTION, "dev_size", 0);
-    default_config.test_size = ini_reader.GetInteger(SECTION, "test_size", 0);
     default_config.device_id = ini_reader.GetInteger(SECTION, "device_id", 0);
     default_config.seed = ini_reader.GetInteger(SECTION, "seed", 0);
     default_config.cut_length = ini_reader.GetInteger(SECTION, "cut_length", 30);
@@ -413,7 +411,7 @@ pair<vector<Node *>, vector<int>> keywordNodesAndIds(const DecoderComponents &de
         const WordIdfInfo &idf_info,
         const ModelParams &model_params) {
     vector<Node *> keyword_result_nodes = decoder_components.keyword_vector_to_onehots;
-    vector<int> keyword_ids = toIds(idf_info.keywords_behind, model_params.lookup_table, false);
+    vector<int> keyword_ids = toIds(idf_info.keywords_behind, model_params.lookup_table, true);
     vector<Node *> non_null_nodes;
     vector<int> chnanged_keyword_ids;
     for (int j = 0; j < keyword_result_nodes.size(); ++j) {
@@ -707,44 +705,25 @@ int main(int argc, char *argv[]) {
     cout << "hyper_params:" << endl;
     hyper_params.print();
 
-    vector<PostAndResponses> post_and_responses_vector = readPostAndResponsesVector(
-            default_config.pair_file);
-    cout << "post_and_responses_vector size:" << post_and_responses_vector.size() << endl;
-
-    default_random_engine engine(default_config.seed);
-    shuffle(begin(post_and_responses_vector), end(post_and_responses_vector),
-            engine);
-    vector<PostAndResponses> dev_post_and_responses, test_post_and_responses,
-        train_post_and_responses;
+    vector<PostAndResponses> train_post_and_responses = readPostAndResponsesVector(
+            default_config.train_pair_file);
+    cout << "train_post_and_responses_vector size:" << train_post_and_responses.size() <<
+        endl;
+    vector<PostAndResponses> dev_post_and_responses = readPostAndResponsesVector(
+            default_config.dev_pair_file);
+    cout << "dev_post_and_responses_vector size:" << dev_post_and_responses.size() <<
+        endl;
+    vector<PostAndResponses> test_post_and_responses = readPostAndResponsesVector(
+            default_config.test_pair_file);
+    cout << "test_post_and_responses_vector size:" << test_post_and_responses.size() <<
+        endl;
     vector<ConversationPair> train_conversation_pairs;
-    int i = 0;
-    for (const PostAndResponses &post_and_responses : post_and_responses_vector) {
-        auto add_to_train = [&]() {
-            train_post_and_responses.push_back(post_and_responses);
-            vector<ConversationPair> conversation_pairs =
-                toConversationPairs(post_and_responses);
-            for (ConversationPair &conversation_pair : conversation_pairs) {
-                train_conversation_pairs.push_back(move(conversation_pair));
-            }
-        };
-        if (i < default_config.dev_size) {
-            dev_post_and_responses.push_back(post_and_responses);
-            if (default_config.learn_test) {
-                add_to_train();
-            }
-        } else if (i < default_config.dev_size + default_config.test_size) {
-            test_post_and_responses.push_back(post_and_responses);
-            if (default_config.learn_test) {
-                add_to_train();
-            }
-        } else {
-            add_to_train();
+    for (const PostAndResponses &post_and_responses : train_post_and_responses) {
+        vector<ConversationPair> conversation_pairs = toConversationPairs(post_and_responses);
+        for (ConversationPair &conversation_pair : conversation_pairs) {
+            train_conversation_pairs.push_back(move(conversation_pair));
         }
-        ++i;
     }
-
-    cout << "train size:" << train_conversation_pairs.size() << " dev size:" <<
-        dev_post_and_responses.size() << " test size:" << test_post_and_responses.size() << endl;
 
     vector<vector<string>> post_sentences = readSentences(default_config.post_file);
     vector<vector<string>> response_sentences = readSentences(default_config.response_file);
@@ -964,6 +943,7 @@ int main(int argc, char *argv[]) {
         int iteration = 0;
         string last_saved_model;
 
+        default_random_engine engine(default_config.seed);
         for (int epoch = 0; ; ++epoch) {
             cout << "epoch:" << epoch << endl;
             model_params.lookup_table.E.is_fixed = (epoch == 0 &&
@@ -1011,6 +991,7 @@ int main(int argc, char *argv[]) {
                 auto getSentenceIndex = [batch_i, batch_count](int i) {
                     return i * batch_count + batch_i;
                 };
+                int response_size_sum = 0;
                 for (int i = 0; i < hyper_params.batch_size; ++i) {
                     shared_ptr<GraphBuilder> graph_builder(new GraphBuilder);
                     graph_builders.push_back(graph_builder);
@@ -1022,6 +1003,7 @@ int main(int argc, char *argv[]) {
                     graph_builder->forward(graph, post_sentence, hyper_params, model_params, true);
                     int response_id = train_conversation_pairs.at(instance_index).response_id;
                     auto response_sentence = response_sentences.at(response_id);
+                    response_size_sum += response_sentence.size();
                     const WordIdfInfo &idf_info = response_idf_info_list.at(response_id);
                     DecoderComponents decoder_components;
                     graph_builder->forwardDecoder(graph, decoder_components, response_sentence,
@@ -1044,7 +1026,7 @@ int main(int argc, char *argv[]) {
                     std::pair<dtype, std::vector<int>> result;
                     try {
                         result = MaxLogProbabilityLossWithInconsistentDims(result_nodes,
-                                word_ids, hyper_params.batch_size, is_unkown,
+                                word_ids, response_size_sum, is_unkown,
                                 model_params.lookup_table.nVSize);
                     } catch (const InformedRuntimeError &e) {
                         cerr << e.what() << endl;
@@ -1072,7 +1054,7 @@ int main(int argc, char *argv[]) {
                     profiler.BeginEvent("loss");
                     auto keyword_result = MaxLogProbabilityLossWithInconsistentDims(
                             keyword_nodes_and_ids.first, keyword_nodes_and_ids.second,
-                            hyper_params.batch_size, is_unkown, model_params.lookup_table.nVSize);
+                            response_size_sum, is_unkown, model_params.lookup_table.nVSize);
                     profiler.EndCudaEvent();
                     loss_sum += keyword_result.first;
                     analyze(keyword_result.second, keyword_nodes_and_ids.second, *keyword_metric);

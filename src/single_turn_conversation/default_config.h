@@ -18,7 +18,9 @@ struct NgramPenalty {
 };
 
 struct DefaultConfig {
-    std::string pair_file;
+    std::string train_pair_file;
+    std::string dev_pair_file;
+    std::string test_pair_file;
     std::string post_file;
     std::string response_file;
     std::string post_idf_file;
@@ -30,8 +32,6 @@ struct DefaultConfig {
     bool save_model_per_batch;
     bool split_unknown_words;
     int max_sample_count;
-    int dev_size;
-    int test_size;
     int device_id;
     int hold_batch_size;
     int seed;
@@ -53,7 +53,9 @@ struct DefaultConfig {
     }
 
     void print() const {
-        std::cout << "pair_file:" << pair_file << std::endl
+        std::cout << "train_pair_file:" << train_pair_file << std::endl
+            << "dev_pair_file:" << dev_pair_file << std::endl
+            << "test_pair_file:" << test_pair_file << std::endl
             << "post_file:" << post_file << std::endl
             << "response_file:" << response_file << std::endl
             << "post_idf_file:" << post_idf_file << std::endl
@@ -65,8 +67,6 @@ struct DefaultConfig {
             << "save_model_per_batch:" << save_model_per_batch << std::endl
             << "split_unknown_words:" << split_unknown_words << std::endl
             << "max_sample_count:" << max_sample_count << std::endl
-            << "dev_size:" << dev_size << std::endl
-            << "test_size:" << test_size << std::endl
             << "device_id:" << device_id << std::endl
             << "hold_batch_size:" << hold_batch_size << std::endl
             << "seed:" << seed << std::endl
