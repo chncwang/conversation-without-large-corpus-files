@@ -273,6 +273,7 @@ void analyze(const vector<int> &results, const vector<int> &answers, Metric &met
 
 string saveModel(const HyperParams &hyper_params, ModelParams &model_params,
         const string &filename_prefix, int epoch) {
+    return "";
     cout << "saving model file..." << endl;
     auto t = time(nullptr);
     auto tm = *localtime(&t);
@@ -742,7 +743,7 @@ int main(int argc, char *argv[]) {
         dtype loss_sum = 0.0f;
 
         n3ldg_cuda::Profiler &profiler = n3ldg_cuda::Profiler::Ins();
-        profiler.SetEnabled(false);
+        profiler.SetEnabled(true);
         profiler.BeginEvent("total");
 
         int iteration = 0;
@@ -774,7 +775,7 @@ int main(int argc, char *argv[]) {
             }
 
             unique_ptr<Metric> metric = unique_ptr<Metric>(new Metric);
-            for (int batch_i = 0; batch_i < batch_count; ++batch_i) {
+            for (int batch_i = 0; batch_i < 50; ++batch_i) {
                 cout << format("batch_i:%1% iteration:%2%") % batch_i % iteration << endl;
                 if (epoch == 0) {
                     if (iteration < hyper_params.warm_up_iterations) {
@@ -920,6 +921,7 @@ int main(int argc, char *argv[]) {
             profiler.EndCudaEvent();
             profiler.Print();
             profiler.SetEnabled(false);
+            return 0;
         }
     } else {
         abort();
