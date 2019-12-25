@@ -88,7 +88,8 @@ public:
 //            keys.insert(path_.at(i).word_id);
 //        }
 //        return final_log_probability / path_.size();
-        int len = (path_.size() % 2 == 1 ? all_words.size() : normal_words.size());
+//        int len = (path_.size() % 2 == 1 ? all_words.size() : normal_words.size());
+        int len = (normal_words.size() + 1e-5);
         return final_log_probability / pow(len, 1);
 //        return final_log_probability / (normal_words.size() + 1e-10);
     }
@@ -335,57 +336,35 @@ vector<BeamSearchResult> mostProbableKeywords(
     cout << "black size:" << black_list.size() << endl;
     vector<Node *> keyword_nodes, hiddens, nodes;
     for (int ii = 0; ii < beam.size(); ++ii) {
-        bool should_predict_keyword;
-        if (last_results.empty()) {
-            should_predict_keyword = true;
-        } else {
-            vector<WordIdAndProbability> path = last_results.at(ii).getPath();
-            int size = path.size();
-            should_predict_keyword = path.at(size - 2).word_id == path.at(size - 1).word_id;
+        Node *hidden = beam.at(ii).decoder._hiddens.at(word_pos);
+        DecoderComponents &components = beam.at(ii);
+
+        ConcatNode *concat_node = new ConcatNode();
+        concat_node->init(hyper_params.hidden_dim);
+        if (components.decoder_lookups.size() != word_pos) {
+            cerr << boost::format("size:%1% word_pos:%2%") % components.decoder_lookups.size()
+                % word_pos << endl;
+            abort();
         }
-        Node *node, *keyword_node, *hidden;
-        hidden = beam.at(ii).decoder._hiddens.at(word_pos);
-        if (should_predict_keyword) {
-            DecoderComponents &components = beam.at(ii);
 
-            ConcatNode *concat_node = new ConcatNode();
-            concat_node->init(hyper_params.hidden_dim);
-            if (components.decoder_lookups.size() != word_pos) {
-                cerr << boost::format("size:%1% word_pos:%2%") % components.decoder_lookups.size()
-                    % word_pos << endl;
-                abort();
-            }
+        ConcatNode *context_concated = new ConcatNode;
+        context_concated->init(2 * hyper_params.hidden_dim);
+        context_concated->forward(graph, {components.decoder._hiddens.at(word_pos),
+                components.contexts.at(word_pos)});
 
-            ConcatNode *context_concated = new ConcatNode;
-            context_concated->init(2 * hyper_params.hidden_dim);
-            context_concated->forward(graph, {components.decoder._hiddens.at(word_pos),
-                    components.contexts.at(word_pos)});
+        Node *keyword = n3ldg_plus::linear(graph, model_params.hidden_to_keyword_params,
+                *context_concated);
+        Node *keyword_node = keyword;
 
-            Node *keyword = n3ldg_plus::linear(graph, model_params.hidden_to_keyword_params,
-                    *context_concated);
-            keyword_node = keyword;
+        LinearWordVectorNode *keyword_vector_to_onehot = new LinearWordVectorNode;
+        keyword_vector_to_onehot->init(model_params.lookup_table.nVSize);
+        keyword_vector_to_onehot->setParam(model_params.lookup_table.E);
+        keyword_vector_to_onehot->forward(graph, *keyword);
 
-            int last_keyword_id;
-            if (last_results.empty()) {
-                last_keyword_id = model_params.lookup_table.nVSize - 1;
-            } else {
-                vector<WordIdAndProbability> path = last_results.at(ii).getPath();
-                last_keyword_id = path.at(path.size() - 2).word_id;
-            }
+        Node *softmax = n3ldg_plus::softmax(graph, *keyword_vector_to_onehot);
 
-            LinearWordVectorNode *keyword_vector_to_onehot = new LinearWordVectorNode;
-            keyword_vector_to_onehot->init(last_keyword_id + 1);
-            keyword_vector_to_onehot->setParam(model_params.lookup_table.E);
-            keyword_vector_to_onehot->forward(graph, *keyword);
-
-            Node *softmax = n3ldg_plus::softmax(graph, *keyword_vector_to_onehot);
-
-            components.keyword_vector_to_onehots.push_back(softmax);
-            node = softmax;
-        } else {
-            node = nullptr;
-            keyword_node = nullptr;
-        }
+        components.keyword_vector_to_onehots.push_back(softmax);
+        Node *node = softmax;
         nodes.push_back(node);
         keyword_nodes.push_back(keyword_node);
         hiddens.push_back(hidden);
@@ -398,7 +377,6 @@ vector<BeamSearchResult> mostProbableKeywords(
     priority_queue<BeamSearchResult, vector<BeamSearchResult>, decltype(cmp)> queue(cmp);
     vector<BeamSearchResult> results;
     for (int i = 0; i < (is_first ? 1 : nodes.size()); ++i) {
-//    for (int i = 0; i < nodes.size(); ++i) {
         const Node *node_ptr = nodes.at(i);
         if (node_ptr == nullptr) {
             vector<WordIdAndProbability> new_id_and_probs = last_results.at(i).getPath();
@@ -703,9 +681,8 @@ struct GraphBuilder {
                 hyper_params, model_params, encoder_hiddens, i, false);
         Node *result_node = result.result;
 
-        int keyword_id = model_params.lookup_table.elems.from_string(keyword);
         LinearWordVectorNode *one_hot_node = new LinearWordVectorNode;
-        one_hot_node->init(keyword_id + 1);
+        one_hot_node->init(model_params.lookup_table.nVSize);
         one_hot_node->setParam(model_params.lookup_table.E);
         one_hot_node->forward(graph, *result_node);
         Node *softmax = n3ldg_plus::softmax(graph, *one_hot_node);
@@ -734,10 +711,6 @@ struct GraphBuilder {
             most_probable_results.clear();
             auto beam = decoder_components_beam;
             int closured_count = word_ids_result.size();
-//            for (int i = 0; i < closured_count; ++i) {
-//                auto & r = word_ids_result.at(i);
-//                ++closured_count;
-//            }
             if (closured_count >= default_config.result_count_factor * k) {
                 break;
             }
