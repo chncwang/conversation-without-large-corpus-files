@@ -113,18 +113,6 @@ DefaultConfig parseDefaultConfig(INIReader &ini_reader) {
         abort();
     }
 
-    default_config.post_idf_file = ini_reader.Get(SECTION, "post_idf_file", "");
-    if (default_config.post_idf_file.empty()) {
-        cerr << "post idf file empty" << endl;
-        abort();
-    }
-
-    default_config.response_idf_file = ini_reader.Get(SECTION, "response_idf_file", "");
-    if (default_config.response_idf_file.empty()) {
-        cerr << "response idf file empty" << endl;
-        abort();
-    }
-
     string program_mode_str = ini_reader.Get(SECTION, "program_mode", "");
     ProgramMode program_mode;
     if (program_mode_str == "interacting") {
@@ -316,13 +304,6 @@ vector<int> toKeywordIds(const vector<string> &sentence, const LookupTable<Param
         ids.push_back(xid);
     }
     return ids;
-}
-
-void print(const vector<string> &words) {
-    for (const string &w : words) {
-        cout << w << " ";
-    }
-    cout << endl;
 }
 
 void printWordIds(const vector<int> &word_ids, const LookupTable<Param> &lookup_table) {
@@ -561,37 +542,28 @@ void decodeTestPosts(const HyperParams &hyper_params, ModelParams &model_params,
         cout << "post:" << endl;
         print(post_sentences.at(post_and_responses.post_id));
         cout << "response:" << endl;
-        printWordIdsWithKeywords(word_ids_and_probability, model_params.lookup_table,
-                word_idf_table);
+        printWordIdsWithKeywords(toWordIds(word_ids_and_probability), model_params.lookup_table);
         dtype probability = pair.second;
         cout << format("probability:%1%") % probability << endl;
         if (word_ids_and_probability.empty()) {
             continue;
         }
 
-        vector<int> decoded_word_ids = transferVector<int, WordIdAndProbability>(
-                word_ids_and_probability, [](const WordIdAndProbability &w)->int {
-            return w.word_id;
-        });
         const vector<int> &response_ids = post_and_responses.response_ids;
         vector<vector<string>> str_references =
             transferVector<vector<string>, int>(response_ids,
                     [&](int response_id) -> vector<string> {
                     return response_sentences.at(response_id);
                     });
-        vector<vector<int>> id_references;
-        for (const vector<string> &strs : str_references) {
-            vector<int> ids = transferVector<int, string>(strs,
-                    [&](const string &w) -> int {
-                    return model_params.lookup_table.getElemId(w);
-                    });
-            id_references.push_back(ids);
-        }
-
-        CandidateAndReferences candidate_and_references(decoded_word_ids, id_references);
+        auto transfer = [&](const WordIdAndProbability &in) ->string {
+            return model_params.lookup_table.elems.from_id(in.word_id);
+        };
+        auto decoded_words = transferVector<string, WordIdAndProbability>(
+                word_ids_and_probability, transfer);
+        CandidateAndReferences candidate_and_references(decoded_words, str_references);
         candidate_and_references_vector.push_back(candidate_and_references);
 
-        float bleu_value = computeBleu(candidate_and_references_vector);
+        float bleu_value = computeBleu(candidate_and_references_vector, 4);
         cout << "bleu_value:" << bleu_value << endl;
     }
 }
@@ -702,7 +674,7 @@ std::pair<dtype, std::vector<int>> MaxLogProbabilityLossWithInconsistentDims(
         }
         vector<int> id = {ids.at(i)};
         vector<Node *> node = {result_nodes.at(i)};
-        auto result = maxLogProbabilityLoss(node, id, batchsize);
+        auto result = maxLogProbabilityLoss(node, id, 1.0 / batchsize);
         if (result.first < 0) {
             cerr << "loss is less than 0:" << result.first << endl;
             cerr << boost::format("node dim:%1% id:%2%") % node.front()->getDim() % id.front() <<
@@ -949,46 +921,13 @@ int main(int argc, char *argv[]) {
     }
     auto black_list = readBlackList(default_config.black_list_file);
 
-//    cout << "post:" << endl;
-//    for (auto &s : post_sentences) {
-//        WordIdfInfo info = getWordIdfInfo(s, all_idf, word_counts, hyper_params.word_cutoff,
-//                hyper_params.idf_threshhold);
-//        print(info.keywords_behind);
-//        bool first = true;
-//        for (float f : info.word_idfs) {
-//            if (first) {
-//                first = false;
-//            } else {
-//                cout << " ";
-//            }
-//            cout << f;
-//        }
-//        cout << endl;
-//    }
-//    cout << "response:" << endl;
-//    for (auto &s : response_sentences) {
-//        WordIdfInfo info = getWordIdfInfo(s, all_idf, word_counts, hyper_params.word_cutoff,
-//                hyper_params.idf_threshhold);
-//        print(info.keywords_behind);
-//        bool first = true;
-//        for (float f : info.word_idfs) {
-//            if (first) {
-//                first = false;
-//            } else {
-//                cout << " ";
-//            }
-//            cout << f;
-//        }
-//        cout << endl;
-//    }
-//    exit(0);
-
     cout << "reading post idf info ..." << endl;
-    vector<WordIdfInfo> post_idf_info_list = readWordIdfInfoList(default_config.post_idf_file);
+    vector<WordIdfInfo> post_idf_info_list = readWordIdfInfoList(post_sentences, all_idf,
+          model_params.lookup_table.elems.m_string_to_id, hyper_params.idf_threshhold);
     cout << "completed" << endl;
     cout << "reading response idf info ..." << endl;
-    vector<WordIdfInfo> response_idf_info_list = readWordIdfInfoList(
-            default_config.response_idf_file);
+    vector<WordIdfInfo> response_idf_info_list = readWordIdfInfoList(response_sentences, all_idf,
+          model_params.lookup_table.elems.m_string_to_id, hyper_params.idf_threshhold);
     cout << "completed" << endl;
 
     if (default_config.program_mode == ProgramMode::INTERACTING) {

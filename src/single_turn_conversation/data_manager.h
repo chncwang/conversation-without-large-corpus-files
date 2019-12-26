@@ -253,24 +253,15 @@ struct WordIdfInfo {
 
 WordIdfInfo getWordIdfInfo(const vector<string> &sentence,
         const unordered_map<string, float> &word_idfs,
-        const unordered_map<string, int> word_counts,
-        int cutoff,
+        const unordered_map<string, int> &word_id_table,
         float threshhold) {
     WordIdfInfo word_idf_info;
     word_idf_info.word_idfs.reserve(sentence.size());
     word_idf_info.keywords_behind.reserve(sentence.size());
 
     for (const string &word : sentence) {
-        float idf;
-        auto it = word_counts.find(word);
-        if (it == word_counts.end()) {
-            idf = -1;
-        } else if (it->second <= cutoff) {
-            idf = -1;
-        } else {
-            auto it = word_idfs.find(word);
-            idf = it->second;
-        }
+        auto it = word_idfs.find(word);
+        float  idf = it->second;
         word_idf_info.word_idfs.push_back(idf);
     }
 
@@ -282,41 +273,21 @@ WordIdfInfo getWordIdfInfo(const vector<string> &sentence,
         auto it = std::find_if(word_frequencies.begin() + i, word_frequencies.end(), check);
         string word = it == word_frequencies.end() ? STOP_SYMBOL :
             sentence.at(it - word_frequencies.begin());
-        if (word == ::unknownkey) {
-            cerr << word_counts.at(::unknownkey) << endl;
-            abort();
-        }
         word_idf_info.keywords_behind.push_back(word);
     }
 
     return word_idf_info;
 }
 
-vector<WordIdfInfo> readWordIdfInfoList(const string &filename) {
-    std::string line;
-    std::ifstream ifs(filename);
+vector<WordIdfInfo> readWordIdfInfoList(const vector<vector<string>> &sentences,
+        const unordered_map<string, float> &word_idfs,
+        const unordered_map<string, int> &word_id_table,
+        float threshhold) {
     std::vector<WordIdfInfo> results;
 
-    while (std::getline(ifs, line)) {
-        WordIdfInfo word_idf_info;
-        boost::split(word_idf_info.keywords_behind, line, boost::is_any_of(" "));
-        if (!std::getline(ifs, line)) {
-            cerr << filename << " error" << endl;
-            abort();
-        }
-
-        vector<string> words;
-        boost::split(words, line, boost::is_any_of(" "));
-        for (const string &word : words) {
-            try {
-                word_idf_info.word_idfs.push_back(stof(word));
-            } catch (const std::exception &e) {
-                cerr << word << endl;
-                throw e;
-            }
-        }
-
-        results.push_back(move(word_idf_info));
+    for (const auto &s : sentences) {
+        auto info = getWordIdfInfo(s, word_idfs, word_id_table, threshhold);
+        results.push_back(move(info));
     }
 
     return results;

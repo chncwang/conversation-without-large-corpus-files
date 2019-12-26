@@ -32,6 +32,15 @@ struct WordIdAndProbability {
     WordIdAndProbability(int wordid, dtype prob) : word_id(wordid), probability(prob) {}
 };
 
+vector<int> toWordIds(const vector<WordIdAndProbability> &in) {
+    vector<int> results;
+    auto to_id = [](const WordIdAndProbability &wap) -> int {
+        return wap.word_id;
+    };
+    transform(in.begin(), in.end(), back_inserter(results), to_id);
+    return results;
+}
+
 string getSentence(const vector<int> &word_ids_vector, const ModelParams &model_params) {
     string words;
     for (const int &w : word_ids_vector) {
@@ -224,7 +233,6 @@ vector<BeamSearchResult> mostProbableResults(
     vector<BeamSearchResult> results;
     for (int i = 0; i < nodes.size(); ++i) {
         const Node &node = *nodes.at(i);
-        auto tuple = toExp(node);
 
         BeamSearchResult beam_search_result;
         priority_queue<BeamSearchResult, vector<BeamSearchResult>, decltype(cmp)> local_queue(cmp);
@@ -232,16 +240,16 @@ vector<BeamSearchResult> mostProbableResults(
             if (j == model_params.lookup_table.getElemId(::unknownkey)) {
                 continue;
             }
-            dtype value = node.getVal().v[j] - get<1>(tuple).second;
-            dtype log_probability = value - log(get<2>(tuple));
-            dtype word_probability = exp(log_probability);
+            dtype value = node.getVal().v[j];
+            dtype log_probability = log(value);
+            dtype word_probability = value;
             vector<WordIdAndProbability> word_ids;
             if (!last_results.empty()) {
                 log_probability += last_results.at(i).finalLogProbability();
                 word_ids = last_results.at(i).getPath();
             }
             if (log_probability != log_probability) {
-                cerr << value << " " << log(get<2>(tuple)) << endl;
+                cerr << value << endl;
                 abort();
             }
             word_ids.push_back(WordIdAndProbability(j, word_probability));
@@ -385,8 +393,6 @@ vector<BeamSearchResult> mostProbableKeywords(
             }
         } else {
             const Node &node = *nodes.at(i);
-            auto tuple = toExp(node);
-
             BeamSearchResult beam_search_result;
             priority_queue<BeamSearchResult, vector<BeamSearchResult>, decltype(cmp)>
                 local_queue(cmp);
@@ -412,9 +418,9 @@ vector<BeamSearchResult> mostProbableKeywords(
                 if (word_pos == 0 && word_idf_table.at(word) <= default_config.keyword_bound) {
                     continue;
                 }
-                dtype value = node.getVal().v[j] - get<1>(tuple).second;
-                dtype log_probability = value - log(get<2>(tuple));
-                dtype word_probability = exp(log_probability);
+                dtype value = node.getVal().v[j];
+                dtype log_probability = log(value);
+                dtype word_probability = value;
                 vector<WordIdAndProbability> word_ids;
                 if (!last_results.empty()) {
                     log_probability += last_results.at(i).finalLogProbability();
@@ -422,7 +428,6 @@ vector<BeamSearchResult> mostProbableKeywords(
                 }
                 if (log_probability != log_probability) {
                     cerr << node.getVal().vec() << endl;
-                    cerr << value << " " << log(get<2>(tuple)) << endl;
                     cerr << "keyword node:" << endl << keyword_nodes.at(i)->getVal().vec() << endl;
                     cerr << "hidden node:" << endl << hiddens.at(i)->getVal().vec() << endl;
                     Json::StreamWriterBuilder builder;
