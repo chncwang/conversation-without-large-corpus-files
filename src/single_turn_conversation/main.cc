@@ -657,7 +657,7 @@ std::pair<dtype, std::vector<int>> MaxLogProbabilityLossWithInconsistentDims(
             info["i"] = i;
             throw InformedRuntimeError(info);
         }
-        auto result = maxLogProbabilityLoss(node, id, batchsize);
+        auto result = maxLogProbabilityLoss(node, id, 1.0 / batchsize);
         if (result.second.size() != 1) {
             cerr << "result second size:" << result.second.size() << endl;
             abort();
@@ -992,6 +992,7 @@ int main(int argc, char *argv[]) {
                     return i * batch_count + batch_i;
                 };
                 int response_size_sum = 0;
+                int keyword_size_sum = 0;
                 for (int i = 0; i < hyper_params.batch_size; ++i) {
                     shared_ptr<GraphBuilder> graph_builder(new GraphBuilder);
                     graph_builders.push_back(graph_builder);
@@ -1005,6 +1006,7 @@ int main(int argc, char *argv[]) {
                     auto response_sentence = response_sentences.at(response_id);
                     response_size_sum += response_sentence.size();
                     const WordIdfInfo &idf_info = response_idf_info_list.at(response_id);
+                    keyword_size_sum += idf_info.keyword_size;
                     DecoderComponents decoder_components;
                     graph_builder->forwardDecoder(graph, decoder_components, response_sentence,
                             idf_info.keywords_behind, hyper_params, model_params, true);
@@ -1050,7 +1052,7 @@ int main(int argc, char *argv[]) {
                     profiler.BeginEvent("loss");
                     auto keyword_result = MaxLogProbabilityLossWithInconsistentDims(
                             keyword_nodes_and_ids.first, keyword_nodes_and_ids.second,
-                            response_size_sum, model_params.lookup_table.nVSize);
+                            keyword_size_sum, model_params.lookup_table.nVSize);
                     profiler.EndCudaEvent();
                     loss_sum += keyword_result.first;
                     analyze(keyword_result.second, keyword_nodes_and_ids.second, *keyword_metric);

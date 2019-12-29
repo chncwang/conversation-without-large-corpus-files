@@ -244,11 +244,11 @@ vector<vector<string>> reprocessSentences(const vector<vector<string>> &sentence
 struct WordIdfInfo {
     vector<float> word_idfs;
     vector<string> keywords_behind;
+    int keyword_size;
 
     WordIdfInfo() noexcept = default;
     WordIdfInfo(const WordIdfInfo&) = delete;
-    WordIdfInfo(WordIdfInfo&& w) noexcept : word_idfs(move(w.word_idfs)),
-        keywords_behind(move(w.keywords_behind)) {}
+    WordIdfInfo(WordIdfInfo&& w) = default;
 };
 
 WordIdfInfo getWordIdfInfo(const vector<string> &sentence,
@@ -260,6 +260,7 @@ WordIdfInfo getWordIdfInfo(const vector<string> &sentence,
     WordIdfInfo word_idf_info;
     word_idf_info.word_idfs.reserve(sentence.size());
     word_idf_info.keywords_behind.reserve(sentence.size());
+    word_idf_info.keyword_size = 0;
 
     for (const string &word : sentence) {
         float idf;
@@ -276,6 +277,7 @@ WordIdfInfo getWordIdfInfo(const vector<string> &sentence,
     }
 
     auto &word_frequencies = word_idf_info.word_idfs;
+    string last;
     for (int i = 0; i < word_frequencies.size(); ++i) {
         int max_id = -1;
         string word;
@@ -290,9 +292,14 @@ WordIdfInfo getWordIdfInfo(const vector<string> &sentence,
                 max_id = it->second;
             }
         }
-//        cout << "word:" << word <<" id:" << max_id << endl;
 
         word_idf_info.keywords_behind.push_back(word);
+
+        if (last != word) {
+            ++word_idf_info.keyword_size;
+        }
+
+        last = word;
     }
 
     return word_idf_info;
