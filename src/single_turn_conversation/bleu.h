@@ -86,8 +86,7 @@ float mostMatchedCount(const CandidateAndReferences &candidate_and_references,
 
                 bool finded = false;
                 for (int k = 0; k < gram_len; ++k) {
-                    if (includePunctuation(candidate.at(i + k)) ||
-                            candidate.at(i + k) != reference.at(j + k)) {
+                    if (candidate.at(i + k) != reference.at(j + k)) {
                         break;
                     }
                     if (k == gram_len - 1) {
@@ -126,13 +125,14 @@ float mostMatchedCount(const CandidateAndReferences &candidate_and_references,
 }
 
 int puncRemovedLen(const vector<string> &sentence) {
-    int len = 0;
-    for (const string &w : sentence) {
-        if (!includePunctuation(w)) {
-            ++len;
-        }
-    }
-    return len;
+    return sentence.size();
+//    int len = 0;
+//    for (const string &w : sentence) {
+//        if (!includePunctuation(w)) {
+//            ++len;
+//        }
+//    }
+//    return len;
 }
 
 int mostMatchedLength(const CandidateAndReferences &candidate_and_references) {
@@ -157,9 +157,9 @@ float ngramCount(const vector<string> sentence, int ngram) {
     int result = 0;
     for (int i = 0; i < 1 + sentence.size() - ngram; ++i) {
         for (int j = 0; j < ngram; ++j) {
-            if (includePunctuation(sentence.at(i + j))) {
-                break;
-            }
+//            if (includePunctuation(sentence.at(i + j))) {
+//                break;
+//            }
             if (j == ngram - 1) {
                 ++result;
             }
