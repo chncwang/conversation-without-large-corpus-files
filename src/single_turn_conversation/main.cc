@@ -459,6 +459,7 @@ float metricTestPosts(const HyperParams &hyper_params, ModelParams &model_params
     float rep_perplex(0.0f);
     thread_pool pool(16);
     mutex rep_perplex_mutex;
+    int size_sum = 0;
 
     for (const PostAndResponses &post_and_responses : post_and_responses_vector) {
         auto f = [&]() {
@@ -470,6 +471,7 @@ float metricTestPosts(const HyperParams &hyper_params, ModelParams &model_params
 
             const vector<int> &response_ids = post_and_responses.response_ids;
             float avg_perplex = 0.0f;
+            float sum = 0;
             cout << "response size:" << response_ids.size() << endl;
             for (int response_id : response_ids) {
 //                cout << "response:" << endl;
@@ -491,10 +493,8 @@ float metricTestPosts(const HyperParams &hyper_params, ModelParams &model_params
                 profiler.EndEvent();
                 graph.compute();
                 vector<Node*> nodes = toNodePointers(decoder_components.wordvector_to_onehots);
-                vector<int> word_ids = transferVector<int, string>(
-                        response_sentences.at(response_id), [&](const string &w) -> int {
-                        return model_params.lookup_table.getElemId(w);
-                        });
+                vector<int> word_ids = toNormalWordIds(response_sentences.at(response_id),
+                            model_params.lookup_table);
                 auto keyword_nodes_and_ids = keywordNodesAndIds(decoder_components, idf_info,
                         model_params);
                 for (int i = 0; i < keyword_nodes_and_ids.first.size(); ++i) {
@@ -504,19 +504,20 @@ float metricTestPosts(const HyperParams &hyper_params, ModelParams &model_params
 
                 float perplex = computePerplex(nodes, word_ids);
                 avg_perplex += perplex;
+                sum += response_sentences.at(response_id).size();
             }
-            avg_perplex /= response_ids.size();
             cout << "size:" << response_ids.size() << endl;
-            cout << "avg_perplex:" << avg_perplex << endl;
+            cout << "avg_perplex:" << exp(avg_perplex / sum) << endl;
             rep_perplex_mutex.lock();
             rep_perplex += avg_perplex;
+            size_sum += sum;
             rep_perplex_mutex.unlock();
         };
         post(pool, f);
     }
     pool.join();
 
-    cout << "total avg perplex:" << rep_perplex / post_and_responses_vector.size() << endl;
+    cout << "total avg perplex:" << rep_perplex / size_sum << endl;
     return rep_perplex;
 }
 
@@ -805,6 +806,23 @@ int main(int argc, char *argv[]) {
     };
     wordStat();
 
+    for (auto &s : post_sentences) {
+        for (string &w : s) {
+            const auto &it = word_counts.find(w);
+            if (it == word_counts.end() || it->second <= hyper_params.word_cutoff) {
+                w = unknownkey;
+            }
+        }
+    }
+    for (auto &s : response_sentences) {
+        for (string &w : s) {
+            const auto &it = word_counts.find(w);
+            if (it == word_counts.end() || it->second <= hyper_params.word_cutoff) {
+                w = unknownkey;
+            }
+        }
+    }
+
     vector<vector<string>> all_sentences;
     cout << "merging sentences..." << endl;
     for (auto &s : post_sentences) {
@@ -826,6 +844,7 @@ int main(int argc, char *argv[]) {
         bool include = false;
         for (const string &w : s) {
             if (all_idf.at(w) > hyper_params.idf_threshhold) {
+                include = true;
                 break;
             }
         }
@@ -836,11 +855,18 @@ int main(int argc, char *argv[]) {
     cout << boost::format("%1% sentences contain words of idf %2%") %
         ((float)sum / response_sentences.size()) % hyper_params.idf_threshhold << endl;
 
+    unordered_map<string, int> filtered_words;
+    for (auto &it : word_counts) {
+        if (it.second > hyper_params.word_cutoff) {
+            filtered_words.insert(it);
+        }
+    }
+
     Alphabet keyword_alphabet, normal_alphabet;
-    auto keyword_counts = getKeywords(all_idf, word_counts, hyper_params.idf_threshhold);
+    auto keyword_counts = getKeywords(all_idf, filtered_words, hyper_params.idf_threshhold);
     keyword_counts.insert(make_pair(unknownkey, 1));
     keyword_alphabet.init(keyword_counts, 0);
-    auto normal_counts = getNormalWords(all_idf, word_counts, hyper_params.idf_threshhold);
+    auto normal_counts = getNormalWords(all_idf, filtered_words, hyper_params.idf_threshhold);
     normal_counts.insert(make_pair(unknownkey, 1));
     normal_alphabet.init(normal_counts, 0);
     if (keyword_alphabet.size() + normal_alphabet.size() != word_counts.size()) {
