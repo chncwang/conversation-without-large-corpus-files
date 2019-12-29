@@ -662,6 +662,8 @@ int main(int argc, char *argv[]) {
         }
         model_params.attention_params.init(hyper_params.hidden_dim, hyper_params.hidden_dim);
         model_params.left_to_right_encoder_params.init(hyper_params.hidden_dim,
+                hyper_params.word_dim);
+        model_params.left_to_right_decoder_params.init(hyper_params.hidden_dim,
                 hyper_params.word_dim + hyper_params.hidden_dim);
         model_params.hidden_to_wordvector_params.init(hyper_params.word_dim,
                 hyper_params.hidden_dim + hyper_params.hidden_dim + hyper_params.word_dim, false);
@@ -751,8 +753,7 @@ int main(int argc, char *argv[]) {
         for (int epoch = 0; ; ++epoch) {
             cout << "epoch:" << epoch << endl;
 
-            model_params.lookup_table.E.is_fixed = (epoch == 0 &&
-                    default_config.input_model_file == "");
+            model_params.lookup_table.E.is_fixed = false;
 
             auto cmp = [&] (const ConversationPair &a, const ConversationPair &b)->bool {
                 auto len = [&] (const ConversationPair &pair)->int {
@@ -793,6 +794,7 @@ int main(int argc, char *argv[]) {
                 auto getSentenceIndex = [batch_i, batch_count](int i) {
                     return i * batch_count + batch_i;
                 };
+                int len_sum = 0;
                 for (int i = 0; i < hyper_params.batch_size; ++i) {
                     shared_ptr<GraphBuilder> graph_builder(new GraphBuilder);
                     graph_builders.push_back(graph_builder);
@@ -807,6 +809,8 @@ int main(int argc, char *argv[]) {
                     graph_builder->forwardDecoder(graph, decoder_components,
                             response_sentences.at(response_id), hyper_params, model_params, true);
                     decoder_components_vector.push_back(decoder_components);
+
+                    len_sum += response_sentences.at(i).size();
                 }
                 profiler.EndCudaEvent();
 
@@ -819,8 +823,7 @@ int main(int argc, char *argv[]) {
                             model_params.lookup_table);
                     vector<Node*> result_nodes =
                         toNodePointers(decoder_components_vector.at(i).wordvector_to_onehots);
-                    auto result = maxLogProbabilityLoss(result_nodes, word_ids,
-                            1.0 / hyper_params.batch_size);
+                    auto result = maxLogProbabilityLoss(result_nodes, word_ids, 1.0 / len_sum);
                     loss_sum += result.first;
 
                     analyze(result.second, word_ids, *metric);

@@ -193,7 +193,6 @@ vector<BeamSearchResult> mostProbableResults(
         return a.finalScore() > b.finalScore();
     };
     priority_queue<BeamSearchResult, vector<BeamSearchResult>, decltype(cmp)> queue(cmp);
-//    int stop_id = model_params.lookup_table.getElemId(STOP_SYMBOL);
     vector<BeamSearchResult> results;
     for (int i = 0; i < (is_first ? 1 : nodes.size()); ++i) {
         Node &node = *nodes.at(i);
@@ -308,15 +307,7 @@ struct GraphBuilder {
             dropout_node->init(hyper_params.word_dim);
             dropout_node->forward(graph, *input_lookup);
 
-            BucketNode *bucket = new BucketNode();
-            bucket->init(hyper_params.hidden_dim);
-            bucket->forward(graph);
-
-            ConcatNode *concat = new ConcatNode;
-            concat->init(dropout_node->getDim() + bucket->getDim());
-            concat->forward(graph, {dropout_node, bucket});
-
-            encoder_lookups.push_back(concat);
+            encoder_lookups.push_back(dropout_node);
         }
 
         for (Node* node : encoder_lookups) {
