@@ -639,7 +639,6 @@ std::pair<dtype, std::vector<int>> MaxLogProbabilityLossWithInconsistentDims(
         const std::vector<Node*> &result_nodes,
         const std::vector<int> &ids,
         int batchsize,
-        const std::function<bool(int)> &is_unkown,
         int vocabulary_size) {
     if (ids.size() != result_nodes.size()) {
         cerr << "ids size is not equal to result_nodes'." << endl;
@@ -843,6 +842,8 @@ int main(int argc, char *argv[]) {
         }
         model_params.attention_params.init(hyper_params.hidden_dim, hyper_params.hidden_dim);
         model_params.left_to_right_encoder_params.init(hyper_params.hidden_dim,
+                hyper_params.word_dim);
+        model_params.left_to_right_decoder_params.init(hyper_params.hidden_dim,
                 2 * hyper_params.word_dim + hyper_params.hidden_dim);
         model_params.hidden_to_wordvector_params.init(hyper_params.word_dim,
                 2 * hyper_params.hidden_dim + 2 * hyper_params.word_dim, false);
@@ -946,8 +947,7 @@ int main(int argc, char *argv[]) {
         default_random_engine engine(default_config.seed);
         for (int epoch = 0; ; ++epoch) {
             cout << "epoch:" << epoch << endl;
-            model_params.lookup_table.E.is_fixed = (epoch == 0 &&
-                    default_config.input_model_file != "");
+            model_params.lookup_table.E.is_fixed = false;
             auto cmp = [&] (const ConversationPair &a, const ConversationPair &b)->bool {
                 auto len = [&] (const ConversationPair &pair)->int {
                     return post_sentences.at(pair.post_id).size() +
@@ -1020,14 +1020,10 @@ int main(int argc, char *argv[]) {
                     vector<int> word_ids = toIds(response_sentence, model_params.lookup_table);
                     vector<Node*> result_nodes =
                         toNodePointers(decoder_components_vector.at(i).wordvector_to_onehots);
-                    auto is_unkown = [&](int id) {
-                        return model_params.lookup_table.elems.from_string(unknownkey) == id;
-                    };
                     std::pair<dtype, std::vector<int>> result;
                     try {
                         result = MaxLogProbabilityLossWithInconsistentDims(result_nodes,
-                                word_ids, response_size_sum, is_unkown,
-                                model_params.lookup_table.nVSize);
+                                word_ids, response_size_sum, model_params.lookup_table.nVSize);
                     } catch (const InformedRuntimeError &e) {
                         cerr << e.what() << endl;
                         int i = e.getInfo()["i"].asInt();
@@ -1054,7 +1050,7 @@ int main(int argc, char *argv[]) {
                     profiler.BeginEvent("loss");
                     auto keyword_result = MaxLogProbabilityLossWithInconsistentDims(
                             keyword_nodes_and_ids.first, keyword_nodes_and_ids.second,
-                            response_size_sum, is_unkown, model_params.lookup_table.nVSize);
+                            response_size_sum, model_params.lookup_table.nVSize);
                     profiler.EndCudaEvent();
                     loss_sum += keyword_result.first;
                     analyze(keyword_result.second, keyword_nodes_and_ids.second, *keyword_metric);
@@ -1110,14 +1106,11 @@ int main(int argc, char *argv[]) {
                                 conversation_pair.response_id);
                         auto keyword_nodes_and_ids = keywordNodesAndIds(
                                 decoder_components, response_idf, model_params);
-                        auto is_unkown = [&](int id) {
-                            return model_params.lookup_table.elems.from_string(unknownkey) == id;
-                        };
                         return MaxLogProbabilityLossWithInconsistentDims(
                                 keyword_nodes_and_ids.first, keyword_nodes_and_ids.second, 1,
-                                is_unkown, model_params.lookup_table.nVSize).first +
+                                model_params.lookup_table.nVSize).first +
                             MaxLogProbabilityLossWithInconsistentDims( result_nodes, word_ids, 1,
-                                    is_unkown, model_params.lookup_table.nVSize).first;
+                                    model_params.lookup_table.nVSize).first;
                     };
                     cout << format("checking grad - conversation_pair size:%1%") %
                         conversation_pair_in_batch.size() << endl;

@@ -46,7 +46,7 @@ struct DecoderComponents {
         vector<Node *> ins = {&input, &keyword_input, attention_builder->_hidden};
         concat->forward(graph, ins);
 
-        decoder.forward(graph, model_params.left_to_right_encoder_params, *concat,
+        decoder.forward(graph, model_params.left_to_right_decoder_params, *concat,
                 *bucket(hyper_params.hidden_dim, graph),
                 *bucket(hyper_params.hidden_dim, graph),
                 hyper_params.dropout, is_training);

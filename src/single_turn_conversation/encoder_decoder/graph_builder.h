@@ -537,14 +537,9 @@ struct GraphBuilder {
             dropout_node->init(hyper_params.word_dim);
             dropout_node->forward(graph, *input_lookup);
 
-            BucketNode *bucket = new BucketNode();
-            bucket->init(hyper_params.hidden_dim + hyper_params.word_dim);
-            bucket->forward(graph);
-
-            Node *concat = n3ldg_plus::concat(graph, {dropout_node, bucket});
-
             left_to_right_encoder.forward(graph, model_params.left_to_right_encoder_params,
-                    *concat, *hidden_bucket, *hidden_bucket, hyper_params.dropout, is_training);
+                    *dropout_node, *hidden_bucket, *hidden_bucket, hyper_params.dropout,
+                    is_training);
         }
     }
 
