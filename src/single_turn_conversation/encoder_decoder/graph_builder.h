@@ -361,7 +361,13 @@ vector<BeamSearchResult> mostProbableKeywords(
             context_concated->forward(graph, {components.decoder._hiddens.at(word_pos),
                     components.contexts.at(word_pos)});
 
-            Node *keyword = n3ldg_plus::linear(graph, model_params.hidden_to_keyword_params,
+            Node *keyword_mlp = context_concated;
+            for (int j = 0; j < hyper_params.keyword_mlp_layer; ++j) {
+                keyword_mlp = n3ldg_plus::uni(graph, *model_params.keyword_mlp_params.get(j),
+                        *keyword_mlp, ActivatedEnum::RELU);
+            }
+
+            Node *keyword = n3ldg_plus::uni(graph, model_params.hidden_to_keyword_params,
                     *context_concated);
             keyword_node = keyword;
 

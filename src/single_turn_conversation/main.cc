@@ -221,6 +221,13 @@ HyperParams parseHyperParams(INIReader &ini_reader) {
     }
     hyper_params.beam_size = beam_size;
 
+    int keyword_mlp_layer = ini_reader.GetInteger("hyper", "keyword_mlp_layer", -1);
+    if (keyword_mlp_layer == -1) {
+        cerr << "keyword_mlp_layer not found" << endl;
+        abort();
+    }
+    hyper_params.keyword_mlp_layer = keyword_mlp_layer;
+
     float learning_rate = ini_reader.GetReal("hyper", "learning_rate", 0.001f);
     if (learning_rate <= 0.0f) {
         cerr << "learning_rate wrong" << endl;
@@ -853,8 +860,10 @@ int main(int argc, char *argv[]) {
                 2 * hyper_params.word_dim + hyper_params.hidden_dim);
         model_params.hidden_to_wordvector_params.init(hyper_params.word_dim,
                 2 * hyper_params.hidden_dim + 2 * hyper_params.word_dim, false);
-        model_params.hidden_to_keyword_params.init(hyper_params.word_dim,
-                2 * hyper_params.hidden_dim, false);
+        model_params.hidden_to_keyword_params.init(hyper_params.word_dim, hyper_params.hidden_dim,
+                false);
+        model_params.keyword_mlp_params.init(hyper_params.keyword_mlp_layer,
+                hyper_params.hidden_dim, hyper_params.hidden_dim * 2);
     };
 
     if (default_config.program_mode != ProgramMode::METRIC) {

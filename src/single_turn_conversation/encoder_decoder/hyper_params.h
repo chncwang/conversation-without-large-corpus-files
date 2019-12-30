@@ -22,6 +22,8 @@ struct HyperParams : public N3LDGSerializable {
     float dropout;
     int batch_size;
     int beam_size;
+    int keyword_mlp_layer;
+
     float learning_rate;
     float learning_rate_decay;
     float min_learning_rate;
@@ -39,7 +41,6 @@ struct HyperParams : public N3LDGSerializable {
         json["hidden_dim"] = hidden_dim;
         json["dropout"] = dropout;
         json["batch_size"] = batch_size;
-        json["beam_size"] = beam_size;
         json["learning_rate"] = learning_rate;
         json["learning_rate_decay"] = learning_rate_decay;
         json["min_learning_rate"] = min_learning_rate;
@@ -49,6 +50,7 @@ struct HyperParams : public N3LDGSerializable {
         json["word_finetune"] = word_finetune;
         json["l2_reg"] = l2_reg;
         json["optimizer"] = static_cast<int>(optimizer);
+        json["keyword_mlp_layer"] = keyword_mlp_layer;
         return json;
     }
 
@@ -57,7 +59,6 @@ struct HyperParams : public N3LDGSerializable {
         hidden_dim = json["hidden_dim"].asInt();
         dropout = json["dropout"].asFloat();
         batch_size = json["batch_size"].asInt();
-        beam_size = json["beam_size"].asInt();
         learning_rate = json["learning_rate"].asFloat();
         min_learning_rate = json["min_learning_rate"].asFloat();
         warm_up_learning_rate = json["warm_up_learning_rate"].asFloat();
@@ -66,6 +67,7 @@ struct HyperParams : public N3LDGSerializable {
         word_file = json["word_file"].asString();
         word_finetune = json["word_finetune"].asBool();
         l2_reg = json["l2_reg"].asFloat();
+        keyword_mlp_layer = json["keyword_mlp_layer"].asInt();
         optimizer = static_cast<Optimizer>(json["optimizer"].asInt());
     }
 
@@ -75,6 +77,7 @@ struct HyperParams : public N3LDGSerializable {
             << "dropout:" << dropout << std::endl
             << "batch_size:" << batch_size << std::endl
             << "beam_size:" << beam_size << std::endl
+            << "keyword_mlp_layer" << keyword_mlp_layer << std::endl
             << "learning_rate:" << learning_rate << std::endl
             << "learning_rate_decay:" << learning_rate_decay << std::endl
             << "warm_up_learning_rate:" << warm_up_learning_rate << std::endl
