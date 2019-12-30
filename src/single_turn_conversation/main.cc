@@ -112,7 +112,11 @@ DefaultConfig parseDefaultConfig(INIReader &ini_reader) {
     default_config.split_unknown_words = ini_reader.GetBoolean(SECTION, "split_unknown_words",
             true);
 
-    default_config.max_sample_count = ini_reader.GetInteger(SECTION, "max_sample_count",
+    default_config.train_sample_count = ini_reader.GetInteger(SECTION, "train_sample_count",
+            1000000000);
+    default_config.dev_sample_count = ini_reader.GetInteger(SECTION, "dev_sample_count",
+            1000000000);
+    default_config.test_sample_count = ini_reader.GetInteger(SECTION, "test_sample_count",
             1000000000);
     default_config.hold_batch_size = ini_reader.GetInteger(SECTION, "hold_batch_size", 100);
     default_config.device_id = ini_reader.GetInteger(SECTION, "device_id", 0);
@@ -521,6 +525,13 @@ unordered_set<string> knownWords(const vector<string> &words) {
     return word_set;
 }
 
+template<typename T>
+void preserveVector(vector<T> &vec, int count, int seed) {
+    default_random_engine engine(seed);
+    shuffle(vec.begin(), vec.end(), engine);
+    vec.erase(vec.begin() + std::min<int>(count, vec.size()), vec.end());
+}
+
 int main(int argc, char *argv[]) {
     cout << "dtype size:" << sizeof(dtype) << endl;
 
@@ -551,14 +562,18 @@ int main(int argc, char *argv[]) {
 
     vector<PostAndResponses> train_post_and_responses = readPostAndResponsesVector(
             default_config.train_pair_file);
+    preserveVector(train_post_and_responses, default_config.train_sample_count,
+            default_config.seed);
     cout << "train_post_and_responses_vector size:" << train_post_and_responses.size()
         << endl;
     vector<PostAndResponses> dev_post_and_responses = readPostAndResponsesVector(
             default_config.dev_pair_file);
+    preserveVector(dev_post_and_responses, default_config.dev_sample_count, default_config.seed);
     cout << "dev_post_and_responses_vector size:" << dev_post_and_responses.size()
         << endl;
     vector<PostAndResponses> test_post_and_responses = readPostAndResponsesVector(
             default_config.test_pair_file);
+    preserveVector(test_post_and_responses, default_config.test_sample_count, default_config.seed);
     cout << "test_post_and_responses_vector size:" << test_post_and_responses.size()
         << endl;
     vector<ConversationPair> train_conversation_pairs;
@@ -574,16 +589,6 @@ int main(int argc, char *argv[]) {
 
     vector<vector<string>> post_sentences = readSentences(default_config.post_file);
     vector<vector<string>> response_sentences = readSentences(default_config.response_file);
-
-    cout << "dev:" << endl;
-    for (auto &p : dev_post_and_responses) {
-        print(post_sentences.at(p.post_id));
-    }
-
-    cout << "test:" << endl;
-    for (auto &p : test_post_and_responses) {
-        print(post_sentences.at(p.post_id));
-    }
 
     Alphabet alphabet;
     shared_ptr<Json::Value> root_ptr;
@@ -773,19 +778,20 @@ int main(int argc, char *argv[]) {
                 auto begin_pos = begin(train_conversation_pairs) + i * batch_count;
                 shuffle(begin_pos, begin_pos + batch_count, engine);
             }
+            if (train_conversation_pairs.size() > hyper_params.batch_size * batch_count) {
+                shuffle(begin(train_conversation_pairs) + hyper_params.batch_size * batch_count,
+                        train_conversation_pairs.end(), engine);
+            }
+
 
             unique_ptr<Metric> metric = unique_ptr<Metric>(new Metric);
-            for (int batch_i = 0; batch_i < batch_count; ++batch_i) {
+            for (int batch_i = 0; batch_i < batch_count +
+                    (train_conversation_pairs.size() > hyper_params.batch_size * batch_count);
+                    ++batch_i) {
                 cout << format("batch_i:%1% iteration:%2%") % batch_i % iteration << endl;
-                if (epoch == 0) {
-                    if (iteration < hyper_params.warm_up_iterations) {
-                        model_update._alpha = hyper_params.warm_up_learning_rate;
-                    } else {
-                        model_update._alpha = hyper_params.learning_rate;
-                        cout << "warm up finished, learning rate now:" <<
-                            hyper_params.learning_rate << endl;
-                    }
-                }
+                int batch_size = batch_i == batch_count ?
+                    train_conversation_pairs.size() % hyper_params.batch_size :
+                    hyper_params.batch_size;
                 profiler.BeginEvent("build braph");
                 Graph graph;
                 vector<shared_ptr<GraphBuilder>> graph_builders;
@@ -795,7 +801,7 @@ int main(int argc, char *argv[]) {
                     return i * batch_count + batch_i;
                 };
                 int len_sum = 0;
-                for (int i = 0; i < hyper_params.batch_size; ++i) {
+                for (int i = 0; i < batch_size; ++i) {
                     shared_ptr<GraphBuilder> graph_builder(new GraphBuilder);
                     graph_builders.push_back(graph_builder);
                     int instance_index = getSentenceIndex(i);
@@ -816,7 +822,7 @@ int main(int argc, char *argv[]) {
 
                 graph.compute();
 
-                for (int i = 0; i < hyper_params.batch_size; ++i) {
+                for (int i = 0; i < batch_size; ++i) {
                     int instance_index = getSentenceIndex(i);
                     int response_id = train_conversation_pairs.at(instance_index).response_id;
                     vector<int> word_ids = toIds(response_sentences.at(response_id),
