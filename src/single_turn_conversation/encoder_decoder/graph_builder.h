@@ -632,7 +632,9 @@ struct GraphBuilder {
         keyword_node->init(hyper_params.word_dim);
         keyword_node->setParam(model_params.lookup_table);
         keyword_node->forward(graph, keyword);
-        decoder_components.decoder_keyword_lookups.push_back(keyword_node);
+        Node * dropout_keyword = n3ldg_plus::dropout(graph, *keyword_node, hyper_params.dropout,
+                is_training);
+        decoder_components.decoder_keyword_lookups.push_back(dropout_keyword);
 
         decoder_components.forward(graph, hyper_params, model_params, *last_input, *last_keyword,
                 left_to_right_encoder._hiddens, is_training);
@@ -672,7 +674,10 @@ struct GraphBuilder {
         keyword_lookup->init(hyper_params.word_dim);
         keyword_lookup->setParam(model_params.lookup_table);
         keyword_lookup->forward(graph, keyword);
-        decoder_components.decoder_keyword_lookups.push_back(keyword_lookup);
+
+        Node *dropout_keyword = n3ldg_plus::dropout(graph, *keyword_lookup, hyper_params.dropout,
+                false);
+        decoder_components.decoder_keyword_lookups.push_back(dropout_keyword);
     }
 
     void forwardDecoderHiddenByOneStep(Graph &graph, DecoderComponents &decoder_components, int i,
