@@ -168,6 +168,7 @@ DefaultConfig parseDefaultConfig(INIReader &ini_reader) {
     default_config.cut_length = ini_reader.GetInteger(SECTION, "cut_length", 30);
     default_config.keyword_bound = ini_reader.GetReal(SECTION, "keyword_bound", 0);
     default_config.keyword_fork_bound = ini_reader.GetReal(SECTION, "keyword_fork_bound", 0);
+    default_config.max_epoch = ini_reader.GetInteger(SECTION, "max_epoch", 100);
     default_config.output_model_file_prefix = ini_reader.Get(SECTION, "output_model_file_prefix",
             "");
     default_config.input_model_file = ini_reader.Get(SECTION, "input_model_file", "");
@@ -950,7 +951,7 @@ int main(int argc, char *argv[]) {
         string last_saved_model;
 
         default_random_engine engine(default_config.seed);
-        for (int epoch = 0; ; ++epoch) {
+        for (int epoch = 0; epoch < default_config.max_epoch; ++epoch) {
             cout << "epoch:" << epoch << endl;
             model_params.lookup_table.E.is_fixed = false;
             auto cmp = [&] (const ConversationPair &a, const ConversationPair &b)->bool {

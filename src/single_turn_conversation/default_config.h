@@ -40,6 +40,7 @@ struct DefaultConfig {
     int cut_length;
     float keyword_bound;
     float keyword_fork_bound;
+    int max_epoch;
     std::string output_model_file_prefix;
     std::string input_model_file;
     std::string input_model_dir;
@@ -77,6 +78,7 @@ struct DefaultConfig {
             << "cut_length:" << cut_length << std::endl
             << "keyword_bound:" << keyword_bound << std::endl
             << "keyword_fork_bound:" << keyword_fork_bound << std::endl
+            << "max_epoch:" << max_epoch << std::endl
             << "output_model_file_prefix" << output_model_file_prefix << std::endl
             << "input_model_file:" << input_model_file << std::endl
             << "input_model_dir:" << input_model_dir << std::endl
