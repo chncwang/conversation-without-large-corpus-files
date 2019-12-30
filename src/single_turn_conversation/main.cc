@@ -156,7 +156,11 @@ DefaultConfig parseDefaultConfig(INIReader &ini_reader) {
     default_config.split_unknown_words = ini_reader.GetBoolean(SECTION, "split_unknown_words",
             true);
 
-    default_config.max_sample_count = ini_reader.GetInteger(SECTION, "max_sample_count",
+    default_config.train_sample_count = ini_reader.GetInteger(SECTION, "train_sample_count",
+            1000000000);
+    default_config.dev_sample_count = ini_reader.GetInteger(SECTION, "dev_sample_count",
+            1000000000);
+    default_config.test_sample_count = ini_reader.GetInteger(SECTION, "test_sample_count",
             1000000000);
     default_config.hold_batch_size = ini_reader.GetInteger(SECTION, "hold_batch_size", 100);
     default_config.device_id = ini_reader.GetInteger(SECTION, "device_id", 0);
@@ -676,6 +680,13 @@ std::pair<dtype, std::vector<int>> MaxLogProbabilityLossWithInconsistentDims(
     return final_result;
 }
 
+template<typename T>
+void preserveVector(vector<T> &vec, int count, int seed) {
+    default_random_engine engine(seed);
+    shuffle(vec.begin(), vec.end(), engine);
+    vec.erase(vec.begin() + std::min<int>(count, vec.size()), vec.end());
+}
+
 int main(int argc, char *argv[]) {
     cout << "dtype size:" << sizeof(dtype) << endl;
 
@@ -706,16 +717,20 @@ int main(int argc, char *argv[]) {
 
     vector<PostAndResponses> train_post_and_responses = readPostAndResponsesVector(
             default_config.train_pair_file);
-    cout << "train_post_and_responses_vector size:" << train_post_and_responses.size() <<
-        endl;
+    preserveVector(train_post_and_responses, default_config.train_sample_count,
+            default_config.seed);
+    cout << "train_post_and_responses_vector size:" << train_post_and_responses.size()
+        << endl;
     vector<PostAndResponses> dev_post_and_responses = readPostAndResponsesVector(
             default_config.dev_pair_file);
-    cout << "dev_post_and_responses_vector size:" << dev_post_and_responses.size() <<
-        endl;
+    preserveVector(dev_post_and_responses, default_config.dev_sample_count, default_config.seed);
+    cout << "dev_post_and_responses_vector size:" << dev_post_and_responses.size()
+        << endl;
     vector<PostAndResponses> test_post_and_responses = readPostAndResponsesVector(
             default_config.test_pair_file);
-    cout << "test_post_and_responses_vector size:" << test_post_and_responses.size() <<
-        endl;
+    preserveVector(test_post_and_responses, default_config.test_sample_count, default_config.seed);
+    cout << "test_post_and_responses_vector size:" << test_post_and_responses.size()
+        << endl;
     vector<ConversationPair> train_conversation_pairs;
     for (const PostAndResponses &post_and_responses : train_post_and_responses) {
         vector<ConversationPair> conversation_pairs = toConversationPairs(post_and_responses);
@@ -730,16 +745,6 @@ int main(int argc, char *argv[]) {
     is_response_in_train_set.resize(response_sentences.size(), false);
     for (const auto &p : train_conversation_pairs) {
         is_response_in_train_set.at(p.response_id) = true;
-    }
-
-    cout << "dev set:" << endl;
-    for (PostAndResponses &i : dev_post_and_responses) {
-        print(post_sentences.at(i.post_id));
-    }
-
-    cout << "test set:" << endl;
-    for (PostAndResponses &i : test_post_and_responses) {
-        print(post_sentences.at(i.post_id));
     }
 
     Alphabet alphabet;
@@ -965,6 +970,11 @@ int main(int argc, char *argv[]) {
                 auto begin_pos = begin(train_conversation_pairs) + i * batch_count;
                 shuffle(begin_pos, begin_pos + batch_count, engine);
             }
+            if (train_conversation_pairs.size() > hyper_params.batch_size * batch_count) {
+                shuffle(begin(train_conversation_pairs) + hyper_params.batch_size * batch_count,
+                        train_conversation_pairs.end(), engine);
+            }
+
 
             unique_ptr<Metric> metric = unique_ptr<Metric>(new Metric);
             unique_ptr<Metric> keyword_metric = unique_ptr<Metric>(new Metric);
@@ -973,7 +983,9 @@ int main(int argc, char *argv[]) {
             profiler.SetEnabled(false);
             profiler.BeginEvent("total");
 
-            for (int batch_i = 0; batch_i < batch_count; ++batch_i) {
+            for (int batch_i = 0; batch_i < batch_count +
+                    (train_conversation_pairs.size() > hyper_params.batch_size * batch_count);
+                    ++batch_i) {
                 cout << format("batch_i:%1% iteration:%2%") % batch_i % iteration << endl;
                 if (epoch == 0) {
                     if (iteration < hyper_params.warm_up_iterations) {
@@ -984,7 +996,12 @@ int main(int argc, char *argv[]) {
                             hyper_params.learning_rate << endl;
                     }
                 }
-                Graph graph(false);
+                cout << format("batch_i:%1% iteration:%2%") % batch_i % iteration << endl;
+                int batch_size = batch_i == batch_count ?
+                    train_conversation_pairs.size() % hyper_params.batch_size :
+                    hyper_params.batch_size;
+                profiler.BeginEvent("build braph");
+                Graph graph;
                 vector<shared_ptr<GraphBuilder>> graph_builders;
                 vector<DecoderComponents> decoder_components_vector;
                 vector<ConversationPair> conversation_pair_in_batch;
@@ -993,7 +1010,7 @@ int main(int argc, char *argv[]) {
                 };
                 int response_size_sum = 0;
                 int keyword_size_sum = 0;
-                for (int i = 0; i < hyper_params.batch_size; ++i) {
+                for (int i = 0; i < batch_size; ++i) {
                     shared_ptr<GraphBuilder> graph_builder(new GraphBuilder);
                     graph_builders.push_back(graph_builder);
                     int instance_index = getSentenceIndex(i);
@@ -1015,7 +1032,7 @@ int main(int argc, char *argv[]) {
 
                 graph.compute();
 
-                for (int i = 0; i < hyper_params.batch_size; ++i) {
+                for (int i = 0; i < batch_size; ++i) {
                     int instance_index = getSentenceIndex(i);
                     int response_id = train_conversation_pairs.at(instance_index).response_id;
                     auto response_sentence = response_sentences.at(response_id);

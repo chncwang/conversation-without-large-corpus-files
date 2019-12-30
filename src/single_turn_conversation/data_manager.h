@@ -29,11 +29,9 @@ using boost::format;
 using namespace boost::asio;
 
 std::vector<PostAndResponses> readPostAndResponsesVector(const std::string &filename) {
-    DefaultConfig &default_config = GetDefaultConfig();
     std::vector<PostAndResponses> results;
     std::string line;
     std::ifstream ifs(filename);
-    int i = 0;
     while (std::getline(ifs, line)) {
         std::vector<std::string> strs;
         boost::split(strs, line, boost::is_any_of(":"));
@@ -47,14 +45,8 @@ std::vector<PostAndResponses> readPostAndResponsesVector(const std::string &file
         boost::split(strs2, strs.at(1), boost::is_any_of(","));
         for (std::string &str : strs2) {
             post_and_responses.response_ids.push_back(stoi(str));
-            if (default_config.one_response) {
-                break;
-            }
         }
         results.push_back(std::move(post_and_responses));
-        if (++i >= default_config.max_sample_count) {
-            break;
-        }
     }
 
     return results;

@@ -31,7 +31,9 @@ struct DefaultConfig {
     bool learn_test;
     bool save_model_per_batch;
     bool split_unknown_words;
-    int max_sample_count;
+    int train_sample_count;
+    int dev_sample_count;
+    int test_sample_count;
     int device_id;
     int hold_batch_size;
     int seed;
@@ -66,7 +68,9 @@ struct DefaultConfig {
             << "learn_test:" << learn_test << std::endl
             << "save_model_per_batch:" << save_model_per_batch << std::endl
             << "split_unknown_words:" << split_unknown_words << std::endl
-            << "max_sample_count:" << max_sample_count << std::endl
+            << "train_sample_count:" << train_sample_count << std::endl
+            << "dev_sample_count:" << dev_sample_count << std::endl
+            << "test_sample_count:" << test_sample_count << std::endl
             << "device_id:" << device_id << std::endl
             << "hold_batch_size:" << hold_batch_size << std::endl
             << "seed:" << seed << std::endl
