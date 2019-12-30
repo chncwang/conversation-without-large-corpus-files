@@ -113,6 +113,7 @@ float mostMatchedCount(const CandidateAndReferences &candidate_and_references,
             max_matched_log = log;
         }
     }
+
     if (max_mached_count > 0 && print_log) {
         cout << "candidate:" << endl;
         print(candidate);
@@ -146,30 +147,52 @@ int mostMatchedLength(const CandidateAndReferences &candidate_and_references) {
     };
     const auto &e = min_element(candidate_and_references.references.begin(),
             candidate_and_references.references.end(), cmp);
-//    cout << "candidate:" << endl;
+//    cout << "candidate len:" << candidate_len << endl;
 //    print(candidate_and_references.candidate);
 //    cout << "most match len:" << e->size() << endl;
+//    for (const auto &e : candidate_and_references.references) {
+//        cout << "other:" << e.size() << " ";
+//    }
+//    cout << endl;
 //    print(*e);
     return puncRemovedLen(*e);
 }
 
 float ngramCount(const vector<string> sentence, int ngram) {
-    int result = 0;
-    for (int i = 0; i < 1 + sentence.size() - ngram; ++i) {
-        for (int j = 0; j < ngram; ++j) {
+//    int result = 0;
+//    for (int i = 0; i < 1 + sentence.size() - ngram; ++i) {
+//        for (int j = 0; j < ngram; ++j) {
 //            if (includePunctuation(sentence.at(i + j))) {
 //                break;
 //            }
-            if (j == ngram - 1) {
-                ++result;
-            }
+//            if (j == ngram - 1) {
+//                ++result;
+//            }
+//        }
+//    }
+    return sentence.size() + 1 - ngram;
+}
+
+vector<string> toChars(const vector<string> &src) {
+    vector<string> result;
+    for (const string &w : src) {
+        utf8_string utf8(w);
+        for (int i = 0; i < utf8.length(); ++i) {
+            result.push_back(utf8.substr(i, 1).cpp_str());
         }
     }
     return result;
 }
 
-float computeBleu(const vector<CandidateAndReferences> &candidate_and_references_vector,
+float computeBleu(vector<CandidateAndReferences> &candidate_and_references_vector,
         int max_gram_len) {
+//    for (auto &e : candidate_and_references_vector) {
+//        e.candidate = toChars(e.candidate);
+//        for (auto &ee : e.references) {
+//            ee = toChars(ee);
+//        }
+//    }
+
     using namespace std;
     float weighted_sum = 0.0f;
     int r_sum = 0;
