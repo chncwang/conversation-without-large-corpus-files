@@ -122,6 +122,7 @@ DefaultConfig parseDefaultConfig(INIReader &ini_reader) {
     default_config.device_id = ini_reader.GetInteger(SECTION, "device_id", 0);
     default_config.seed = ini_reader.GetInteger(SECTION, "seed", 0);
     default_config.cut_length = ini_reader.GetInteger(SECTION, "cut_length", 30);
+    default_config.max_epoch = ini_reader.GetInteger(SECTION, "max_epoch", 100);
     default_config.output_model_file_prefix = ini_reader.Get(SECTION, "output_model_file_prefix",
             "");
     default_config.input_model_file = ini_reader.Get(SECTION, "input_model_file", "");
@@ -753,7 +754,7 @@ int main(int argc, char *argv[]) {
         int iteration = 0;
         string last_saved_model;
 
-        for (int epoch = 0; ; ++epoch) {
+        for (int epoch = 0; epoch < default_config.max_epoch; ++epoch) {
             cout << "epoch:" << epoch << endl;
 
             model_params.lookup_table.E.is_fixed = false;

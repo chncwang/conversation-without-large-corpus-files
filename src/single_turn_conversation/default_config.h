@@ -36,6 +36,7 @@ struct DefaultConfig {
     int hold_batch_size;
     int seed;
     int cut_length;
+    int max_epoch;
     std::string output_model_file_prefix;
     std::string input_model_file;
     std::string input_model_dir;
@@ -69,6 +70,7 @@ struct DefaultConfig {
             << "hold_batch_size:" << hold_batch_size << std::endl
             << "seed:" << seed << std::endl
             << "cut_length:" << cut_length << std::endl
+            << "max_epoch:" << max_epoch << std::endl
             << "output_model_file_prefix" << output_model_file_prefix << std::endl
             << "input_model_file:" << input_model_file << std::endl
             << "input_model_dir:" << input_model_dir << std::endl
