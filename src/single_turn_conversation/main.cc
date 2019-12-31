@@ -800,6 +800,7 @@ int main(int argc, char *argv[]) {
                     return i * batch_count + batch_i;
                 };
 
+                int len_sum = 0;
                 for (int i = 0; i < batch_size; ++i) {
                     shared_ptr<GraphBuilder> graph_builder(new GraphBuilder);
                     graph_builders.push_back(graph_builder);
@@ -813,6 +814,7 @@ int main(int argc, char *argv[]) {
                     DecoderComponents decoder_components;
                     graph_builder->forwardDecoder(graph, decoder_components,
                             response_sentences.at(response_id), hyper_params, model_params, true);
+                    len_sum += response_sentences.at(response_id).size();
                     decoder_components_vector.push_back(decoder_components);
                 }
                 profiler.EndCudaEvent();
@@ -826,7 +828,7 @@ int main(int argc, char *argv[]) {
                             model_params.lookup_table);
                     vector<Node*> result_nodes =
                         toNodePointers(decoder_components_vector.at(i).wordvector_to_onehots);
-                    auto result = maxLogProbabilityLoss(result_nodes, word_ids, 1.0 / batch_size);
+                    auto result = maxLogProbabilityLoss(result_nodes, word_ids, 1.0 / len_sum);
                     loss_sum += result.first;
 
                     analyze(result.second, word_ids, *metric);
