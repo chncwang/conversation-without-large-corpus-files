@@ -14,7 +14,7 @@ struct ResultAndKeywordVectors {
 struct DecoderComponents {
     std::vector<LookupNode<Param> *> decoder_lookups_before_dropout;
     std::vector<DropoutNode *> decoder_lookups;
-    std::vector<LookupNode<Param> *> decoder_keyword_lookups;
+    std::vector<Node *> decoder_keyword_lookups;
     std::vector<Node *> decoder_to_wordvectors;
     std::vector<Node *> decoder_to_keyword_vectors;
     std::vector<Node *> wordvector_to_onehots;
