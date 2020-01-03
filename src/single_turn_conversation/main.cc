@@ -415,7 +415,7 @@ void loadModel(const DefaultConfig &default_config, HyperParams &hyper_params,
 pair<vector<Node *>, vector<int>> keywordNodesAndIds(const DecoderComponents &decoder_components,
         const WordIdfInfo &idf_info,
         const ModelParams &model_params) {
-    vector<Node *> keyword_result_nodes = decoder_components.keyword_vector_to_onehots;
+    vector<Node *> keyword_result_nodes = decoder_components.wordvector_to_onehots;
     vector<int> keyword_ids = toIds(idf_info.keywords_behind, model_params.lookup_table, true);
     vector<Node *> non_null_nodes;
     vector<int> chnanged_keyword_ids;
@@ -464,20 +464,20 @@ float metricTestPosts(const HyperParams &hyper_params, ModelParams &model_params
                 GraphBuilder graph_builder;
                 graph_builder.forward(graph, post_sentences.at(post_and_responses.post_id),
                         hyper_params, model_params, false);
-                DecoderComponents decoder_components;
-                graph_builder.forwardDecoder(graph, decoder_components,
+                DecoderComponents keyword_decoder, normal_decoder;
+                graph_builder.forwardDecoder(graph, normal_decoder, keyword_decoder,
                         response_sentences.at(response_id),
                         idf_info.keywords_behind,
                         hyper_params, model_params, false);
                 profiler.EndEvent();
                 graph.compute();
-                vector<Node*> nodes = toNodePointers(decoder_components.wordvector_to_onehots);
+                vector<Node*> nodes = toNodePointers(normal_decoder.wordvector_to_onehots);
                 vector<int> word_ids = transferVector<int, string>(
                         response_sentences.at(response_id), [&](const string &w) -> int {
                         return model_params.lookup_table.getElemId(w);
                         });
                 int word_ids_size = word_ids.size();
-                auto keyword_nodes_and_ids = keywordNodesAndIds(decoder_components, idf_info,
+                auto keyword_nodes_and_ids = keywordNodesAndIds(keyword_decoder, idf_info,
                         model_params);
                 int sentence_len = nodes.size();
                 for (int i = 0; i < keyword_nodes_and_ids.first.size(); ++i) {
@@ -847,14 +847,18 @@ int main(int argc, char *argv[]) {
             }
         }
         model_params.attention_params.init(hyper_params.hidden_dim, hyper_params.hidden_dim);
+        model_params.keyword_attention_params.init(hyper_params.hidden_dim,
+                hyper_params.hidden_dim);
         model_params.left_to_right_encoder_params.init(hyper_params.hidden_dim,
                 hyper_params.word_dim);
         model_params.left_to_right_decoder_params.init(hyper_params.hidden_dim,
                 2 * hyper_params.word_dim + hyper_params.hidden_dim);
+        model_params.keyword_decoder_params.init(hyper_params.hidden_dim,
+                hyper_params.word_dim + hyper_params.hidden_dim);
         model_params.hidden_to_wordvector_params.init(hyper_params.word_dim,
                 2 * hyper_params.hidden_dim + 2 * hyper_params.word_dim, false);
         model_params.hidden_to_keyword_params.init(hyper_params.word_dim,
-                2 * hyper_params.hidden_dim, false);
+                2 * hyper_params.hidden_dim + hyper_params.word_dim, false);
     };
 
     if (default_config.program_mode != ProgramMode::METRIC) {
@@ -946,6 +950,8 @@ int main(int argc, char *argv[]) {
 
         dtype last_loss_sum = 1e10f;
         dtype loss_sum = 0.0f;
+        dtype normal_loss_sum = 0.0f;
+        dtype keyword_loss_sum = 0.0f;
 
         int iteration = 0;
         string last_saved_model;
@@ -997,14 +1003,13 @@ int main(int argc, char *argv[]) {
                             hyper_params.learning_rate << endl;
                     }
                 }
-                cout << format("batch_i:%1% iteration:%2%") % batch_i % iteration << endl;
                 int batch_size = batch_i == batch_count ?
                     train_conversation_pairs.size() % hyper_params.batch_size :
                     hyper_params.batch_size;
                 profiler.BeginEvent("build braph");
-                Graph graph;
+                Graph graph(false);
                 vector<shared_ptr<GraphBuilder>> graph_builders;
-                vector<DecoderComponents> decoder_components_vector;
+                vector<DecoderComponents> normal_decoder_vector, keyword_decoder_vector;
                 vector<ConversationPair> conversation_pair_in_batch;
                 auto getSentenceIndex = [batch_i, batch_count](int i) {
                     return i * batch_count + batch_i;
@@ -1025,10 +1030,12 @@ int main(int argc, char *argv[]) {
                     response_size_sum += response_sentence.size();
                     const WordIdfInfo &idf_info = response_idf_info_list.at(response_id);
                     keyword_size_sum += idf_info.keyword_size;
-                    DecoderComponents decoder_components;
-                    graph_builder->forwardDecoder(graph, decoder_components, response_sentence,
-                            idf_info.keywords_behind, hyper_params, model_params, true);
-                    decoder_components_vector.push_back(decoder_components);
+                    DecoderComponents keyword_decoder, normal_decoder;
+                    graph_builder->forwardDecoder(graph, normal_decoder, keyword_decoder,
+                            response_sentence, idf_info.keywords_behind, hyper_params,
+                            model_params, true);
+                    keyword_decoder_vector.push_back(keyword_decoder);
+                    normal_decoder_vector.push_back(normal_decoder);
                 }
 
                 graph.compute();
@@ -1039,7 +1046,7 @@ int main(int argc, char *argv[]) {
                     auto response_sentence = response_sentences.at(response_id);
                     vector<int> word_ids = toIds(response_sentence, model_params.lookup_table);
                     vector<Node*> result_nodes =
-                        toNodePointers(decoder_components_vector.at(i).wordvector_to_onehots);
+                        toNodePointers(normal_decoder_vector.at(i).wordvector_to_onehots);
                     std::pair<dtype, std::vector<int>> result;
                     try {
                         result = MaxLogProbabilityLossWithInconsistentDims(result_nodes,
@@ -1063,16 +1070,18 @@ int main(int argc, char *argv[]) {
                     }
                     profiler.EndCudaEvent();
                     loss_sum += result.first;
+                    normal_loss_sum += result.first * response_size_sum;
                     analyze(result.second, word_ids, *metric);
                     const WordIdfInfo &response_idf = response_idf_info_list.at(response_id);
-                    auto keyword_nodes_and_ids = keywordNodesAndIds(
-                            decoder_components_vector.at(i), response_idf, model_params);
+                    auto keyword_nodes_and_ids = keywordNodesAndIds(keyword_decoder_vector.at(i),
+                            response_idf, model_params);
                     profiler.BeginEvent("loss");
                     auto keyword_result = MaxLogProbabilityLossWithInconsistentDims(
                             keyword_nodes_and_ids.first, keyword_nodes_and_ids.second,
                             keyword_size_sum, model_params.lookup_table.nVSize);
                     profiler.EndCudaEvent();
                     loss_sum += keyword_result.first;
+                    keyword_loss_sum += keyword_result.first * keyword_size_sum;
                     analyze(keyword_result.second, keyword_nodes_and_ids.second, *keyword_metric);
 
                     static int count_for_print;
@@ -1093,7 +1102,8 @@ int main(int argc, char *argv[]) {
                     }
                 }
 
-                cout << "loss:" << loss_sum << endl;
+                cout << "loss:" << loss_sum << "normal:" << normal_loss_sum << "keyword:" <<
+                    keyword_loss_sum << endl;
                 cout << "normal:" << endl;
                 metric->print();
                 cout << "keyword:" << endl;
@@ -1109,8 +1119,8 @@ int main(int argc, char *argv[]) {
                         graph_builder.forward(graph, post_sentences.at(conversation_pair.post_id),
                                 hyper_params, model_params, true);
 
-                        DecoderComponents decoder_components;
-                        graph_builder.forwardDecoder(graph, decoder_components,
+                        DecoderComponents normal_decoder, keyword_decoder;
+                        graph_builder.forwardDecoder(graph, normal_decoder, keyword_decoder,
                                 response_sentences.at(conversation_pair.response_id),
                                 response_idf_info_list.at(
                                     conversation_pair.response_id).keywords_behind,
@@ -1121,11 +1131,11 @@ int main(int argc, char *argv[]) {
                         vector<int> word_ids = toIds(response_sentences.at(
                                     conversation_pair.response_id), model_params.lookup_table);
                         vector<Node*> result_nodes = toNodePointers(
-                                decoder_components.wordvector_to_onehots);
+                                normal_decoder.wordvector_to_onehots);
                         const WordIdfInfo &response_idf = response_idf_info_list.at(
                                 conversation_pair.response_id);
-                        auto keyword_nodes_and_ids = keywordNodesAndIds(
-                                decoder_components, response_idf, model_params);
+                        auto keyword_nodes_and_ids = keywordNodesAndIds(keyword_decoder,
+                                response_idf, model_params);
                         return MaxLogProbabilityLossWithInconsistentDims(
                                 keyword_nodes_and_ids.first, keyword_nodes_and_ids.second, 1,
                                 model_params.lookup_table.nVSize).first +
