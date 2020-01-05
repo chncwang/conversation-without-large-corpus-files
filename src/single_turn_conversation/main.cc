@@ -441,6 +441,8 @@ float metricTestPosts(const HyperParams &hyper_params, ModelParams &model_params
     thread_pool pool(16);
     mutex rep_perplex_mutex;
     int size_sum = 0;
+    int normal_size_sum_sum = 0;
+    int keyword_size_sum_sum = 0;
 
     for (const PostAndResponses &post_and_responses : post_and_responses_vector) {
         auto f = [&]() {
@@ -450,7 +452,10 @@ float metricTestPosts(const HyperParams &hyper_params, ModelParams &model_params
 
             const vector<int> &response_ids = post_and_responses.response_ids;
             float avg_perplex = 0.0f;
+            float normal_sum = 0;
+            float keyword_sum = 0;
             int sum = 0;
+            int keyword_size_sum = 0;
             cout << "response size:" << response_ids.size() << endl;
             for (int response_id : response_ids) {
 //                cout << "response:" << endl;
@@ -476,31 +481,34 @@ float metricTestPosts(const HyperParams &hyper_params, ModelParams &model_params
                         response_sentences.at(response_id), [&](const string &w) -> int {
                         return model_params.lookup_table.getElemId(w);
                         });
+                int sentence_len = nodes.size();
+                float normal_perplex = computePerplex(nodes, word_ids, sentence_len);
+                normal_sum += normal_perplex;
                 int word_ids_size = word_ids.size();
                 auto keyword_nodes_and_ids = keywordNodesAndIds(keyword_decoder, idf_info,
                         model_params);
-                int sentence_len = nodes.size();
+                keyword_size_sum += keyword_nodes_and_ids.first.size();
+                float keyword_ppl = computePerplex(keyword_nodes_and_ids.first,
+                        keyword_nodes_and_ids.second, sentence_len);
+                keyword_sum += keyword_ppl;
                 for (int i = 0; i < keyword_nodes_and_ids.first.size(); ++i) {
                     nodes.push_back(keyword_nodes_and_ids.first.at(i));
                     word_ids.push_back(keyword_nodes_and_ids.second.at(i));
                 }
-                vector<int> filtered_word_ids;
-                vector<Node*> filtered_nodes;
-                for (int i = 0; i < word_ids.size(); ++i) {
-                    int word_id = word_ids.at(i);
-                    filtered_word_ids.push_back(word_id);
-                    filtered_nodes.push_back(nodes.at(i));
-                }
 
-                float perplex = computePerplex(filtered_nodes, filtered_word_ids, sentence_len);
+                float perplex = computePerplex(nodes, word_ids, sentence_len);
                 avg_perplex += perplex;
                 sum += word_ids_size;
             }
             cout << "size:" << response_ids.size() << endl;
             cout << "avg_perplex:" << exp(avg_perplex/sum) << endl;
+            cout << "normal_perplex:" << exp(normal_sum/sum) << endl;
+            cout << "keyword_perplex:" << exp(keyword_sum/keyword_size_sum) << endl;
             rep_perplex_mutex.lock();
             rep_perplex += avg_perplex;
             size_sum += sum;
+            normal_size_sum_sum += normal_sum;
+            keyword_size_sum_sum += keyword_size_sum;
             rep_perplex_mutex.unlock();
         };
         post(pool, f);
@@ -949,15 +957,15 @@ int main(int argc, char *argv[]) {
         }
 
         dtype last_loss_sum = 1e10f;
-        dtype loss_sum = 0.0f;
-        dtype normal_loss_sum = 0.0f;
-        dtype keyword_loss_sum = 0.0f;
 
         int iteration = 0;
         string last_saved_model;
 
         default_random_engine engine(default_config.seed);
         for (int epoch = 0; epoch < default_config.max_epoch; ++epoch) {
+            dtype loss_sum = 0.0f;
+            dtype normal_loss_sum = 0.0f;
+            dtype keyword_loss_sum = 0.0f;
             cout << "epoch:" << epoch << endl;
             model_params.lookup_table.E.is_fixed = false;
             auto cmp = [&] (const ConversationPair &a, const ConversationPair &b)->bool {
@@ -1193,7 +1201,6 @@ int main(int argc, char *argv[]) {
             }
 
             last_loss_sum = loss_sum;
-            loss_sum = 0;
         }
     } else {
         abort();
