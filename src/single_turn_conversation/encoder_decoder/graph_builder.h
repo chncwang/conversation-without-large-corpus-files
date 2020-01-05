@@ -559,9 +559,8 @@ struct GraphBuilder {
                 abort();
             }
             forwardKeywordDecoderByOneStep(graph, keyword_decoder, i,
-                    i == 0 ? nullptr : &answer.at(i - 1),
-                    i == 0 || answer.at(i - 1) == keywords.at(i - 1), hyper_params, model_params,
-                    is_training, keyword_bound);
+                    i == 0 ? nullptr : &answer.at(i - 1), hyper_params, model_params, is_training,
+                    keyword_bound);
             forwardNormalDecoderByOneStep(graph, normal_decoder, i, keywords.at(i),
                     i == 0 ? nullptr : &answer.at(i - 1), hyper_params, model_params, is_training,
                     normal_bound);
@@ -570,7 +569,6 @@ struct GraphBuilder {
 
     void forwardKeywordDecoderByOneStep(Graph &graph, DecoderComponents &decoder, int i,
             const string *answer,
-            bool should_predict_keyword,
             const HyperParams &hyper_params,
             ModelParams &model_params,
             bool is_training,
@@ -593,16 +591,12 @@ struct GraphBuilder {
                 model_params.keyword_attention_params, *last_input,
                 left_to_right_encoder._hiddens, is_training);
 
-        if (should_predict_keyword) {
-            Node *decoder_to_wordvector = decoder.decoderToWordVectors(graph, hyper_params,
-                    model_params.hidden_to_keyword_params, i);
-            Node *one_hot = n3ldg_plus::linearWordVector(graph, keyword_id_upper_open_bound,
-                    model_params.lookup_table.E, *decoder_to_wordvector);
-            one_hot = n3ldg_plus::softmax(graph, *one_hot);
-            decoder.wordvector_to_onehots.push_back(one_hot);
-        } else {
-            decoder.wordvector_to_onehots.push_back(nullptr);
-        }
+        Node *decoder_to_wordvector = decoder.decoderToWordVectors(graph, hyper_params,
+                model_params.hidden_to_keyword_params, i);
+        Node *one_hot = n3ldg_plus::linearWordVector(graph, keyword_id_upper_open_bound,
+                model_params.lookup_table.E, *decoder_to_wordvector);
+        one_hot = n3ldg_plus::softmax(graph, *one_hot);
+        decoder.wordvector_to_onehots.push_back(one_hot);
     }
 
     void forwardNormalDecoderByOneStep(Graph &graph, DecoderComponents &decoder, int i,
