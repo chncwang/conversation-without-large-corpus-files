@@ -429,6 +429,24 @@ pair<vector<Node *>, vector<int>> keywordNodesAndIds(const DecoderComponents &de
     return {non_null_nodes, chnanged_keyword_ids};
 }
 
+pair<vector<Node *>, vector<int>> partialKeywordNodesAndIds(
+        const DecoderComponents &decoder_components,
+        const WordIdfInfo &idf_info,
+        const vector<int> &word_ids,
+        const ModelParams &model_params) {
+    vector<Node *> keyword_result_nodes = decoder_components.wordvector_to_onehots;
+    vector<int> keyword_ids = toIds(idf_info.keywords_behind, model_params.lookup_table, true);
+    vector<Node *> partial_nodes;
+    vector<int> chnanged_keyword_ids;
+    for (int j = 0; j < keyword_result_nodes.size(); ++j) {
+        if (j == 0 || keyword_ids.at(j -1 ) == word_ids.at(j - 1)) {
+            partial_nodes.push_back(keyword_result_nodes.at(j));
+            chnanged_keyword_ids.push_back(keyword_ids.at(j));
+        }
+    }
+
+    return {partial_nodes, chnanged_keyword_ids};
+}
 
 float metricTestPosts(const HyperParams &hyper_params, ModelParams &model_params,
         const vector<PostAndResponses> &post_and_responses_vector,
@@ -437,12 +455,12 @@ float metricTestPosts(const HyperParams &hyper_params, ModelParams &model_params
         const vector<WordIdfInfo> &response_idf_info_list) {
     cout << "metricTestPosts begin" << endl;
     hyper_params.print();
-    float rep_perplex(0.0f);
+    float overall_ppl_sum(0.0f);
     thread_pool pool(16);
-    mutex rep_perplex_mutex;
-    int size_sum = 0;
+    mutex overall_ppl_sum_mutex;
     int normal_size_sum_sum = 0;
-    int keyword_size_sum_sum = 0;
+    float keyword_ppl_sum_sum = 0;
+    float normal_ppl_sum_sum = 0;
 
     for (const PostAndResponses &post_and_responses : post_and_responses_vector) {
         auto f = [&]() {
@@ -451,10 +469,10 @@ float metricTestPosts(const HyperParams &hyper_params, ModelParams &model_params
             print(post);
 
             const vector<int> &response_ids = post_and_responses.response_ids;
-            float avg_perplex = 0.0f;
-            float normal_sum = 0;
+            float overall_ppl = 0.0f;
+            float normal_ppl_sum = 0;
             float keyword_sum = 0;
-            int sum = 0;
+            int sentence_len_sum = 0;
             int keyword_size_sum = 0;
             cout << "response size:" << response_ids.size() << endl;
             for (int response_id : response_ids) {
@@ -483,7 +501,7 @@ float metricTestPosts(const HyperParams &hyper_params, ModelParams &model_params
                         });
                 int sentence_len = nodes.size();
                 float normal_perplex = computePerplex(nodes, word_ids, sentence_len);
-                normal_sum += normal_perplex;
+                normal_ppl_sum += normal_perplex;
                 int word_ids_size = word_ids.size();
                 auto keyword_nodes_and_ids = keywordNodesAndIds(keyword_decoder, idf_info,
                         model_params);
@@ -491,33 +509,40 @@ float metricTestPosts(const HyperParams &hyper_params, ModelParams &model_params
                 float keyword_ppl = computePerplex(keyword_nodes_and_ids.first,
                         keyword_nodes_and_ids.second, sentence_len);
                 keyword_sum += keyword_ppl;
-                for (int i = 0; i < keyword_nodes_and_ids.first.size(); ++i) {
-                    nodes.push_back(keyword_nodes_and_ids.first.at(i));
-                    word_ids.push_back(keyword_nodes_and_ids.second.at(i));
+
+                auto partial_keyword_nodes_and_ids = partialKeywordNodesAndIds(keyword_decoder,
+                        idf_info, word_ids, model_params);
+                for (int i = 0; i < partial_keyword_nodes_and_ids.first.size(); ++i) {
+                    nodes.push_back(partial_keyword_nodes_and_ids.first.at(i));
+                    word_ids.push_back(partial_keyword_nodes_and_ids.second.at(i));
                 }
 
                 float perplex = computePerplex(nodes, word_ids, sentence_len);
-                avg_perplex += perplex;
-                sum += word_ids_size;
+                overall_ppl += perplex;
+                sentence_len_sum += word_ids_size;
             }
             cout << "size:" << response_ids.size() << endl;
-            cout << "avg_perplex:" << exp(avg_perplex/sum) << endl;
-            cout << "normal_perplex:" << exp(normal_sum/sum) << endl;
+            cout << "overall_ppl:" << exp(overall_ppl / sentence_len_sum) << endl;
+            cout << "normal_perplex:" << exp(normal_ppl_sum / sentence_len_sum) << endl;
             cout << "keyword_perplex:" << exp(keyword_sum/keyword_size_sum) << endl;
-            rep_perplex_mutex.lock();
-            rep_perplex += avg_perplex;
-            size_sum += sum;
-            normal_size_sum_sum += normal_sum;
-            keyword_size_sum_sum += keyword_size_sum;
-            rep_perplex_mutex.unlock();
+            overall_ppl_sum_mutex.lock();
+            overall_ppl_sum += overall_ppl;
+            normal_size_sum_sum += sentence_len_sum;
+            normal_ppl_sum_sum += normal_ppl_sum;
+            keyword_ppl_sum_sum += keyword_sum;
+            overall_ppl_sum_mutex.unlock();
         };
         post(pool, f);
     }
     pool.join();
-    rep_perplex = exp(rep_perplex / size_sum);
+    overall_ppl_sum = exp(overall_ppl_sum / normal_size_sum_sum);
+    normal_ppl_sum_sum = exp(normal_ppl_sum_sum / normal_size_sum_sum);
+    keyword_ppl_sum_sum = exp(keyword_ppl_sum_sum / normal_size_sum_sum);
 
-    cout << "total avg perplex:" << rep_perplex << endl;
-    return rep_perplex;
+    cout << "total perplex:" << overall_ppl_sum << endl;
+    cout << "normal:" << normal_ppl_sum_sum << endl;
+    cout << "keyword:" << keyword_ppl_sum_sum << endl;
+    return overall_ppl_sum;
 }
 
 void decodeTestPosts(const HyperParams &hyper_params, ModelParams &model_params,
