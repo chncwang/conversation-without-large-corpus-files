@@ -272,12 +272,13 @@ shared_ptr<WordIdfInfo> getWordIdfInfo(const vector<string> &sentence,
         if (i == 0 || last == sentence.at(i - 1)) {
             float idf_sum = 0;
             for (int j = i; j < word_frequencies.size(); ++j) {
-                idf_sum += word_frequencies.at(j);
+                idf_sum += word_frequencies.at(j) * word_frequencies.at(j);
             }
             shared_ptr<vector<dtype>> distribution(new vector<dtype>(vocabulary_size, 0.0));
             for (int j = i; j < word_frequencies.size(); ++j) {
                 int word_id = word_id_table.at(sentence.at(j));
-                distribution->at(word_id) = idf_sum > 1e-3 ? (word_frequencies.at(j) / idf_sum) : 1;
+                distribution->at(word_id) = idf_sum > 1e-3 ?
+                    (word_frequencies.at(j) * word_frequencies.at(j) / idf_sum) : 1;
             }
             word_idf_info->keyword_distibutions.push_back(move(distribution));
         }
