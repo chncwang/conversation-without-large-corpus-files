@@ -549,10 +549,16 @@ struct GraphBuilder {
         int keyword_bound = model_params.lookup_table.nVSize;
 
         for (int i = 0; i < answer.size(); ++i) {
-            if (i > 0) {
-                keyword_bound = model_params.lookup_table.elems.from_string(keywords.at(i - 1)) + 1;
+            int normal_bound;
+            if (is_training) {
+                normal_bound = keyword_bound;
+            } else {
+                if (i > 0) {
+                    keyword_bound =
+                        model_params.lookup_table.elems.from_string(keywords.at(i - 1)) + 1;
+                }
+                normal_bound = model_params.lookup_table.elems.from_string(keywords.at(i)) + 1;
             }
-            int normal_bound = model_params.lookup_table.elems.from_string(keywords.at(i)) + 1;
             if (normal_bound > keyword_bound) {
                 print(answer);
                 print(keywords);
