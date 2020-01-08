@@ -434,7 +434,8 @@ float metricTestPosts(const HyperParams &hyper_params, ModelParams &model_params
         const vector<PostAndResponses> &post_and_responses_vector,
         const vector<vector<string>> &post_sentences,
         const vector<vector<string>> &response_sentences,
-        const vector<WordIdfInfo> &response_idf_info_list) {
+        const unordered_map<string, float> &all_idf,
+        const unordered_map<string, int> &word_counts) {
     cout << "metricTestPosts begin" << endl;
     hyper_params.print();
     float rep_perplex(0.0f);
@@ -461,7 +462,10 @@ float metricTestPosts(const HyperParams &hyper_params, ModelParams &model_params
 //                cout << "response:" << endl;
 //                auto response = response_sentences.at(response_id);
 //                print(response);
-                const WordIdfInfo &idf_info = response_idf_info_list.at(response_id);
+                const shared_ptr<WordIdfInfo> &idf_info = getWordIdfInfo(
+                        response_sentences.at(response_id), all_idf,
+                        model_params.lookup_table.elems.m_string_to_id, word_counts,
+                        model_params.lookup_table.nVSize);
 //                print(idf_info.keywords_behind);
                 n3ldg_cuda::Profiler &profiler = n3ldg_cuda::Profiler::Ins();
                 profiler.BeginEvent("build computation graph");
@@ -472,7 +476,7 @@ float metricTestPosts(const HyperParams &hyper_params, ModelParams &model_params
                 DecoderComponents keyword_decoder, normal_decoder;
                 graph_builder.forwardDecoder(graph, normal_decoder, keyword_decoder,
                         response_sentences.at(response_id),
-                        idf_info.keywords_behind,
+                        idf_info->keywords_behind,
                         hyper_params, model_params, false);
                 profiler.EndEvent();
                 graph.compute();
@@ -485,7 +489,7 @@ float metricTestPosts(const HyperParams &hyper_params, ModelParams &model_params
                 float normal_perplex = computePerplex(nodes, word_ids, sentence_len);
                 normal_sum += normal_perplex;
                 int word_ids_size = word_ids.size();
-                auto keyword_nodes_and_ids = keywordNodesAndIds(keyword_decoder, idf_info,
+                auto keyword_nodes_and_ids = keywordNodesAndIds(keyword_decoder, *idf_info,
                         model_params);
                 keyword_size_sum += keyword_nodes_and_ids.first.size();
                 float keyword_ppl = computePerplex(keyword_nodes_and_ids.first,
@@ -949,21 +953,21 @@ int main(int argc, char *argv[]) {
                 return last_write_time(a) < last_write_time(b);
                 });
 
-//        float max_rep_perplex = 0.0f;
+        float max_rep_perplex = 0.0f;
         for(const string &model_file_path : ordered_file_paths) {
             cout << format("model_file_path:%1%") % model_file_path << endl;
             ModelParams model_params;
             shared_ptr<Json::Value> root_ptr = loadModel(model_file_path);
             loadModel(default_config, hyper_params, model_params, root_ptr.get(),
                     allocate_model_params);
-//            float rep_perplex = metricTestPosts(hyper_params, model_params, dev_post_and_responses,
-//                    post_sentences, response_sentences, response_idf_info_list);
-//            cout << format("model %1% rep_perplex is %2%") % model_file_path % rep_perplex << endl;
-//            if (max_rep_perplex < rep_perplex) {
-//                max_rep_perplex = rep_perplex;
-//                cout << format("best model now is %1%, and rep_perplex is %2%") % model_file_path %
-//                    rep_perplex << endl;
-//            }
+            float rep_perplex = metricTestPosts(hyper_params, model_params, dev_post_and_responses,
+                    post_sentences, response_sentences, all_idf, word_counts);
+            cout << format("model %1% rep_perplex is %2%") % model_file_path % rep_perplex << endl;
+            if (max_rep_perplex < rep_perplex) {
+                max_rep_perplex = rep_perplex;
+                cout << format("best model now is %1%, and rep_perplex is %2%") % model_file_path %
+                    rep_perplex << endl;
+            }
         }
     } else if (default_config.program_mode == ProgramMode::TRAINING) {
         ModelUpdate model_update;
