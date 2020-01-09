@@ -186,6 +186,9 @@ DefaultConfig parseDefaultConfig(INIReader &ini_reader) {
 HyperParams parseHyperParams(INIReader &ini_reader) {
     HyperParams hyper_params;
 
+    int keyword_decoder_layer = ini_reader.GetInteger("hyper", "keyword_decoder_layer", 1);
+    hyper_params.keyword_decoder_layer = keyword_decoder_layer;
+
     int word_dim = ini_reader.GetInteger("hyper", "word_dim", 0);
     if (word_dim <= 0) {
         cerr << "word_dim wrong" << endl;
@@ -469,7 +472,8 @@ float metricTestPosts(const HyperParams &hyper_params, ModelParams &model_params
                 GraphBuilder graph_builder;
                 graph_builder.forward(graph, post_sentences.at(post_and_responses.post_id),
                         hyper_params, model_params, false);
-                DecoderComponents keyword_decoder, normal_decoder;
+                DecoderComponents keyword_decoder(hyper_params.keyword_decoder_layer),
+                                  normal_decoder(1);
                 graph_builder.forwardDecoder(graph, normal_decoder, keyword_decoder,
                         response_sentences.at(response_id),
                         idf_info.keywords_behind,
@@ -540,7 +544,7 @@ void decodeTestPosts(const HyperParams &hyper_params, ModelParams &model_params,
         graph_builder.forward(graph, post_sentences.at(post_and_responses.post_id),
                 hyper_params, model_params, false);
         vector<DecoderComponents> decoder_components_vector;
-        decoder_components_vector.resize(hyper_params.beam_size);
+//        decoder_components_vector.resize(hyper_params.beam_size);
         auto pair = graph_builder.forwardDecoderUsingBeamSearch(graph, decoder_components_vector,
                 word_idf_table, hyper_params.beam_size, hyper_params, model_params, default_config,
                 black_list);
@@ -855,14 +859,16 @@ int main(int argc, char *argv[]) {
             }
         }
         model_params.attention_params.init(hyper_params.hidden_dim, hyper_params.hidden_dim);
+        model_params.clip_input_params.init(hyper_params.hidden_dim,
+                hyper_params.word_dim + hyper_params.hidden_dim);
         model_params.keyword_attention_params.init(hyper_params.hidden_dim,
                 hyper_params.hidden_dim);
         model_params.left_to_right_encoder_params.init(hyper_params.hidden_dim,
                 hyper_params.word_dim);
         model_params.left_to_right_decoder_params.init(hyper_params.hidden_dim,
                 2 * hyper_params.word_dim + hyper_params.hidden_dim);
-        model_params.keyword_decoder_params.init(hyper_params.hidden_dim,
-                hyper_params.word_dim + hyper_params.hidden_dim);
+        model_params.keyword_decoder_params.init(hyper_params.keyword_decoder_layer,
+                hyper_params.hidden_dim, hyper_params.word_dim + hyper_params.hidden_dim);
         model_params.hidden_to_wordvector_params.init(hyper_params.word_dim,
                 2 * hyper_params.hidden_dim + 2 * hyper_params.word_dim, false);
         model_params.hidden_to_keyword_params.init(hyper_params.word_dim,
@@ -1038,7 +1044,8 @@ int main(int argc, char *argv[]) {
                     response_size_sum += response_sentence.size();
                     const WordIdfInfo &idf_info = response_idf_info_list.at(response_id);
                     keyword_size_sum += idf_info.keyword_size;
-                    DecoderComponents keyword_decoder, normal_decoder;
+                    DecoderComponents keyword_decoder(hyper_params.keyword_decoder_layer),
+                                      normal_decoder(1);
                     graph_builder->forwardDecoder(graph, normal_decoder, keyword_decoder,
                             response_sentence, idf_info.keywords_behind, hyper_params,
                             model_params, true);
@@ -1127,7 +1134,8 @@ int main(int argc, char *argv[]) {
                         graph_builder.forward(graph, post_sentences.at(conversation_pair.post_id),
                                 hyper_params, model_params, true);
 
-                        DecoderComponents normal_decoder, keyword_decoder;
+                        DecoderComponents normal_decoder(1),
+                                          keyword_decoder(hyper_params.keyword_decoder_layer);
                         graph_builder.forwardDecoder(graph, normal_decoder, keyword_decoder,
                                 response_sentences.at(conversation_pair.response_id),
                                 response_idf_info_list.at(

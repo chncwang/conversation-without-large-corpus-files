@@ -17,6 +17,7 @@ enum Optimizer {
 };
 
 struct HyperParams : public N3LDGSerializable {
+    int keyword_decoder_layer;
     int word_dim;
     int hidden_dim;
     float dropout;
@@ -35,6 +36,7 @@ struct HyperParams : public N3LDGSerializable {
 
     Json::Value toJson() const override {
         Json::Value json;
+        json["keyword_decoder_layer"] = keyword_decoder_layer;
         json["word_dim"] = word_dim;
         json["hidden_dim"] = hidden_dim;
         json["dropout"] = dropout;
@@ -53,6 +55,7 @@ struct HyperParams : public N3LDGSerializable {
     }
 
     void fromJson(const Json::Value &json) override {
+        keyword_decoder_layer = json["keyword_decoder_layer"].asInt();
         word_dim = json["word_dim"].asInt();
         hidden_dim = json["hidden_dim"].asInt();
         dropout = json["dropout"].asFloat();
@@ -70,7 +73,8 @@ struct HyperParams : public N3LDGSerializable {
     }
 
     void print() const {
-        std::cout << "word_dim:" << word_dim << std::endl
+        std::cout << "keyword_decoder_layer:" << keyword_decoder_layer << std::endl
+            << "word_dim:" << word_dim << std::endl
             << "hidden_dim:" << hidden_dim << std::endl
             << "dropout:" << dropout << std::endl
             << "batch_size:" << batch_size << std::endl

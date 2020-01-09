@@ -46,7 +46,7 @@ string getSentence(const vector<int> &word_ids_vector, const ModelParams &model_
 
 class BeamSearchResult {
 public:
-    BeamSearchResult() {
+    BeamSearchResult(int layer) : decoder_components_(layer) {
         ngram_counts_ = {0, 0, 0};
     }
     BeamSearchResult(const BeamSearchResult &beam_search_result) = default;
@@ -251,7 +251,7 @@ vector<BeamSearchResult> mostProbableResults(
     for (int i = 0; i < nodes.size(); ++i) {
         const Node &node = *nodes.at(i);
 
-        BeamSearchResult beam_search_result;
+        BeamSearchResult beam_search_result(1);
         for (int j = 0; j < nodes.at(i)->getDim(); ++j) {
             if (j == model_params.lookup_table.getElemId(::unknownkey)) {
                 continue;
@@ -340,7 +340,7 @@ vector<BeamSearchResult> mostProbableKeywords(
             should_predict_keyword = path.at(size - 2).word_id == path.at(size - 1).word_id;
         }
         Node *node, *keyword_node, *hidden;
-        hidden = beam.at(ii).decoder._hiddens.at(word_pos);
+//        hidden = beam.at(ii).decoder._hiddens.at(word_pos);
 //        if (should_predict_keyword) {
 //            DecoderComponents &components = beam.at(ii);
 
@@ -414,7 +414,7 @@ vector<BeamSearchResult> mostProbableKeywords(
         } else {
             const Node &node = *nodes.at(i);
 
-            BeamSearchResult beam_search_result;
+            BeamSearchResult beam_search_result(hyper_params.keyword_decoder_layer);
             for (int j = 0; j < nodes.at(i)->getDim(); ++j) {
                 bool should_continue = false;
                 if (is_first) {
@@ -589,8 +589,8 @@ struct GraphBuilder {
             last_input = n3ldg_plus::dropout(graph, *last_input, hyper_params.dropout, is_training);
         }
         decoder.decoder_lookups.push_back(last_input);
-        decoder.forward(graph, hyper_params, model_params.keyword_decoder_params,
-                model_params.keyword_attention_params, *last_input,
+        decoder.forward(graph, hyper_params, model_params.keyword_decoder_params.ptrs(),
+                model_params.keyword_attention_params, &model_params.clip_input_params, *last_input,
                 left_to_right_encoder._hiddens, is_training);
 
         if (should_predict_keyword) {
