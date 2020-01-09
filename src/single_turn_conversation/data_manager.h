@@ -236,7 +236,6 @@ vector<vector<string>> reprocessSentences(const vector<vector<string>> &sentence
 struct WordIdfInfo {
     vector<float> word_idfs;
     vector<string> keywords_behind;
-    vector<shared_ptr<vector<dtype>>> keyword_distibutions;
     int keyword_size;
 
     WordIdfInfo() noexcept = default;
@@ -244,58 +243,52 @@ struct WordIdfInfo {
     WordIdfInfo(WordIdfInfo&& w) = default;
 };
 
-shared_ptr<WordIdfInfo> getWordIdfInfo(const vector<string> &sentence,
+WordIdfInfo getWordIdfInfo(const vector<string> &sentence,
+        bool is_in_train_set,
         const unordered_map<string, float> &word_idfs,
         const unordered_map<string, int> &word_id_table,
         const unordered_map<string, int> &word_counts,
-        int vocabulary_size) {
-    shared_ptr<WordIdfInfo> word_idf_info(new WordIdfInfo);
-    word_idf_info->word_idfs.reserve(sentence.size());
-    word_idf_info->keywords_behind.reserve(sentence.size());
-    word_idf_info->keyword_size = 0;
+        int cutoff) {
+    WordIdfInfo word_idf_info;
+    word_idf_info.word_idfs.reserve(sentence.size());
+    word_idf_info.keywords_behind.reserve(sentence.size());
+    word_idf_info.keyword_size = 0;
 
     for (const string &word : sentence) {
         float idf;
         auto it = word_counts.find(word);
         if (it == word_counts.end()) {
             idf = 0;
+        } else if (it->second <= cutoff) {
+            idf = 0;
         } else {
             auto it = word_idfs.find(word);
             idf = it->second;
         }
-        word_idf_info->word_idfs.push_back(idf);
+        word_idf_info.word_idfs.push_back(idf);
     }
 
-    auto &word_frequencies = word_idf_info->word_idfs;
+    auto &word_frequencies = word_idf_info.word_idfs;
     string last;
     for (int i = 0; i < word_frequencies.size(); ++i) {
-        if (i == 0 || last == sentence.at(i - 1)) {
-            float idf_sum = 0;
-            for (int j = i; j < word_frequencies.size(); ++j) {
-                idf_sum += word_frequencies.at(j);
-            }
-            shared_ptr<vector<dtype>> distribution(new vector<dtype>(vocabulary_size, 0.0));
-            for (int j = i; j < word_frequencies.size(); ++j) {
-                int word_id = word_id_table.at(sentence.at(j));
-                distribution->at(word_id) = idf_sum > 1e-3 ? (word_frequencies.at(j) / idf_sum) : 1;
-            }
-            word_idf_info->keyword_distibutions.push_back(move(distribution));
-        }
-
         int max_id = -1;
         string word;
         for (int j = i; j < word_frequencies.size(); ++j) {
             const auto &it  = word_id_table.find(sentence.at(j));
+            if (is_in_train_set && it == word_id_table.end()) {
+                cerr << sentence.at(j) << " not found" << endl;
+                abort();
+            }
             if (it->second >= max_id) {
                 word = sentence.at(j);
                 max_id = it->second;
             }
         }
 
-        word_idf_info->keywords_behind.push_back(word);
+        word_idf_info.keywords_behind.push_back(word);
 
         if (last != word) {
-            ++word_idf_info->keyword_size;
+            ++word_idf_info.keyword_size;
         }
 
         last = word;
@@ -312,11 +305,12 @@ vector<WordIdfInfo> readWordIdfInfoList(const vector<vector<string>> &sentences,
         int cutoff) {
     std::vector<WordIdfInfo> results;
 
-//    for (const auto &s : sentences) {
-//        auto info = getWordIdfInfo(s, word_idfs, word_id_table,
-//                word_counts, cutoff);
-//        results.push_back(move(info));
-//    }
+    int i = 0;
+    for (const auto &s : sentences) {
+        auto info = getWordIdfInfo(s, is_in_train_set.at(i++), word_idfs, word_id_table,
+                word_counts, cutoff);
+        results.push_back(move(info));
+    }
 
     return results;
 }
