@@ -67,6 +67,8 @@ struct DecoderComponents {
                         decoders.at(i - 2)._hiddens.back()};
                 }
                 Node *sum = n3ldg_plus::add(graph, sum_inputs);
+                cout << "decoder size:" << decoders.size() << " i:" << i << " decoder_params size:"
+                    << decoder_params.size() << endl;
                 decoders.at(i).forward(graph, *decoder_params.at(i),
                         *sum, *bucket(hyper_params.hidden_dim, graph),
                         *bucket(hyper_params.hidden_dim, graph), hyper_params.dropout,
