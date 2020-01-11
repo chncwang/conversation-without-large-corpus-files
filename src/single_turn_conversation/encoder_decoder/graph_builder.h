@@ -596,8 +596,10 @@ struct GraphBuilder {
         if (should_predict_keyword) {
             Node *decoder_to_wordvector = decoder.decoderToWordVectors(graph, hyper_params,
                     model_params.hidden_to_keyword_params, i);
-            Node *one_hot = n3ldg_plus::linearWordVector(graph, keyword_id_upper_open_bound,
-                    model_params.lookup_table.E, *decoder_to_wordvector);
+            int stop_id = model_params.lookup_table.elems.from_string(STOP_SYMBOL);
+            Node *one_hot = n3ldg_plus::linearWordVector(graph,
+                    keyword_id_upper_open_bound - stop_id, model_params.lookup_table.E,
+                    *decoder_to_wordvector, stop_id);
             one_hot = n3ldg_plus::softmax(graph, *one_hot);
             decoder.wordvector_to_onehots.push_back(one_hot);
         } else {

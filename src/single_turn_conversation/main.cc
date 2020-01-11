@@ -315,9 +315,10 @@ vector<int> toIds(const vector<string> &sentence, const LookupTable<Param> &look
     return ids;
 }
 
-void printWordIds(const vector<int> &word_ids, const LookupTable<Param> &lookup_table) {
+void printWordIds(const vector<int> &word_ids, const LookupTable<Param> &lookup_table,
+        int offset = 0) {
     for (int word_id : word_ids) {
-        cout << lookup_table.elems.from_id(word_id) << " ";
+        cout << lookup_table.elems.from_id(word_id + offset) << " ";
     }
     cout << endl;
 }
@@ -423,10 +424,16 @@ pair<vector<Node *>, vector<int>> keywordNodesAndIds(const DecoderComponents &de
     vector<int> keyword_ids = toIds(idf_info.keywords_behind, model_params.lookup_table, true);
     vector<Node *> non_null_nodes;
     vector<int> chnanged_keyword_ids;
+    int stop_id = model_params.lookup_table.elems.from_string(STOP_SYMBOL);
     for (int j = 0; j < keyword_result_nodes.size(); ++j) {
         if (keyword_result_nodes.at(j) != nullptr) {
             non_null_nodes.push_back(keyword_result_nodes.at(j));
-            chnanged_keyword_ids.push_back(keyword_ids.at(j));
+            int id = keyword_ids.at(j) - stop_id;
+            if (id < 0) {
+                cerr << "keywordNodesAndIds - id is less than 0:" << id << endl;
+                abort();
+            }
+            chnanged_keyword_ids.push_back(id);
         }
     }
 
@@ -1111,10 +1118,12 @@ int main(int argc, char *argv[]) {
                         cout << "output:" << endl;
                         printWordIds(result.second, model_params.lookup_table);
 
+                        int stop_id = model_params.lookup_table.elems.from_string(STOP_SYMBOL);
                         cout << "golden keywords:" << endl;
-                        printWordIds(keyword_nodes_and_ids.second, model_params.lookup_table);
+                        printWordIds(keyword_nodes_and_ids.second, model_params.lookup_table,
+                                stop_id);
                         cout << "output:" << endl;
-                        printWordIds(keyword_result.second, model_params.lookup_table);
+                        printWordIds(keyword_result.second, model_params.lookup_table, stop_id);
                     }
                 }
 
