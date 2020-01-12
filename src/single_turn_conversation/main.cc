@@ -452,8 +452,9 @@ float metricTestPosts(const HyperParams &hyper_params, ModelParams &model_params
     thread_pool pool(16);
     mutex rep_perplex_mutex;
     int size_sum = 0;
-    int normal_size_sum_sum = 0;
     int keyword_size_sum_sum = 0;
+    float normal_ppl_sum = 0;
+    float keyword_ppl_sum = 0;
 
     for (const PostAndResponses &post_and_responses : post_and_responses_vector) {
         auto f = [&]() {
@@ -519,8 +520,9 @@ float metricTestPosts(const HyperParams &hyper_params, ModelParams &model_params
             rep_perplex_mutex.lock();
             rep_perplex += avg_perplex;
             size_sum += sum;
-            normal_size_sum_sum += normal_sum;
             keyword_size_sum_sum += keyword_size_sum;
+            normal_ppl_sum += normal_sum;
+            keyword_ppl_sum += keyword_sum;
             rep_perplex_mutex.unlock();
         };
         post(pool, f);
@@ -529,6 +531,8 @@ float metricTestPosts(const HyperParams &hyper_params, ModelParams &model_params
     rep_perplex = exp(rep_perplex / size_sum);
 
     cout << "total avg perplex:" << rep_perplex << endl;
+    cout << "keyword:" << exp(keyword_ppl_sum / keyword_size_sum_sum);
+    cout << "normal:" << exp(normal_ppl_sum / size_sum);
     return rep_perplex;
 }
 
