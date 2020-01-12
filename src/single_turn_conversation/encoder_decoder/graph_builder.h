@@ -284,7 +284,7 @@ vector<BeamSearchResult> mostProbableResults(
 
 struct GraphBuilder {
     vector<Node *> encoder_lookups;
-    DynamicLSTMBuilder left_to_right_encoder;
+    DynamicGRUBuilder left_to_right_encoder;
 
     void forward(Graph &graph, const vector<string> &sentence,
             const HyperParams &hyper_params,
@@ -312,7 +312,7 @@ struct GraphBuilder {
 
         for (Node* node : encoder_lookups) {
             left_to_right_encoder.forward(graph, model_params.left_to_right_encoder_params, *node,
-                    *hidden_bucket, *hidden_bucket, hyper_params.dropout, is_training);
+                    *hidden_bucket, hyper_params.dropout, is_training);
         }
     }
 
@@ -352,7 +352,7 @@ struct GraphBuilder {
         }
 
         decoder_components.forward(graph, hyper_params, model_params, *last_input,
-                left_to_right_encoder._hiddens, is_training);
+                left_to_right_encoder.hiddens, is_training);
 
         Node *decoder_to_wordvector = decoder_components.decoderToWordVectors(graph, hyper_params,
                 model_params, i);

@@ -13,8 +13,8 @@ struct ModelParams : public N3LDGSerializable, public TunableCombination<BasePar
 {
     LookupTable<Param> lookup_table;
     UniParams hidden_to_wordvector_params;
-    LSTM1Params left_to_right_encoder_params;
-    LSTM1Params left_to_right_decoder_params;
+    GRUParams left_to_right_encoder_params;
+    GRUParams left_to_right_decoder_params;
     AdditiveAttentionParams attention_params;
 
     ModelParams() : hidden_to_wordvector_params("hidden_to_wordvector_params"),

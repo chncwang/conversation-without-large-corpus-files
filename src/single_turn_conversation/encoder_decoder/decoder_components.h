@@ -11,7 +11,7 @@ struct DecoderComponents {
     std::vector<DropoutNode *> decoder_lookups;
     std::vector<Node *> decoder_to_wordvectors;
     std::vector<Node *> wordvector_to_onehots;
-    DynamicLSTMBuilder decoder;
+    DynamicGRUBuilder decoder;
     vector<Node*> contexts;
 
     BucketNode *bucket(int dim, Graph &graph) {
@@ -28,7 +28,7 @@ struct DecoderComponents {
         shared_ptr<AdditiveAttentionBuilder> attention_builder(new AdditiveAttentionBuilder);
         Node *guide = decoder.size() == 0 ?
             static_cast<Node*>(bucket(hyper_params.hidden_dim,
-                        graph)) : static_cast<Node*>(decoder._hiddens.at(decoder.size() - 1));
+                        graph)) : static_cast<Node*>(decoder.hiddens.at(decoder.size() - 1));
 
 
         attention_builder->forward(graph, model_params.attention_params, encoder_hiddens, *guide);
@@ -41,7 +41,6 @@ struct DecoderComponents {
 
         decoder.forward(graph, model_params.left_to_right_decoder_params, *concat,
                 *bucket(hyper_params.hidden_dim, graph),
-                *bucket(hyper_params.hidden_dim, graph),
                 hyper_params.dropout, is_training);
     }
 
@@ -51,7 +50,7 @@ struct DecoderComponents {
         ConcatNode *concat_node = new ConcatNode();
         int context_dim = contexts.at(0)->getDim();
         concat_node->init(context_dim + hyper_params.hidden_dim + hyper_params.word_dim);
-        vector<Node *> concat_inputs = {contexts.at(i), decoder._hiddens.at(i),
+        vector<Node *> concat_inputs = {contexts.at(i), decoder.hiddens.at(i),
             i == 0 ? bucket(hyper_params.word_dim, graph) :
                 static_cast<Node*>(decoder_lookups.at(i - 1))};
         concat_node->forward(graph, concat_inputs);
