@@ -75,7 +75,8 @@ unordered_map<string, float> calculateIdf(const vector<vector<string>> sentences
         }
 
         utf8_string utf8(it.first);
-        if (utf8.length() == 1 || includePunctuation(utf8.cpp_str()) || !isPureChinese(it.first)) {
+        if (utf8.length() == 1 || includePunctuation(utf8.cpp_str()) || !isPureChinese(it.first) ||
+                idf >= 10 || idf < 5) {
             idf = -idf;
         }
 
@@ -843,8 +844,9 @@ int main(int argc, char *argv[]) {
     for (int i = 0; i < all_word_list.size(); ++i) {
         cout << all_word_list.at(i) << ":" ;
         cout << all_idf.at(all_word_list.at(i)) << " ";
-        cout << word_counts.at(all_word_list.at(i)) << "  ";
+        cout << word_counts.at(all_word_list.at(i)) << " ";
     }
+    cout << endl;
     alphabet.init(all_word_list);
     cout << boost::format("alphabet size:%1%") % alphabet.size() << endl;
 
