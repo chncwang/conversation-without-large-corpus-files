@@ -511,7 +511,7 @@ vector<BeamSearchResult> mostProbableKeywords(
 }
 
 struct GraphBuilder {
-    DynamicLSTMBuilder left_to_right_encoder;
+    DynamicGRUBuilder left_to_right_encoder;
 
     void forward(Graph &graph, const vector<string> &sentence, const HyperParams &hyper_params,
             ModelParams &model_params,
@@ -534,8 +534,7 @@ struct GraphBuilder {
             dropout_node->forward(graph, *input_lookup);
 
             left_to_right_encoder.forward(graph, model_params.left_to_right_encoder_params,
-                    *dropout_node, *hidden_bucket, *hidden_bucket, hyper_params.dropout,
-                    is_training);
+                    *dropout_node, *hidden_bucket, hyper_params.dropout, is_training);
         }
     }
 
@@ -591,7 +590,7 @@ struct GraphBuilder {
         decoder.decoder_lookups.push_back(last_input);
         decoder.forward(graph, hyper_params, model_params.keyword_decoder_params.ptrs(),
                 model_params.keyword_attention_params, &model_params.clip_input_params, *last_input,
-                left_to_right_encoder._hiddens, is_training);
+                left_to_right_encoder.hiddens, is_training);
 
         if (should_predict_keyword) {
             Node *decoder_to_wordvector = decoder.decoderToWordVectors(graph, hyper_params,
@@ -630,7 +629,7 @@ struct GraphBuilder {
         Node *concat = n3ldg_plus::concat(graph, {last_input, keyword_input});
         decoder.decoder_lookups.push_back(concat);
         decoder.forward(graph, hyper_params, model_params.left_to_right_decoder_params,
-                model_params.attention_params, *concat, left_to_right_encoder._hiddens,
+                model_params.attention_params, *concat, left_to_right_encoder.hiddens,
                 is_training);
 
         Node *decoder_to_wordvector = decoder.decoderToWordVectors(graph, hyper_params,
@@ -799,7 +798,7 @@ struct GraphBuilder {
                 for (auto &decoder_components : beam) {
                     forwardDecoderKeywordByOneStep(graph, decoder_components, i,
                             last_keywords.at(beam_i), hyper_params, model_params,
-                            left_to_right_encoder._hiddens);
+                            left_to_right_encoder.hiddens);
                     ++beam_i;
                 }
                 last_keywords.clear();
