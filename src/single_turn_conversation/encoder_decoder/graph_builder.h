@@ -344,7 +344,7 @@ vector<BeamSearchResult> mostProbableKeywords(
             should_predict_keyword = path.at(size - 2).word_id == path.at(size - 1).word_id;
         }
         Node *node, *keyword_node, *hidden;
-        hidden = beam.at(ii).decoder._hiddens.at(word_pos);
+        hidden = beam.at(ii).decoder.hiddens.at(word_pos);
         if (should_predict_keyword) {
             DecoderComponents &components = beam.at(ii);
 
@@ -358,7 +358,7 @@ vector<BeamSearchResult> mostProbableKeywords(
 
             ConcatNode *context_concated = new ConcatNode;
             context_concated->init(2 * hyper_params.hidden_dim);
-            context_concated->forward(graph, {components.decoder._hiddens.at(word_pos),
+            context_concated->forward(graph, {components.decoder.hiddens.at(word_pos),
                     components.contexts.at(word_pos)});
 
             Node *keyword = n3ldg_plus::linear(graph, model_params.hidden_to_keyword_params,
@@ -515,7 +515,7 @@ vector<BeamSearchResult> mostProbableKeywords(
 }
 
 struct GraphBuilder {
-    DynamicLSTMBuilder left_to_right_encoder;
+    DynamicGRUBuilder left_to_right_encoder;
 
     void forward(Graph &graph, const vector<string> &sentence, const HyperParams &hyper_params,
             ModelParams &model_params,
@@ -538,8 +538,7 @@ struct GraphBuilder {
             dropout_node->forward(graph, *input_lookup);
 
             left_to_right_encoder.forward(graph, model_params.left_to_right_encoder_params,
-                    *dropout_node, *hidden_bucket, *hidden_bucket, hyper_params.dropout,
-                    is_training);
+                    *dropout_node, *hidden_bucket, hyper_params.dropout, is_training);
         }
     }
 
@@ -631,10 +630,10 @@ struct GraphBuilder {
         decoder_components.decoder_keyword_lookups.push_back(dropout_keyword);
 
         decoder_components.forward(graph, hyper_params, model_params, *last_input, *last_keyword,
-                left_to_right_encoder._hiddens, is_training);
+                left_to_right_encoder.hiddens, is_training);
 
         auto nodes = decoder_components.decoderToWordVectors(graph, hyper_params,
-                model_params, left_to_right_encoder._hiddens, i, should_predict_keyword);
+                model_params, left_to_right_encoder.hiddens, i, should_predict_keyword);
         Node *decoder_to_wordvector = nodes.result;
         decoder_components.decoder_to_wordvectors.push_back(decoder_to_wordvector);
 
@@ -712,7 +711,7 @@ struct GraphBuilder {
         }
 
         decoder_components.forward(graph, hyper_params, model_params, *last_input, *last_keyword,
-                left_to_right_encoder._hiddens, false);
+                left_to_right_encoder.hiddens, false);
     }
 
     void forwardDecoderKeywordByOneStep(Graph &graph, DecoderComponents &decoder_components, int i,
@@ -819,7 +818,7 @@ struct GraphBuilder {
                 for (auto &decoder_components : beam) {
                     forwardDecoderKeywordByOneStep(graph, decoder_components, i,
                             last_keywords.at(beam_i), hyper_params, model_params,
-                            left_to_right_encoder._hiddens);
+                            left_to_right_encoder.hiddens);
                     ++beam_i;
                 }
                 last_keywords.clear();
