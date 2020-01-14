@@ -68,16 +68,18 @@ unordered_map<string, float> calculateIdf(const vector<vector<string>> sentences
 
     unordered_map<string, float> result;
     for (const auto &it : doc_counts) {
-        float idf;
-        if (it.first == unknownkey) {
-            idf = 0;
-        } else {
-            idf = log(sentences.size() / static_cast<float>(it.second));
-            if (idf < 0.0) {
-                cerr << "idf:" << idf << endl;
-                abort();
-            }
+        float idf = log(sentences.size() / static_cast<float>(it.second));
+        if (idf < 0.0) {
+            cerr << "idf:" << idf << endl;
+            abort();
         }
+
+        utf8_string utf8(it.first);
+        if (utf8.length() == 1 || includePunctuation(utf8.cpp_str()) || !isPureChinese(it.first) ||
+                idf <= 5) {
+            idf = -idf;
+        }
+
         result.insert(make_pair(it.first, idf));
     }
 
@@ -820,11 +822,11 @@ int main(int argc, char *argv[]) {
     vector<string> all_word_list = getAllWordsByIdfAscendingly(all_idf, word_counts,
                         hyper_params.word_cutoff);
     cout << "all_word_list size:" << all_word_list.size() << endl;
-//    for (int i = 0; i < 40000; ++i) {
-//        cout << all_word_list.at(i) << ":" ;
-//        cout << all_idf.at(all_word_list.at(i)) << " ";
-//        cout << word_counts.at(all_word_list.at(i)) << endl;
-//    }
+    for (int i = 0; i < all_word_list.size(); ++i) {
+        cout << all_word_list.at(i) << ":" ;
+        cout << all_idf.at(all_word_list.at(i)) << " ";
+        cout << word_counts.at(all_word_list.at(i)) << "  ";
+    }
     alphabet.init(all_word_list);
     cout << boost::format("alphabet size:%1%") % alphabet.size() << endl;
 
