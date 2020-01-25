@@ -808,6 +808,77 @@ int main(int argc, char *argv[]) {
         }
     }
 
+    unordered_map<string, unordered_map<string, float>> pmi_map = calPMI(post_sentences,
+            response_sentences, train_conversation_pairs);
+
+//    for (const auto &p : post_sentences) {
+//        print(p);
+//        unordered_map<string, float> pmi_sum_table;
+//        for (const auto &w : p) {
+//            unordered_map<string, float> w_table;
+//            const auto &pmi_map_it = pmi_map.find(w);
+//            if (pmi_map_it == pmi_map.end()) {
+//                cout << w << " not found in map" << endl;
+//                continue;
+//            }
+//            for (const auto &it : pmi_map_it->second) {
+//                const auto &w_table_it = w_table.find(it.first);
+//                if (w_table_it == w_table.end()) {
+//                    w_table.insert(make_pair(it.first, it.second));
+//                } else {
+//                    cerr << "main - w_table_it found" << endl;
+//                    abort();
+//                }
+//            }
+//            unordered_map<string, float> new_pmi_sum_table;
+//            for (const auto &w_table_it : w_table) {
+//                const auto &pmi_sum_table_it = pmi_sum_table.find(w_table_it.first);
+//                float v = pmi_sum_table_it == pmi_sum_table.end() ? w_table_it.second :
+//                    w_table_it.second + pmi_sum_table_it->second;
+//                new_pmi_sum_table.insert(make_pair(w_table_it.first, v));
+//            }
+//            swap(pmi_sum_table, new_pmi_sum_table);
+//        }
+
+//        auto cmp = [] (const pair<string, float> &a, const pair<string, float> &b) {
+//            return a.second > b.second;
+//        };
+
+//        priority_queue<pair<string, float>, vector<pair<string, float>>, decltype(cmp)> q(cmp);
+//        for (const auto &it : pmi_sum_table) {
+//            auto p = make_pair(it.first, it.second);
+//            if (q.size() < 10) {
+//                q.push(p);
+//            } else if (q.top().second < p.second) {
+//                q.pop();
+//                q.push(p);
+//            }
+//        }
+
+//        while (!q.empty()) {
+//            const auto &e = q.top();
+//            cout << e.first << ":" << e.second << " ";
+//            q.pop();
+//        }
+//        cout << endl;
+//    }
+
+    for (const auto &p : train_conversation_pairs) {
+        const auto &post = post_sentences.at(p.post_id);
+        print(post);
+        const auto &response = response_sentences.at(p.response_id);
+        print(response);
+        for (const auto &w : response) {
+            float sum = 0.0f;
+            for (const auto &post_w : post) {
+                sum += pmi_map.at(post_w).at(w);
+            }
+            cout << w << ":" << sum / post.size() << endl;;
+        }
+    }
+
+    exit(0);
+
     vector<vector<string>> all_sentences;
     for (auto &p : train_conversation_pairs) {
         auto &s = response_sentences.at(p.response_id);

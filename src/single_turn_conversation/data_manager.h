@@ -297,6 +297,105 @@ WordIdfInfo getWordIdfInfo(const vector<string> &sentence,
     return word_idf_info;
 }
 
+vector<unordered_set<string>> toWordSets(const vector<vector<string>> &sentences) {
+    vector<unordered_set<string>> results;
+    for (const auto & v : sentences) {
+        unordered_set<string> word_set;
+        for (const auto & w : v) {
+            word_set.insert(w);
+        }
+        results.push_back(move(word_set));
+    }
+
+    return results;
+}
+
+unordered_map<string, int> toOccurenceMap(const vector<unordered_set<string>> &word_sets) {
+    unordered_map<string, int> word_frequencies;
+    for (const auto &word_set : word_sets) {
+        for (const string &w : word_set) {
+            const auto &it = word_frequencies.find(w);
+            if (it == word_frequencies.end()) {
+                word_frequencies.insert(make_pair(w, 1));
+            } else {
+                it->second++;
+            }
+        }
+    }
+    return word_frequencies;
+}
+
+unordered_map<string, float> toIdfMap(const unordered_map<string, int> &word_frequencies,
+        int size) {
+    unordered_map<string, float> result;
+    for (const auto &it : word_frequencies) {
+        float idf = log((float)size / it.second);
+        result.insert(make_pair(it.first, idf));
+    }
+    return result;
+}
+
+unordered_map<string, unordered_map<string, float>> calPMI(
+        const vector<vector<string>> &post_sentences,
+        const vector<vector<string>> &response_sentences,
+        const vector<ConversationPair> &pairs) {
+    cout << "calculating post word sets..." << endl;
+    vector<unordered_set<string>> post_word_sets = toWordSets(post_sentences);
+    cout << "calculating response word sets..." << endl;
+    vector<unordered_set<string>> response_word_sets = toWordSets(response_sentences);
+    cout << "calculating post occurence map..." << endl;
+    unordered_map<string, int> occurence_map = toOccurenceMap(post_word_sets);
+    cout << "calculating response occurence map..." << endl;
+    unordered_map<string, int> response_occurence_map = toOccurenceMap(response_word_sets);
+    cout << "calculating post idf map..." << endl;
+    unordered_map<string, float> post_idf_map = toIdfMap(occurence_map, post_word_sets.size());
+    unordered_map<string, unordered_map<string, int>> conditional_post_occurence_map;
+    for (const ConversationPair &conv_pair : pairs) {
+        const unordered_set<string> &post_word_set = post_word_sets.at(conv_pair.post_id);
+        for (const string &post_word : post_word_set) {
+            const auto &outer_it = conditional_post_occurence_map.find(post_word);
+            unordered_map<string, int> *p;
+            if (outer_it == conditional_post_occurence_map.end()) {
+                unordered_map<string, int> m;
+                conditional_post_occurence_map.insert(make_pair(post_word, move(m)));
+                p = &conditional_post_occurence_map.find(post_word)->second;
+            } else {
+                p = &outer_it->second;
+            }
+            const unordered_set<string> &response_word_set =
+                response_word_sets.at(conv_pair.response_id);
+            for (const string &response_word : response_word_set) {
+                const auto &it = p->find(response_word);
+                if (it == p->end()) {
+                    p->insert(make_pair(response_word, 1));
+                } else {
+                    it->second++;
+                }
+            }
+        }
+    }
+
+    unordered_map<string, unordered_map<string, float>> pmi_map;
+    for (const auto &outter_it : conditional_post_occurence_map) {
+        unordered_map<string, float> m;
+        for (const auto &inner_it : outter_it.second) {
+            float pmi;
+            if (outter_it.first == STOP_SYMBOL || inner_it.first == STOP_SYMBOL) {
+                pmi = 0;
+            } else {
+                pmi = log((float)inner_it.second / response_occurence_map.at(inner_it.first)) +
+                    post_idf_map.at(outter_it.first);
+                if (pmi > 0)
+                    cout << "post:" << outter_it.first << " response:" << inner_it.first << pmi << endl;
+            }
+            m.insert(make_pair(inner_it.first, pmi));
+        }
+        pmi_map.insert(make_pair(outter_it.first, move(m)));
+    }
+
+    return pmi_map;
+}
+
 vector<WordIdfInfo> readWordIdfInfoList(const vector<vector<string>> &sentences,
         const vector<bool> &is_in_train_set,
         const unordered_map<string, float> &word_idfs,
