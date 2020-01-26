@@ -243,52 +243,37 @@ struct WordIdfInfo {
     WordIdfInfo(WordIdfInfo&& w) = default;
 };
 
-WordIdfInfo getWordIdfInfo(const vector<string> &sentence,
-        bool is_in_train_set,
-        const unordered_map<string, float> &word_idfs,
-        const unordered_map<string, int> &word_id_table,
-        const unordered_map<string, int> &word_counts,
-        int cutoff) {
-    WordIdfInfo word_idf_info;
-    word_idf_info.word_idfs.reserve(sentence.size());
-    word_idf_info.keywords_behind.reserve(sentence.size());
-    word_idf_info.keyword_size = 0;
+shared_ptr<WordIdfInfo> getWordIdfInfo(const vector<string> &post, const vector<string> &response,
+        const unordered_map<string, unordered_map<string, float>> &pmi_map) {
+    shared_ptr<WordIdfInfo> word_idf_info(new WordIdfInfo);
+    word_idf_info->word_idfs.reserve(response.size());
+    word_idf_info->keywords_behind.reserve(response.size());
+    word_idf_info->keyword_size = 0;
 
-    for (const string &word : sentence) {
-        float idf;
-        auto it = word_counts.find(word);
-        if (it == word_counts.end()) {
-            idf = 0;
-        } else if (it->second <= cutoff) {
-            idf = 0;
-        } else {
-            auto it = word_idfs.find(word);
-            idf = it->second;
+    for (const auto &w : response) {
+        float sum = 0.0f;
+        for (const auto &post_w : post) {
+            sum += pmi_map.at(post_w).at(w);
         }
-        word_idf_info.word_idfs.push_back(idf);
+        word_idf_info->word_idfs.push_back(sum / post.size());
     }
 
-    auto &word_frequencies = word_idf_info.word_idfs;
+    auto &word_pmis = word_idf_info->word_idfs;
     string last;
-    for (int i = 0; i < word_frequencies.size(); ++i) {
-        int max_id = -1;
+    for (int i = 0; i < word_pmis.size(); ++i) {
+        float max_v = -1;
         string word;
-        for (int j = i; j < word_frequencies.size(); ++j) {
-            const auto &it  = word_id_table.find(sentence.at(j));
-            if (is_in_train_set && it == word_id_table.end()) {
-                cerr << sentence.at(j) << " not found" << endl;
-                abort();
-            }
-            if (it->second >= max_id) {
-                word = sentence.at(j);
-                max_id = it->second;
+        for (int j = i; j < word_pmis.size(); ++j) {
+            if (word_pmis.at(j) >= max_v) {
+                word = response.at(j);
+                max_v = word_pmis.at(j);
             }
         }
 
-        word_idf_info.keywords_behind.push_back(word);
+        word_idf_info->keywords_behind.push_back(word);
 
         if (last != word) {
-            ++word_idf_info.keyword_size;
+            ++word_idf_info->keyword_size;
         }
 
         last = word;
@@ -385,8 +370,8 @@ unordered_map<string, unordered_map<string, float>> calPMI(
             } else {
                 pmi = log((float)inner_it.second / response_occurence_map.at(inner_it.first)) +
                     post_idf_map.at(outter_it.first);
-                if (pmi > 0)
-                    cout << "post:" << outter_it.first << " response:" << inner_it.first << pmi << endl;
+//                if (pmi > 0)
+//                    cout << "post:" << outter_it.first << " response:" << inner_it.first << pmi << endl;
             }
             m.insert(make_pair(inner_it.first, pmi));
         }
@@ -394,24 +379,6 @@ unordered_map<string, unordered_map<string, float>> calPMI(
     }
 
     return pmi_map;
-}
-
-vector<WordIdfInfo> readWordIdfInfoList(const vector<vector<string>> &sentences,
-        const vector<bool> &is_in_train_set,
-        const unordered_map<string, float> &word_idfs,
-        const unordered_map<string, int> &word_counts,
-        const unordered_map<string, int> &word_id_table,
-        int cutoff) {
-    std::vector<WordIdfInfo> results;
-
-    int i = 0;
-    for (const auto &s : sentences) {
-        auto info = getWordIdfInfo(s, is_in_train_set.at(i++), word_idfs, word_id_table,
-                word_counts, cutoff);
-        results.push_back(move(info));
-    }
-
-    return results;
 }
 
 std::vector<std::string> readBlackList(const std::string &filename) {
