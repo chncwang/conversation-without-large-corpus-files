@@ -455,12 +455,12 @@ float metricTestPosts(const HyperParams &hyper_params, ModelParams &model_params
             int sum = 0;
             cout << "response size:" << response_ids.size() << endl;
             for (int response_id : response_ids) {
-//                cout << "response:" << endl;
-//                auto response = response_sentences.at(response_id);
-//                print(response);
-//                const WordIdfInfo &idf_info = response_idf_info_list.at(response_id);
+                //                cout << "response:" << endl;
+                //                auto response = response_sentences.at(response_id);
+                //                print(response);
+                //                const WordIdfInfo &idf_info = response_idf_info_list.at(response_id);
                 auto idf_info = getWordIdfInfo(post, response_sentences.at(response_id), pmi_map);
-//                print(idf_info.keywords_behind);
+                //                print(idf_info.keywords_behind);
                 n3ldg_cuda::Profiler &profiler = n3ldg_cuda::Profiler::Ins();
                 profiler.BeginEvent("build computation graph");
                 Graph graph;
@@ -506,9 +506,10 @@ float metricTestPosts(const HyperParams &hyper_params, ModelParams &model_params
             size_sum += sum;
             rep_perplex_mutex.unlock();
         };
-        post(pool, f);
+        f();
+//        post(pool, f);
     }
-    pool.join();
+//    pool.join();
     rep_perplex = exp(rep_perplex / size_sum);
 
     cout << "total avg perplex:" << rep_perplex << endl;

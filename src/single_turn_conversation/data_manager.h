@@ -253,7 +253,11 @@ shared_ptr<WordIdfInfo> getWordIdfInfo(const vector<string> &post, const vector<
     for (const auto &w : response) {
         float sum = 0.0f;
         for (const auto &post_w : post) {
-            sum += pmi_map.at(post_w).at(w);
+            try {
+                sum += pmi_map.at(post_w).at(w);
+            } catch (const exception &e) {
+                sum -= 1e-10;
+            }
         }
         word_idf_info->word_idfs.push_back(sum / post.size());
     }
