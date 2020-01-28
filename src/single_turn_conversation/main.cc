@@ -856,7 +856,7 @@ int main(int argc, char *argv[]) {
 
                 graph.backward();
 
-                if (default_config.check_grad) {
+                if (default_config.check_grad && batch_i > 100) {
                     auto loss_function = [&](const ConversationPair &conversation_pair) -> dtype {
                         GraphBuilder graph_builder;
                         Graph graph(false);
@@ -875,7 +875,8 @@ int main(int argc, char *argv[]) {
                                     conversation_pair.response_id), model_params.lookup_table);
                         vector<Node*> result_nodes = toNodePointers(
                                 decoder_components.wordvector_to_onehots);
-                        return maxLogProbabilityLoss(result_nodes, word_ids, 1).first;
+                        return maxLogProbabilityLoss(result_nodes, word_ids, 1.0f /
+                                len_sum * hyper_params.batch_size).first;
                     };
                     cout << format("checking grad - conversation_pair size:%1%") %
                         conversation_pair_in_batch.size() << endl;
