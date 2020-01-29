@@ -8,6 +8,7 @@
 #include <unordered_set>
 #include <memory>
 #include <iomanip>
+#include <chrono>
 #include <ctime>
 #include <sstream>
 #include <fstream>
@@ -786,9 +787,12 @@ int main(int argc, char *argv[]) {
 
 
             unique_ptr<Metric> metric = unique_ptr<Metric>(new Metric);
+            int duration_sum(0);
             for (int batch_i = 0; batch_i < batch_count +
                     (train_conversation_pairs.size() > hyper_params.batch_size * batch_count);
                     ++batch_i) {
+                using namespace std::chrono;
+                auto start = high_resolution_clock::now();
                 cout << format("batch_i:%1% iteration:%2%") % batch_i % iteration << endl;
                 int batch_size = batch_i == batch_count ?
                     train_conversation_pairs.size() % hyper_params.batch_size :
@@ -901,6 +905,10 @@ int main(int argc, char *argv[]) {
                 }
 
                 ++iteration;
+                auto stop = high_resolution_clock::now();
+                auto duration = duration_cast<std::chrono::milliseconds>(stop - start);
+                duration_sum += duration.count();
+                cout << "training time in micro" << duration_sum / (batch_i + 1) << endl;
             }
 
             cout << "loss_sum:" << loss_sum << " last_loss_sum:" << endl;
