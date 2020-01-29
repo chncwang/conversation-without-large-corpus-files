@@ -506,10 +506,9 @@ float metricTestPosts(const HyperParams &hyper_params, ModelParams &model_params
             size_sum += sum;
             rep_perplex_mutex.unlock();
         };
-        f();
-//        post(pool, f);
+        post(pool, f);
     }
-//    pool.join();
+    pool.join();
     rep_perplex = exp(rep_perplex / size_sum);
 
     cout << "total avg perplex:" << rep_perplex << endl;
