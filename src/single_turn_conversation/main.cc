@@ -406,6 +406,10 @@ void loadModel(const DefaultConfig &default_config, HyperParams &hyper_params,
         const function<void(const DefaultConfig &default_config, const HyperParams &hyper_params,
             ModelParams &model_params, const Alphabet*)> &allocate_model_params) {
     hyper_params.fromJson((*root)["hyper_params"]);
+    if (default_config.check_grad) {
+        hyper_params.batch_size = 1;
+        hyper_params.dropout = 0;
+    }
     hyper_params.print();
     allocate_model_params(default_config, hyper_params, model_params, nullptr);
     model_params.fromJson((*root)["model_params"]);
@@ -1196,9 +1200,9 @@ int main(int argc, char *argv[]) {
                         auto keyword_nodes_and_ids = keywordNodesAndIds(
                                 decoder_components, *word_info, model_params);
                         return MaxLogProbabilityLossWithInconsistentDims(
-                                keyword_nodes_and_ids.first, keyword_nodes_and_ids.second, 1,
+                                keyword_nodes_and_ids.first, keyword_nodes_and_ids.second, keyword_size_sum,
                                 model_params.lookup_table.nVSize).first +
-                            MaxLogProbabilityLossWithInconsistentDims( result_nodes, word_ids, 1,
+                            MaxLogProbabilityLossWithInconsistentDims( result_nodes, word_ids, response_size_sum,
                                     model_params.lookup_table.nVSize).first;
                     };
                     cout << format("checking grad - conversation_pair size:%1%") %
