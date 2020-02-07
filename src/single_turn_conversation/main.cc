@@ -286,7 +286,7 @@ string saveModel(const HyperParams &hyper_params, ModelParams &model_params,
     oss << put_time(&tm, "%d-%m-%Y-%H-%M-%S");
     string filename = filename_prefix + oss.str() + "-epoch" + to_string(epoch);
 #if USE_GPU
-    model_params.copyFromDeviceToHost();
+    model_params.copyFromDeviceToHost(nullptr);
 #endif
 
     Json::Value root;
@@ -337,7 +337,7 @@ void loadModel(const DefaultConfig &default_config, HyperParams &hyper_params,
     allocate_model_params(default_config, hyper_params, model_params, nullptr);
     model_params.fromJson((*root)["model_params"]);
 #if USE_GPU
-    model_params.copyFromHostToDevice();
+    model_params.copyFromHostToDevice(nullptr);
 #endif
 }
 
@@ -923,7 +923,7 @@ int main(int argc, char *argv[]) {
                 std::shared_ptr<Json::Value> root = loadModel(last_saved_model);
                 model_params.fromJson((*root)["model_params"]);
 #if USE_GPU
-                model_params.copyFromHostToDevice();
+                model_params.copyFromHostToDevice(nullptr);
 #endif
             } else {
                 model_update._alpha = (model_update._alpha - hyper_params.min_learning_rate) *

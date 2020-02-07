@@ -198,7 +198,7 @@ vector<BeamSearchResult> mostProbableResults(
         Node &node = *nodes.at(i);
 #if USE_GPU
         node.val().initOnMemory(node.getDim());
-        node.val().copyFromDeviceToHost();
+        node.val().copyFromDeviceToHost(nullptr);
 #endif
 
         for (int j = 0; j < nodes.at(i)->getDim(); ++j) {
