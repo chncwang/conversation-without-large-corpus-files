@@ -146,8 +146,7 @@ void printWordIds(const vector<WordIdAndProbability> &word_ids_with_probability_
 }
 
 void printWordIdsWithKeywords(const vector<WordIdAndProbability> &word_ids_with_probability_vector,
-        const LookupTable<Param> &lookup_table,
-        const unordered_map<string, float> &idf_table) {
+        const LookupTable<Param> &lookup_table) {
     cout << "keywords:" << endl;
     for (int i = 0; i < word_ids_with_probability_vector.size(); i += 2) {
         cout << lookup_table.elems.from_id(word_ids_with_probability_vector.at(i).word_id);
@@ -225,8 +224,7 @@ vector<BeamSearchResult> mostProbableResults(
         const ModelParams &model_params,
         const DefaultConfig &default_config,
         bool is_first,
-        const vector<string> &black_list,
-        const unordered_map<string, float> &idf_table) {
+        const vector<string> &black_list) {
     vector<Node *> nodes;
     int beam_i = 0;
     for (const DecoderComponents &decoder_components : beam) {
@@ -312,7 +310,7 @@ vector<BeamSearchResult> mostProbableResults(
         final_results.push_back(result);
         cout << boost::format("mostProbableResults - i:%1% prob:%2% score:%3%") % i %
             result.finalLogProbability() % result.finalScore() << endl;
-        printWordIdsWithKeywords(result.getPath(), model_params.lookup_table, idf_table);
+        printWordIdsWithKeywords(result.getPath(), model_params.lookup_table);
         ++i;
     }
 
@@ -322,7 +320,6 @@ vector<BeamSearchResult> mostProbableResults(
 vector<BeamSearchResult> mostProbableKeywords(
         vector<DecoderComponents> &beam,
         const vector<BeamSearchResult> &last_results,
-        const unordered_map<string ,float> word_idf_table,
         int word_pos,
         int k,
         Graph &graph,
@@ -374,7 +371,7 @@ vector<BeamSearchResult> mostProbableKeywords(
             }
 
             LinearWordVectorNode *keyword_vector_to_onehot = new LinearWordVectorNode;
-            keyword_vector_to_onehot->init(last_keyword_id + 1);
+            keyword_vector_to_onehot->init(model_params.lookup_table.nVSize);
             keyword_vector_to_onehot->setParam(model_params.lookup_table.E);
             keyword_vector_to_onehot->forward(graph, *keyword);
 
@@ -398,7 +395,6 @@ vector<BeamSearchResult> mostProbableKeywords(
     priority_queue<BeamSearchResult, vector<BeamSearchResult>, decltype(cmp)> queue(cmp);
     vector<BeamSearchResult> results;
     for (int i = 0; i < (is_first ? 1 : nodes.size()); ++i) {
-//    for (int i = 0; i < nodes.size(); ++i) {
         const Node *node_ptr = nodes.at(i);
         if (node_ptr == nullptr) {
             vector<WordIdAndProbability> new_id_and_probs = last_results.at(i).getPath();
@@ -430,20 +426,12 @@ vector<BeamSearchResult> mostProbableKeywords(
                     continue;
                 }
 
-                if (word_idf_table.at(model_params.lookup_table.elems.from_id(j)) >= 9.0f) {
-                    break;
-                }
-
                 for (const string &black : black_list) {
                     if (black == model_params.lookup_table.elems.from_id(j)) {
                         should_continue = true;
                     }
                 }
                 if (should_continue) {
-                    continue;
-                }
-                const string &word = model_params.lookup_table.elems.from_id(j);
-                if (word_pos == 0 && word_idf_table.at(word) <= default_config.keyword_bound) {
                     continue;
                 }
                 dtype value = node.getVal().v[j];
@@ -468,7 +456,6 @@ vector<BeamSearchResult> mostProbableKeywords(
                 word_ids.push_back(WordIdAndProbability(node.getDim(), j, word_probability));
 
                 BeamSearchResult local = BeamSearchResult(beam.at(i), word_ids, log_probability);
-//                if (local_queue.size() < min(k, node.getDim() / 10 + 1)) {
                 if (queue.size() < k) {
                     queue.push(local);
                 } else if (queue.top().finalScore() < local.finalScore()) {
@@ -482,7 +469,7 @@ vector<BeamSearchResult> mostProbableKeywords(
     while (!queue.empty()) {
         auto &e = queue.top();
         if (e.finalScore() != e.finalScore()) {
-            printWordIdsWithKeywords(e.getPath(), model_params.lookup_table, word_idf_table);
+            printWordIdsWithKeywords(e.getPath(), model_params.lookup_table);
             cerr << "final score nan" << endl;
             abort();
         }
@@ -507,7 +494,7 @@ vector<BeamSearchResult> mostProbableKeywords(
         final_results.push_back(result);
         cout << boost::format("mostProbableKeywords - i:%1% prob:%2% score:%3%") % i %
             result.finalLogProbability() % result.finalScore() << endl;
-        printWordIdsWithKeywords(result.getPath(), model_params.lookup_table, word_idf_table);
+        printWordIdsWithKeywords(result.getPath(), model_params.lookup_table);
         ++i;
     }
 
@@ -731,9 +718,8 @@ struct GraphBuilder {
                 hyper_params, model_params, encoder_hiddens, i, false);
         Node *result_node = result.result;
 
-        int keyword_id = model_params.lookup_table.elems.from_string(keyword);
         LinearWordVectorNode *one_hot_node = new LinearWordVectorNode;
-        one_hot_node->init(keyword_id + 1);
+        one_hot_node->init(model_params.lookup_table.nVSize);
         one_hot_node->setParam(model_params.lookup_table.E);
         one_hot_node->forward(graph, *result_node);
         Node *softmax = n3ldg_plus::softmax(graph, *one_hot_node);
@@ -742,7 +728,6 @@ struct GraphBuilder {
 
     pair<vector<WordIdAndProbability>, dtype> forwardDecoderUsingBeamSearch(Graph &graph,
             const vector<DecoderComponents> &decoder_components_beam,
-            const unordered_map<string, float> &word_idf_table,
             int k,
             const HyperParams &hyper_params,
             ModelParams &model_params,
@@ -787,7 +772,7 @@ struct GraphBuilder {
                 graph.compute();
 
                 most_probable_results = mostProbableKeywords(beam, most_probable_results,
-                        word_idf_table, i, k, graph, model_params, hyper_params,
+                        i, k, graph, model_params, hyper_params,
                         default_config, i == 0, searched_ids, black_list);
                 for (int beam_i = 0; beam_i < beam.size(); ++beam_i) {
                     DecoderComponents &decoder_components = beam.at(beam_i);
@@ -825,7 +810,7 @@ struct GraphBuilder {
 
                 last_answers.clear();
                 most_probable_results = mostProbableResults(beam, most_probable_results, i,
-                        k, model_params, default_config, i == 0, black_list, word_idf_table);
+                        k, model_params, default_config, i == 0, black_list);
                 cout << boost::format("most_probable_results size:%1%") %
                     most_probable_results.size() << endl;
                 beam.clear();
@@ -867,7 +852,7 @@ struct GraphBuilder {
         for (const auto &pair : word_ids_result) {
             const vector<WordIdAndProbability> ids = pair.first;
             cout << boost::format("beam result:%1%") % exp(pair.second) << endl;
-            printWordIdsWithKeywords(ids, model_params.lookup_table, word_idf_table);
+            printWordIdsWithKeywords(ids, model_params.lookup_table);
         }
 
         auto compair = [](const pair<vector<WordIdAndProbability>, dtype> &a,
