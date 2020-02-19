@@ -235,8 +235,7 @@ vector<vector<string>> reprocessSentences(const vector<vector<string>> &sentence
 
 struct WordIdfInfo {
     vector<float> word_idfs;
-    vector<string> keywords_behind;
-    int keyword_size;
+    string keyword;
 
     WordIdfInfo() noexcept = default;
     WordIdfInfo(const WordIdfInfo&) = delete;
@@ -247,8 +246,6 @@ shared_ptr<WordIdfInfo> getWordIdfInfo(const vector<string> &post, const vector<
         const unordered_map<string, unordered_map<string, float>> &pmi_map) {
     shared_ptr<WordIdfInfo> word_idf_info(new WordIdfInfo);
     word_idf_info->word_idfs.reserve(response.size());
-    word_idf_info->keywords_behind.reserve(response.size());
-    word_idf_info->keyword_size = 0;
 
     for (const auto &w : response) {
         float sum = 0.0f;
@@ -263,25 +260,15 @@ shared_ptr<WordIdfInfo> getWordIdfInfo(const vector<string> &post, const vector<
     }
 
     auto &word_pmis = word_idf_info->word_idfs;
-    string last;
-    for (int i = 0; i < word_pmis.size(); ++i) {
-        float max_v = -1;
-        string word;
-        for (int j = i; j < word_pmis.size(); ++j) {
-            if (word_pmis.at(j) >= max_v) {
-                word = response.at(j);
-                max_v = word_pmis.at(j);
-            }
+    float max_v = -1;
+    string word;
+    for (int j = 0; j < word_pmis.size(); ++j) {
+        if (word_pmis.at(j) >= max_v) {
+            word = response.at(j);
+            max_v = word_pmis.at(j);
         }
-
-        word_idf_info->keywords_behind.push_back(word);
-
-        if (last != word) {
-            ++word_idf_info->keyword_size;
-        }
-
-        last = word;
     }
+    word_idf_info->keyword = word;
 
     return word_idf_info;
 }

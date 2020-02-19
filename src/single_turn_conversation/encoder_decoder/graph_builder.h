@@ -318,151 +318,63 @@ vector<BeamSearchResult> mostProbableResults(
 }
 
 vector<BeamSearchResult> mostProbableKeywords(
-        vector<DecoderComponents> &beam,
-        const vector<BeamSearchResult> &last_results,
-        int word_pos,
+        DecoderComponents &beam,
+        Node &keyword_onehot,
         int k,
         Graph &graph,
         ModelParams &model_params,
         const HyperParams &hyper_params,
         const DefaultConfig &default_config,
-        bool is_first,
         set<int> &searched_ids,
         const vector<string> &black_list) {
     cout << "black size:" << black_list.size() << endl;
     vector<Node *> keyword_nodes, hiddens, nodes;
-    for (int ii = 0; ii < beam.size(); ++ii) {
-        bool should_predict_keyword;
-        if (last_results.empty()) {
-            should_predict_keyword = true;
-        } else {
-            vector<WordIdAndProbability> path = last_results.at(ii).getPath();
-            int size = path.size();
-            should_predict_keyword = path.at(size - 2).word_id == path.at(size - 1).word_id;
-        }
-        Node *node, *keyword_node, *hidden;
-        hidden = beam.at(ii).decoder._hiddens.at(word_pos);
-        if (should_predict_keyword) {
-            DecoderComponents &components = beam.at(ii);
-
-            ConcatNode *concat_node = new ConcatNode();
-            concat_node->init(hyper_params.hidden_dim);
-            if (components.decoder_lookups.size() != word_pos) {
-                cerr << boost::format("size:%1% word_pos:%2%") % components.decoder_lookups.size()
-                    % word_pos << endl;
-                abort();
-            }
-
-            ConcatNode *context_concated = new ConcatNode;
-            context_concated->init(2 * hyper_params.hidden_dim);
-            context_concated->forward(graph, {components.decoder._hiddens.at(word_pos),
-                    components.contexts.at(word_pos)});
-
-            Node *keyword = n3ldg_plus::linear(graph, model_params.hidden_to_keyword_params,
-                    *context_concated);
-            keyword_node = keyword;
-
-            int last_keyword_id;
-            if (last_results.empty()) {
-                last_keyword_id = model_params.lookup_table.nVSize - 1;
-            } else {
-                vector<WordIdAndProbability> path = last_results.at(ii).getPath();
-                last_keyword_id = path.at(path.size() - 2).word_id;
-            }
-
-            LinearWordVectorNode *keyword_vector_to_onehot = new LinearWordVectorNode;
-            keyword_vector_to_onehot->init(model_params.lookup_table.nVSize);
-            keyword_vector_to_onehot->setParam(model_params.lookup_table.E);
-            keyword_vector_to_onehot->forward(graph, *keyword);
-
-            Node *softmax = n3ldg_plus::softmax(graph, *keyword_vector_to_onehot);
-
-            components.keyword_vector_to_onehots.push_back(softmax);
-            node = softmax;
-        } else {
-            node = nullptr;
-            keyword_node = nullptr;
-        }
-        nodes.push_back(node);
-        keyword_nodes.push_back(keyword_node);
-        hiddens.push_back(hidden);
-    }
-    graph.compute();
 
     auto cmp = [](const BeamSearchResult &a, const BeamSearchResult &b) {
         return a.finalScore() > b.finalScore();
     };
     priority_queue<BeamSearchResult, vector<BeamSearchResult>, decltype(cmp)> queue(cmp);
     vector<BeamSearchResult> results;
-    for (int i = 0; i < (is_first ? 1 : nodes.size()); ++i) {
-        const Node *node_ptr = nodes.at(i);
-        if (node_ptr == nullptr) {
-            vector<WordIdAndProbability> new_id_and_probs = last_results.at(i).getPath();
-            WordIdAndProbability &last_keyword = new_id_and_probs.at(new_id_and_probs.size() - 2);
-            WordIdAndProbability &last_norm = new_id_and_probs.at(new_id_and_probs.size() - 1);
-            WordIdAndProbability w = {last_keyword.dim, last_keyword.word_id,
-                last_norm.probability};
-            new_id_and_probs.push_back(w);
-            BeamSearchResult beam_search_result(beam.at(i), new_id_and_probs,
-                    last_results.at(i).finalLogProbability());
-            if (queue.size() < k) {
-                queue.push(beam_search_result);
-            } else if (queue.top().finalScore() < beam_search_result.finalScore()) {
-                queue.pop();
-                queue.push(beam_search_result);
+
+    BeamSearchResult beam_search_result;
+    for (int j = 0; j < keyword_onehot.getDim(); ++j) {
+        bool should_continue = false;
+        if (searched_ids.find(j) != searched_ids.end()) {
+            continue;
+        }
+        if (j == model_params.lookup_table.getElemId(::unknownkey)) {
+            continue;
+        }
+
+        for (const string &black : black_list) {
+            if (black == model_params.lookup_table.elems.from_id(j)) {
+                should_continue = true;
             }
-        } else {
-            const Node &node = *nodes.at(i);
+        }
+        if (should_continue) {
+            continue;
+        }
+        dtype value = keyword_onehot.getVal().v[j];
+        dtype log_probability = log(value);
+        dtype word_probability = value;
+        vector<WordIdAndProbability> word_ids;
+        if (log_probability != log_probability) {
+            cerr << keyword_onehot.getVal().vec() << endl;
+            Json::StreamWriterBuilder builder;
+            builder["commentStyle"] = "None";
+            builder["indentation"] = "";
+            string json_str = Json::writeString(builder, model_params.hidden_to_keyword_params.W.toJson());
+            cerr << "param W:" << endl << json_str << endl;
+            abort();
+        }
+        word_ids.push_back(WordIdAndProbability(keyword_onehot.getDim(), j, word_probability));
 
-            BeamSearchResult beam_search_result;
-            for (int j = 0; j < nodes.at(i)->getDim(); ++j) {
-                bool should_continue = false;
-                if (is_first) {
-                    if (searched_ids.find(j) != searched_ids.end()) {
-                        continue;
-                    }
-                }
-                if (j == model_params.lookup_table.getElemId(::unknownkey)) {
-                    continue;
-                }
-
-                for (const string &black : black_list) {
-                    if (black == model_params.lookup_table.elems.from_id(j)) {
-                        should_continue = true;
-                    }
-                }
-                if (should_continue) {
-                    continue;
-                }
-                dtype value = node.getVal().v[j];
-                dtype log_probability = log(value);
-                dtype word_probability = value;
-                vector<WordIdAndProbability> word_ids;
-                if (!last_results.empty()) {
-                    log_probability += last_results.at(i).finalLogProbability();
-                    word_ids = last_results.at(i).getPath();
-                }
-                if (log_probability != log_probability) {
-                    cerr << node.getVal().vec() << endl;
-                    cerr << "keyword node:" << endl << keyword_nodes.at(i)->getVal().vec() << endl;
-                    cerr << "hidden node:" << endl << hiddens.at(i)->getVal().vec() << endl;
-                    Json::StreamWriterBuilder builder;
-                    builder["commentStyle"] = "None";
-                    builder["indentation"] = "";
-                    string json_str = Json::writeString(builder, model_params.hidden_to_keyword_params.W.toJson());
-                    cerr << "param W:" << endl << json_str << endl;
-                    abort();
-                }
-                word_ids.push_back(WordIdAndProbability(node.getDim(), j, word_probability));
-
-                BeamSearchResult local = BeamSearchResult(beam.at(i), word_ids, log_probability);
-                if (queue.size() < k) {
-                    queue.push(local);
-                } else if (queue.top().finalScore() < local.finalScore()) {
-                    queue.pop();
-                    queue.push(local);
-                }
-            }
+        BeamSearchResult local = BeamSearchResult(beam, word_ids, log_probability);
+        if (queue.size() < k) {
+            queue.push(local);
+        } else if (queue.top().finalScore() < local.finalScore()) {
+            queue.pop();
+            queue.push(local);
         }
     }
 
@@ -473,14 +385,12 @@ vector<BeamSearchResult> mostProbableKeywords(
             cerr << "final score nan" << endl;
             abort();
         }
-        if (is_first) {
-            int size = e.getPath().size();
-            if (size != 1) {
-                cerr << boost::format("size is not 1:%1%\n") % size;
-                abort();
-            }
-            searched_ids.insert(e.getPath().at(0).word_id);
+        int size = e.getPath().size();
+        if (size != 1) {
+            cerr << boost::format("size is not 1:%1%\n") % size;
+            abort();
         }
+        searched_ids.insert(e.getPath().at(0).word_id);
         results.push_back(e);
         queue.pop();
     }
@@ -503,6 +413,7 @@ vector<BeamSearchResult> mostProbableKeywords(
 
 struct GraphBuilder {
     DynamicLSTMBuilder left_to_right_encoder;
+    Node *keyword_onehot;
 
     void forward(Graph &graph, const vector<string> &sentence, const HyperParams &hyper_params,
             ModelParams &model_params,
@@ -528,26 +439,39 @@ struct GraphBuilder {
                     *dropout_node, *hidden_bucket, *hidden_bucket, hyper_params.dropout,
                     is_training);
         }
+
+        vector<Node *> keyword_hiddens;
+        for (int i = 0; i < sentence.size(); ++i) {
+            Node *keyword_hidden = n3ldg_plus::linear(graph,
+                    model_params.encoder_to_keyword_hidden_params,
+                    *left_to_right_encoder._hiddens.at(i));
+            keyword_hiddens.push_back(keyword_hidden);
+        }
+        keyword_onehot = n3ldg_plus::maxPool(graph, keyword_hiddens);
+        keyword_onehot = n3ldg_plus::linear(graph, model_params.hidden_to_keyword_params,
+                *keyword_onehot);
+        keyword_onehot = n3ldg_plus::linearWordVector(graph, model_params.lookup_table.nVSize,
+                model_params.lookup_table.E, *keyword_onehot);
+        keyword_onehot = n3ldg_plus::softmax(graph, *keyword_onehot);
     }
 
     void forwardDecoder(Graph &graph, DecoderComponents &decoder_components,
             const std::vector<std::string> &answer,
-            const std::vector<std::string> &keywords,
+            const std::string &keyword,
             const HyperParams &hyper_params,
             ModelParams &model_params,
             bool is_training) {
+        Node *keyword_lookup = n3ldg_plus::embedding(graph, model_params.lookup_table, keyword);
+        keyword_lookup = n3ldg_plus::dropout(graph, *keyword_lookup, hyper_params.dropout,
+                is_training);
+        decoder_components.keyword_embedding = keyword_lookup;
+
         int keyword_bound = model_params.lookup_table.nVSize;
         int normal_bound = model_params.lookup_table.nVSize;
 
         for (int i = 0; i < answer.size(); ++i) {
-            if (normal_bound > keyword_bound) {
-                print(answer);
-                print(keywords);
-                abort();
-            }
             forwardDecoderByOneStep(graph, decoder_components, i,
-                    i == 0 ? nullptr : &answer.at(i - 1), keywords.at(i),
-                    i == 0 ||  answer.at(i - 1) == keywords.at(i - 1), hyper_params,
+                    i == 0 ? nullptr : &answer.at(i - 1), keyword, i == 0, hyper_params,
                     model_params, is_training, keyword_bound, normal_bound);
         }
     }
@@ -573,7 +497,7 @@ struct GraphBuilder {
             abort();
         }
 
-        Node *last_input, *last_keyword;
+        Node *last_input;
         if (i > 0) {
             LookupNode<Param>* before_dropout(new LookupNode<Param>);
             before_dropout->init(hyper_params.word_dim);
@@ -590,36 +514,18 @@ struct GraphBuilder {
                 abort();
             }
             last_input = decoder_components.decoder_lookups.back();
-
-            int size = decoder_components.decoder_keyword_lookups.size();
-            if (i != size) {
-                cerr << boost::format("i is not equal to keyword lookup size i:%1% size:%2%") % i %
-                    size << endl;
-                abort();
-            }
-            last_keyword = decoder_components.decoder_keyword_lookups.back();
         } else {
             BucketNode *bucket = new BucketNode;
             bucket->init(hyper_params.word_dim);
             bucket->forward(graph);
             last_input = bucket;
-            last_keyword = bucket;
         }
 
-        LookupNode<Param> *keyword_node(new LookupNode<Param>);
-        keyword_node->init(hyper_params.word_dim);
-        keyword_node->setParam(model_params.lookup_table);
-        keyword_node->forward(graph, keyword);
-        Node * dropout_keyword = n3ldg_plus::dropout(graph, *keyword_node, hyper_params.dropout,
-                is_training);
-        decoder_components.decoder_keyword_lookups.push_back(dropout_keyword);
-
-        decoder_components.forward(graph, hyper_params, model_params, *last_input, *last_keyword,
+        decoder_components.forward(graph, hyper_params, model_params, *last_input,
                 left_to_right_encoder._hiddens, is_training);
 
-        auto nodes = decoder_components.decoderToWordVectors(graph, hyper_params,
-                model_params, left_to_right_encoder._hiddens, i, should_predict_keyword);
-        Node *decoder_to_wordvector = nodes.result;
+        Node* decoder_to_wordvector = decoder_components.decoderToWordVector(graph, hyper_params,
+                model_params, left_to_right_encoder._hiddens, i);
         decoder_components.decoder_to_wordvectors.push_back(decoder_to_wordvector);
 
         LinearWordVectorNode *wordvector_to_onehot(new LinearWordVectorNode);
@@ -630,45 +536,19 @@ struct GraphBuilder {
         Node *softmax = n3ldg_plus::softmax(graph, *wordvector_to_onehot);
 
         decoder_components.wordvector_to_onehots.push_back(softmax);
-
-        decoder_components.decoder_to_keyword_vectors.push_back(nodes.keyword);
-
-        Node *keyword_vector_to_onehot;
-        if (nodes.keyword == nullptr) {
-            keyword_vector_to_onehot = nullptr;
-        } else {
-            keyword_vector_to_onehot = n3ldg_plus::linearWordVector(graph,
-                    keyword_word_id_upper_open_bound, model_params.lookup_table.E, *nodes.keyword);
-            keyword_vector_to_onehot = n3ldg_plus::softmax(graph, *keyword_vector_to_onehot);
-        }
-        decoder_components.keyword_vector_to_onehots.push_back(keyword_vector_to_onehot);
     }
 
-    void forwardDecoderResultByOneStep(Graph &graph, DecoderComponents &decoder_components, int i,
-            const string &keyword,
-            const HyperParams &hyper_params,
-            ModelParams &model_params) {
-        LookupNode<Param> *keyword_lookup = new LookupNode<Param>;
-        keyword_lookup->init(hyper_params.word_dim);
-        keyword_lookup->setParam(model_params.lookup_table);
-        keyword_lookup->forward(graph, keyword);
-
-        Node *dropout_keyword = n3ldg_plus::dropout(graph, *keyword_lookup, hyper_params.dropout,
-                false);
-        decoder_components.decoder_keyword_lookups.push_back(dropout_keyword);
-    }
-
-    void forwardDecoderHiddenByOneStep(Graph &graph, DecoderComponents &decoder_components, int i,
+    void forwardDecoderHiddenByOneStep(Graph &graph, DecoderComponents &decoder_components,
+            int i,
             const std::string *answer,
             const HyperParams &hyper_params,
             ModelParams &model_params) {
-        Node *last_input, * last_keyword;
+        Node *last_input;
         if (i > 0) {
             LookupNode<Param>* before_dropout(new LookupNode<Param>);
             before_dropout->init(hyper_params.word_dim);
             before_dropout->setParam(model_params.lookup_table);
             before_dropout->forward(graph, *answer);
-            decoder_components.decoder_lookups_before_dropout.push_back(before_dropout);
 
             DropoutNode* decoder_lookup(new DropoutNode(hyper_params.dropout, false));
             decoder_lookup->init(hyper_params.word_dim);
@@ -680,53 +560,48 @@ struct GraphBuilder {
                 abort();
             }
             last_input = decoder_components.decoder_lookups.back();
-
-            if (decoder_components.decoder_keyword_lookups.size() != i) {
-                cerr << boost::format("keyword lookup size :%1% i:%2%") %
-                    decoder_components.decoder_keyword_lookups.size() % i << endl;
-                abort();
-            }
-            last_keyword = decoder_components.decoder_keyword_lookups.back();
         } else {
             BucketNode *bucket = new BucketNode;
             bucket->init(hyper_params.word_dim);
             bucket->forward(graph);
             last_input = bucket;
-            last_keyword = bucket;
         }
 
-        decoder_components.forward(graph, hyper_params, model_params, *last_input, *last_keyword,
+        decoder_components.forward(graph, hyper_params, model_params, *last_input,
                 left_to_right_encoder._hiddens, false);
     }
 
-    void forwardDecoderKeywordByOneStep(Graph &graph, DecoderComponents &decoder_components, int i,
-            const std::string &keyword,
+    void forwardKeywordEmbedding(Graph &graph, DecoderComponents &decoder_components,
+            const string &keyword,
+            const HyperParams &hyper_params,
+            ModelParams &model_params) {
+        LookupNode<Param> *keyword_lookup = new LookupNode<Param>;
+        keyword_lookup->init(hyper_params.word_dim);
+        keyword_lookup->setParam(model_params.lookup_table);
+        keyword_lookup->forward(graph, keyword);
+
+        Node *dropout_keyword = n3ldg_plus::dropout(graph, *keyword_lookup, hyper_params.dropout,
+                false);
+        decoder_components.keyword_embedding = dropout_keyword;
+    }
+
+    void forwardOnehotByOneStep(Graph &graph, DecoderComponents &decoder_components, int i,
             const HyperParams &hyper_params,
             ModelParams &model_params,
             vector<Node*> &encoder_hiddens) {
-        LookupNode<Param> *keyword_embedding = new LookupNode<Param>;
-        keyword_embedding->init(hyper_params.word_dim);
-        keyword_embedding->setParam(model_params.lookup_table);
-        keyword_embedding->forward(graph, keyword);
-        if (decoder_components.decoder_keyword_lookups.size() != i) {
-            cerr << "keyword lookup size:" << decoder_components.decoder_keyword_lookups.size()
-                << endl;
-            abort();
-        }
-        decoder_components.decoder_keyword_lookups.push_back(keyword_embedding);
-        ResultAndKeywordVectors result =  decoder_components.decoderToWordVectors(graph,
-                hyper_params, model_params, encoder_hiddens, i, false);
-        Node *result_node = result.result;
+        Node* result =  decoder_components.decoderToWordVector(graph, hyper_params, model_params,
+                encoder_hiddens, i);
 
         LinearWordVectorNode *one_hot_node = new LinearWordVectorNode;
         one_hot_node->init(model_params.lookup_table.nVSize);
         one_hot_node->setParam(model_params.lookup_table.E);
-        one_hot_node->forward(graph, *result_node);
+        one_hot_node->forward(graph, *result);
         Node *softmax = n3ldg_plus::softmax(graph, *one_hot_node);
         decoder_components.wordvector_to_onehots.push_back(softmax);
     }
 
     pair<vector<WordIdAndProbability>, dtype> forwardDecoderUsingBeamSearch(Graph &graph,
+            Node &keyword_onehot,
             const vector<DecoderComponents> &decoder_components_beam,
             int k,
             const HyperParams &hyper_params,
@@ -747,10 +622,6 @@ struct GraphBuilder {
             most_probable_results.clear();
             auto beam = decoder_components_beam;
             int closured_count = word_ids_result.size();
-//            for (int i = 0; i < closured_count; ++i) {
-//                auto & r = word_ids_result.at(i);
-//                ++closured_count;
-//            }
             if (closured_count >= default_config.result_count_factor * k) {
                 break;
             }
@@ -762,24 +633,28 @@ struct GraphBuilder {
                     break;
                 }
 
+                if (i == 0) {
+                    most_probable_results = mostProbableKeywords(beam.front(), keyword_onehot, k,
+                            graph, model_params, hyper_params,
+                            default_config, searched_ids, black_list);
+                    for (int beam_i = 0; beam_i < beam.size(); ++beam_i) {
+                        DecoderComponents &decoder_components = beam.at(beam_i);
+                        auto path = most_probable_results.at(beam_i).getPath();
+                        if (path.size() != 1) {
+                            cerr << "path size:" << path.size() << endl;
+                            abort();
+                        }
+                        int keyword_id = path.back().word_id;
+                        string keyword = model_params.lookup_table.elems.from_id(keyword_id);
+                        forwardKeywordEmbedding(graph, decoder_components, keyword, hyper_params,
+                                model_params);
+                    }
+                }
                 for (int beam_i = 0; beam_i < beam.size(); ++beam_i) {
                     DecoderComponents &decoder_components = beam.at(beam_i);
                     forwardDecoderHiddenByOneStep(graph, decoder_components, i,
                             i == 0 ? nullptr : &last_answers.at(beam_i), hyper_params,
                             model_params);
-                }
-                cout << "forwardDecoderHiddenByOneStep:" << endl;
-                graph.compute();
-
-                most_probable_results = mostProbableKeywords(beam, most_probable_results,
-                        i, k, graph, model_params, hyper_params,
-                        default_config, i == 0, searched_ids, black_list);
-                for (int beam_i = 0; beam_i < beam.size(); ++beam_i) {
-                    DecoderComponents &decoder_components = beam.at(beam_i);
-                    int keyword_id = most_probable_results.at(beam_i).getPath().back().word_id;
-                    string keyword = model_params.lookup_table.elems.from_id(keyword_id);
-                    forwardDecoderResultByOneStep(graph, decoder_components, i, keyword,
-                            hyper_params, model_params);
                 }
                 cout << "forwardDecoderResultByOneStep:" << endl;
                 graph.compute();
@@ -799,9 +674,8 @@ struct GraphBuilder {
 
                 int beam_i = 0;
                 for (auto &decoder_components : beam) {
-                    forwardDecoderKeywordByOneStep(graph, decoder_components, i,
-                            last_keywords.at(beam_i), hyper_params, model_params,
-                            left_to_right_encoder._hiddens);
+                    forwardOnehotByOneStep(graph, decoder_components, i, hyper_params,
+                            model_params, left_to_right_encoder._hiddens);
                     ++beam_i;
                 }
                 last_keywords.clear();
