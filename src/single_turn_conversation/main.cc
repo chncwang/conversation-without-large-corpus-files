@@ -75,8 +75,7 @@ unordered_map<string, float> calculateIdf(const vector<vector<string>> sentences
         }
 
         utf8_string utf8(it.first);
-        if (utf8.length() == 1 || includePunctuation(utf8.cpp_str()) || !isPureChinese(it.first) ||
-                idf <= 5) {
+        if (includePunctuation(utf8.cpp_str()) || !isPureChinese(it.first) || idf <= 5) {
             idf = -idf;
         }
 
