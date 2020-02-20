@@ -46,7 +46,7 @@ string getSentence(const vector<int> &word_ids_vector, const ModelParams &model_
 
 class BeamSearchResult {
 public:
-    BeamSearchResult() {
+    BeamSearchResult(int layer) : decoder_components_(layer) {
         ngram_counts_ = {0, 0, 0};
     }
     BeamSearchResult(const BeamSearchResult &beam_search_result) = default;
@@ -222,6 +222,7 @@ vector<BeamSearchResult> mostProbableResults(
         const vector<BeamSearchResult> &last_results,
         int current_word,
         int k,
+        const HyperParams &hyper_params,
         const ModelParams &model_params,
         const DefaultConfig &default_config,
         bool is_first,
@@ -255,7 +256,7 @@ vector<BeamSearchResult> mostProbableResults(
     for (int i = 0; i < nodes.size(); ++i) {
         const Node &node = *nodes.at(i);
 
-        BeamSearchResult beam_search_result;
+        BeamSearchResult beam_search_result(hyper_params.decoder_layer);
         for (int j = 0; j < nodes.at(i)->getDim(); ++j) {
             if (j == model_params.lookup_table.getElemId(::unknownkey)) {
                 continue;
@@ -344,7 +345,7 @@ vector<BeamSearchResult> mostProbableKeywords(
             should_predict_keyword = path.at(size - 2).word_id == path.at(size - 1).word_id;
         }
         Node *node, *keyword_node, *hidden;
-        hidden = beam.at(ii).decoder._hiddens.at(word_pos);
+        hidden = beam.at(ii).decoders.back()._hiddens.at(word_pos);
         if (should_predict_keyword) {
             DecoderComponents &components = beam.at(ii);
 
@@ -358,7 +359,7 @@ vector<BeamSearchResult> mostProbableKeywords(
 
             ConcatNode *context_concated = new ConcatNode;
             context_concated->init(2 * hyper_params.hidden_dim);
-            context_concated->forward(graph, {components.decoder._hiddens.at(word_pos),
+            context_concated->forward(graph, {components.decoders.back()._hiddens.at(word_pos),
                     components.contexts.at(word_pos)});
 
             Node *keyword = n3ldg_plus::linear(graph, model_params.hidden_to_keyword_params,
@@ -418,7 +419,7 @@ vector<BeamSearchResult> mostProbableKeywords(
         } else {
             const Node &node = *nodes.at(i);
 
-            BeamSearchResult beam_search_result;
+            BeamSearchResult beam_search_result(hyper_params.decoder_layer);
             for (int j = 0; j < nodes.at(i)->getDim(); ++j) {
                 bool should_continue = false;
                 if (is_first) {
@@ -827,8 +828,9 @@ struct GraphBuilder {
                 graph.compute();
 
                 last_answers.clear();
-                most_probable_results = mostProbableResults(beam, most_probable_results, i,
-                        k, model_params, default_config, i == 0, black_list, word_idf_table);
+                most_probable_results = mostProbableResults(beam, most_probable_results, i, k,
+                        hyper_params, model_params, default_config, i == 0, black_list,
+                        word_idf_table);
                 cout << boost::format("most_probable_results size:%1%") %
                     most_probable_results.size() << endl;
                 beam.clear();

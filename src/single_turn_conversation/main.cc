@@ -222,6 +222,8 @@ HyperParams parseHyperParams(INIReader &ini_reader) {
     }
     hyper_params.beam_size = beam_size;
 
+    hyper_params.decoder_layer = ini_reader.GetInteger("hyper", "decoder_layer", 1);
+
     float learning_rate = ini_reader.GetReal("hyper", "learning_rate", 0.001f);
     if (learning_rate <= 0.0f) {
         cerr << "learning_rate wrong" << endl;
@@ -465,7 +467,7 @@ float metricTestPosts(const HyperParams &hyper_params, ModelParams &model_params
                 GraphBuilder graph_builder;
                 graph_builder.forward(graph, post_sentences.at(post_and_responses.post_id),
                         hyper_params, model_params, false);
-                DecoderComponents decoder_components;
+                DecoderComponents decoder_components(hyper_params.decoder_layer);
                 graph_builder.forwardDecoder(graph, decoder_components,
                         response_sentences.at(response_id),
                         idf_info.keywords_behind,
@@ -533,7 +535,9 @@ void decodeTestPosts(const HyperParams &hyper_params, ModelParams &model_params,
         graph_builder.forward(graph, post_sentences.at(post_and_responses.post_id),
                 hyper_params, model_params, false);
         vector<DecoderComponents> decoder_components_vector;
-        decoder_components_vector.resize(hyper_params.beam_size);
+        for (int i = 0; i < hyper_params.beam_size; ++i) {
+            decoder_components_vector.push_back(DecoderComponents(hyper_params.decoder_layer));
+        }
         auto pair = graph_builder.forwardDecoderUsingBeamSearch(graph, decoder_components_vector,
                 word_idf_table, hyper_params.beam_size, hyper_params, model_params, default_config,
                 black_list);
@@ -847,11 +851,12 @@ int main(int argc, char *argv[]) {
                 model_params.lookup_table.init(*alphabet, hyper_params.word_dim, true);
             }
         }
-        model_params.attention_params.init(hyper_params.hidden_dim, hyper_params.hidden_dim);
+        model_params.attention_params.init(hyper_params.hidden_dim,
+                hyper_params.decoder_layer * hyper_params.hidden_dim);
         model_params.left_to_right_encoder_params.init(hyper_params.hidden_dim,
                 hyper_params.word_dim);
-        model_params.left_to_right_decoder_params.init(hyper_params.hidden_dim,
-                2 * hyper_params.word_dim + hyper_params.hidden_dim);
+        model_params.left_to_right_decoder_params.init(hyper_params.decoder_layer,
+                hyper_params.hidden_dim, 2 * hyper_params.word_dim + hyper_params.hidden_dim);
         model_params.hidden_to_wordvector_params.init(hyper_params.word_dim,
                 2 * hyper_params.hidden_dim + 2 * hyper_params.word_dim, false);
         model_params.hidden_to_keyword_params.init(hyper_params.word_dim,
@@ -1026,7 +1031,7 @@ int main(int argc, char *argv[]) {
                     response_size_sum += response_sentence.size();
                     const WordIdfInfo &idf_info = response_idf_info_list.at(response_id);
                     keyword_size_sum += idf_info.keyword_size;
-                    DecoderComponents decoder_components;
+                    DecoderComponents decoder_components(hyper_params.decoder_layer);
                     graph_builder->forwardDecoder(graph, decoder_components, response_sentence,
                             idf_info.keywords_behind, hyper_params, model_params, true);
                     decoder_components_vector.push_back(decoder_components);
@@ -1110,7 +1115,7 @@ int main(int argc, char *argv[]) {
                         graph_builder.forward(graph, post_sentences.at(conversation_pair.post_id),
                                 hyper_params, model_params, true);
 
-                        DecoderComponents decoder_components;
+                        DecoderComponents decoder_components(hyper_params.decoder_layer);
                         graph_builder.forwardDecoder(graph, decoder_components,
                                 response_sentences.at(conversation_pair.response_id),
                                 response_idf_info_list.at(
