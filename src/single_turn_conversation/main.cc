@@ -851,9 +851,12 @@ int main(int argc, char *argv[]) {
         model_params.left_to_right_encoder_params.init(hyper_params.hidden_dim,
                 hyper_params.word_dim);
         model_params.left_to_right_decoder_params.init(hyper_params.hidden_dim,
-                2 * hyper_params.word_dim + hyper_params.hidden_dim);
+                hyper_params.word_dim + hyper_params.hidden_dim);
+        std::function<float(int, int)> bound = [](int out, int in)->float {
+            return sqrt(2.0 / (out + in));
+        };
         model_params.hidden_to_wordvector_params.init(hyper_params.word_dim,
-                2 * hyper_params.hidden_dim + 2 * hyper_params.word_dim, false);
+                2 * hyper_params.hidden_dim + 2 * hyper_params.word_dim, false, &bound);
         model_params.hidden_to_keyword_params.init(hyper_params.word_dim,
                 2 * hyper_params.hidden_dim, false);
     };
@@ -1003,7 +1006,7 @@ int main(int argc, char *argv[]) {
                     train_conversation_pairs.size() % hyper_params.batch_size :
                     hyper_params.batch_size;
                 profiler.BeginEvent("build braph");
-                Graph graph;
+                Graph graph(false);
                 vector<shared_ptr<GraphBuilder>> graph_builders;
                 vector<DecoderComponents> decoder_components_vector;
                 vector<ConversationPair> conversation_pair_in_batch;
