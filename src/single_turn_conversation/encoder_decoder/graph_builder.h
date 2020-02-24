@@ -298,10 +298,7 @@ struct GraphBuilder {
         word_bucket->forward(graph);
 
         for (const string &word : sentence) {
-            LookupNode<Param>* input_lookup(new LookupNode<Param>);
-            input_lookup->init(hyper_params.word_dim);
-            input_lookup->setParam(model_params.lookup_table);
-            input_lookup->forward(graph, word);
+            Node *input_lookup = n3ldg_plus::embedding(graph, model_params.lookup_table, word);
 
             DropoutNode* dropout_node(new DropoutNode(hyper_params.dropout, is_training));
             dropout_node->init(hyper_params.word_dim);
@@ -334,11 +331,8 @@ struct GraphBuilder {
             bool is_training) {
         Node *last_input;
         if (i > 0) {
-            LookupNode<Param>* before_dropout(new LookupNode<Param>);
-            before_dropout->init(hyper_params.word_dim);
-            before_dropout->setParam(model_params.lookup_table);
-            before_dropout->forward(graph, *answer);
-
+            Node *before_dropout = n3ldg_plus::embedding(graph, model_params.lookup_table,
+                    *answer);
             DropoutNode* decoder_lookup(new DropoutNode(hyper_params.dropout, is_training));
             decoder_lookup->init(hyper_params.word_dim);
             decoder_lookup->forward(graph, *before_dropout);
