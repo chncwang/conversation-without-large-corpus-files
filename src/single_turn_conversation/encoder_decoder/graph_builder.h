@@ -516,23 +516,12 @@ struct GraphBuilder {
     void forward(Graph &graph, const vector<string> &sentence, const HyperParams &hyper_params,
             ModelParams &model_params,
             bool is_training) {
-        BucketNode *hidden_bucket = new BucketNode;
-        hidden_bucket->init(hyper_params.hidden_dim);
-        hidden_bucket->forward(graph);
-        BucketNode *word_bucket = new BucketNode;
-        word_bucket->init(hyper_params.word_dim);
-        word_bucket->forward(graph);
+        using namespace n3ldg_plus;
+        Node *hidden_bucket = bucket(graph, hyper_params.hidden_dim, 0);
 
         for (int i = 0; i < sentence.size(); ++i) {
-            LookupNode<Param>* input_lookup(new LookupNode<Param>);
-            input_lookup->init(hyper_params.word_dim);
-            input_lookup->setParam(model_params.lookup_table);
-            input_lookup->forward(graph, sentence.at(i));
-
-            DropoutNode* dropout_node(new DropoutNode(hyper_params.dropout, is_training));
-            dropout_node->init(hyper_params.word_dim);
-            dropout_node->forward(graph, *input_lookup);
-
+            Node *input_lookup = embedding(graph, model_params.lookup_table, sentence.at(i));
+            Node *dropout_node = dropout(graph, *input_lookup, hyper_params.dropout, is_training);
             left_to_right_encoder.forward(graph, model_params.left_to_right_encoder_params,
                     *dropout_node, *hidden_bucket, *hidden_bucket, hyper_params.dropout,
                     is_training);

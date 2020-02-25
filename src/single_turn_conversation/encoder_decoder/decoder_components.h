@@ -17,13 +17,6 @@ struct DecoderComponents {
         decoders.resize(layer);
     }
 
-    BucketNode *bucket(int dim, Graph &graph) {
-        BucketNode *node(new BucketNode);
-        node->init(dim);
-        node->forward(graph, 0);
-        return node;
-    }
-
     void forward(Graph &graph, const HyperParams &hyper_params,
             LSTM1Params &decoder_params,
             AdditiveAttentionParams &attention_params,
@@ -43,10 +36,11 @@ struct DecoderComponents {
             Node &input,
             vector<Node *> &encoder_hiddens,
             bool is_training) {
+        using namespace n3ldg_plus;
         shared_ptr<AdditiveAttentionBuilder> attention_builder(new AdditiveAttentionBuilder);
         Node *guide = decoders.front().size() == 0 ?
-            static_cast<Node*>(bucket(hyper_params.hidden_dim, graph)) :
-            static_cast<Node*>(decoders.front()._hiddens.at(decoders.front().size() - 1));
+            bucket(graph, hyper_params.hidden_dim, 0) :
+            decoders.front()._hiddens.at(decoders.front().size() - 1);
         attention_builder->forward(graph, attention_params, encoder_hiddens, *guide);
         contexts.push_back(attention_builder->_hidden);
 
@@ -54,7 +48,8 @@ struct DecoderComponents {
         Node *concat = n3ldg_plus::concat(graph, ins);
 
         decoders.front().forward(graph, *decoder_params.at(0), *concat,
-                *bucket(hyper_params.hidden_dim, graph), *bucket(hyper_params.hidden_dim, graph),
+                *bucket(graph, hyper_params.hidden_dim, 0),
+                *bucket(graph, hyper_params.hidden_dim, 0),
                 hyper_params.dropout, is_training);
         if (decoder_params.size() > 1) {
             Node *clip = n3ldg_plus::linear(graph, *clip_params, *concat);
@@ -67,9 +62,9 @@ struct DecoderComponents {
                         decoders.at(i - 2)._hiddens.back()};
                 }
                 Node *sum = n3ldg_plus::add(graph, sum_inputs);
-                decoders.at(i).forward(graph, *decoder_params.at(i),
-                        *sum, *bucket(hyper_params.hidden_dim, graph),
-                        *bucket(hyper_params.hidden_dim, graph), hyper_params.dropout,
+                decoders.at(i).forward(graph, *decoder_params.at(i), *sum,
+                        *bucket(graph, hyper_params.hidden_dim, 0),
+                        *bucket(graph, hyper_params.hidden_dim, 0), hyper_params.dropout,
                         is_training);
             }
         }
@@ -78,9 +73,10 @@ struct DecoderComponents {
     Node *decoderToWordVectors(Graph &graph, const HyperParams &hyper_params,
             UniParams &to_word_params,
             int i) {
+        using namespace n3ldg_plus;
         vector<Node *> concat_inputs = {
             contexts.at(i), decoders.back()._hiddens.at(i),
-            i == 0 ? bucket(to_word_params.W.inDim() - 2 * hyper_params.hidden_dim, graph) :
+            i == 0 ? bucket(graph, to_word_params.W.inDim() - 2 * hyper_params.hidden_dim, 0) :
                 static_cast<Node*>(decoder_lookups.at(i - 1))
         };
         if (decoder_lookups.size() != i + 1) {

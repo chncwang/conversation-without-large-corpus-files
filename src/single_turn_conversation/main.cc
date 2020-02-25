@@ -731,6 +731,8 @@ int main(int argc, char *argv[]) {
 #if USE_GPU
     n3ldg_cuda::InitCuda(default_config.device_id, default_config.memory_in_gb);
 #endif
+    bool &pool_enabled = globalPoolEnabled();
+    pool_enabled = false;
 
     HyperParams hyper_params = parseHyperParams(ini_reader);
     cout << "hyper_params:" << endl;
@@ -875,8 +877,11 @@ int main(int argc, char *argv[]) {
                 hyper_params.word_dim);
         model_params.left_to_right_decoder_params.init(hyper_params.hidden_dim,
                 2 * hyper_params.word_dim + hyper_params.hidden_dim);
-        model_params.keyword_decoder_params.init(hyper_params.keyword_decoder_layer,
-                hyper_params.hidden_dim, hyper_params.word_dim + hyper_params.hidden_dim);
+        function<void(LSTM1Params &, int)> init_param = [&](LSTM1Params &param, int layer) {
+            param.init(hyper_params.hidden_dim, layer == 0 ?
+                    hyper_params.word_dim + hyper_params.hidden_dim : hyper_params.hidden_dim);
+        };
+        model_params.keyword_decoder_params.init(hyper_params.keyword_decoder_layer, init_param);
         model_params.hidden_to_wordvector_params.init(hyper_params.word_dim,
                 2 * hyper_params.hidden_dim + 2 * hyper_params.word_dim, false);
         model_params.hidden_to_keyword_params.init(hyper_params.word_dim,
