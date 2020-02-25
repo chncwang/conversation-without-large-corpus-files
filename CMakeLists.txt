@@ -57,7 +57,7 @@ ENDIF()
 
 if(CMAKE_BUILD_TYPE MATCHES debug)
     ADD_DEFINITIONS(-DN3LDG_DEBUG)
-    SET( CMAKE_CXX_FLAGS  "${CMAKE_CXX_FLAGS} -msse3 -std=c++11 -O1" )
+    SET( CMAKE_CXX_FLAGS  "${CMAKE_CXX_FLAGS} -msse3 -std=c++11 -O1 -g" )
 else()
     SET( CMAKE_CXX_FLAGS  "${CMAKE_CXX_FLAGS} -fPIC -std=c++11 -O3 -march=native" )
 endif()

@@ -284,33 +284,23 @@ vector<BeamSearchResult> mostProbableResults(
 
 struct GraphBuilder {
     vector<Node *> encoder_lookups;
-    DynamicLSTMBuilder left_to_right_encoder;
+    vector<Node *> hiddens;
 
     void forward(Graph &graph, const vector<string> &sentence,
             const HyperParams &hyper_params,
             ModelParams &model_params,
             bool is_training) {
-        BucketNode *hidden_bucket = new BucketNode;
-        hidden_bucket->init(hyper_params.hidden_dim);
-        hidden_bucket->forward(graph);
-        BucketNode *word_bucket = new BucketNode;
-        word_bucket->init(hyper_params.word_dim);
-        word_bucket->forward(graph);
+        using namespace n3ldg_plus;
 
         for (const string &word : sentence) {
             Node *input_lookup = n3ldg_plus::embedding(graph, model_params.lookup_table, word);
-
-            DropoutNode* dropout_node(new DropoutNode(hyper_params.dropout, is_training));
-            dropout_node->init(hyper_params.word_dim);
-            dropout_node->forward(graph, *input_lookup);
-
+            Node *dropout_node = n3ldg_plus::dropout(graph, *input_lookup, hyper_params.dropout,
+                    is_training);
             encoder_lookups.push_back(dropout_node);
         }
 
-        for (Node* node : encoder_lookups) {
-            left_to_right_encoder.forward(graph, model_params.left_to_right_encoder_params, *node,
-                    *hidden_bucket, *hidden_bucket, hyper_params.dropout, is_training);
-        }
+        hiddens = n3ldg_plus::transformerEncoder(graph, model_params.transformer_encoder_params,
+                encoder_lookups, hyper_params.dropout, is_training);
     }
 
     void forwardDecoder(Graph &graph, DecoderComponents &decoder_components,
@@ -329,34 +319,28 @@ struct GraphBuilder {
             const HyperParams &hyper_params,
             ModelParams &model_params,
             bool is_training) {
+        using namespace n3ldg_plus;
         Node *last_input;
         if (i > 0) {
             Node *before_dropout = n3ldg_plus::embedding(graph, model_params.lookup_table,
                     *answer);
-            DropoutNode* decoder_lookup(new DropoutNode(hyper_params.dropout, is_training));
-            decoder_lookup->init(hyper_params.word_dim);
-            decoder_lookup->forward(graph, *before_dropout);
+            Node* decoder_lookup = n3ldg_plus::dropout(graph, *before_dropout,
+                    hyper_params.dropout, is_training);
             decoder_components.decoder_lookups.push_back(decoder_lookup);
             last_input = decoder_components.decoder_lookups.at(i - 1);
         } else {
-            BucketNode *bucket = new BucketNode;
-            bucket->init(hyper_params.word_dim);
-            bucket->forward(graph);
-            last_input = bucket;
+            last_input = bucket(graph, hyper_params.word_dim, 0);
         }
 
         decoder_components.forward(graph, hyper_params, model_params, *last_input,
-                left_to_right_encoder._hiddens, is_training);
+                hiddens, is_training);
 
         Node *decoder_to_wordvector = decoder_components.decoderToWordVectors(graph, hyper_params,
                 model_params, i);
         decoder_components.decoder_to_wordvectors.push_back(decoder_to_wordvector);
 
-        LinearWordVectorNode *wordvector_to_onehot(new LinearWordVectorNode);
-        wordvector_to_onehot->init(model_params.lookup_table.nVSize);
-        wordvector_to_onehot->setParam(model_params.lookup_table.E);
-        wordvector_to_onehot->forward(graph, *decoder_to_wordvector);
-
+        Node *wordvector_to_onehot = linearWordVector(graph, model_params.lookup_table.nVSize,
+                model_params.lookup_table.E, *decoder_to_wordvector);
         Node *softmax = n3ldg_plus::softmax(graph, *wordvector_to_onehot);
 
         decoder_components.wordvector_to_onehots.push_back(softmax);

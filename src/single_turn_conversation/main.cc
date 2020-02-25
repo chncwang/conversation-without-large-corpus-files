@@ -667,8 +667,8 @@ int main(int argc, char *argv[]) {
             }
         }
         model_params.attention_params.init(hyper_params.hidden_dim, hyper_params.hidden_dim);
-        model_params.left_to_right_encoder_params.init(hyper_params.hidden_dim,
-                hyper_params.word_dim);
+        model_params.transformer_encoder_params.init(3, hyper_params.hidden_dim,
+                hyper_params.word_dim, 8, 1000);
         model_params.left_to_right_decoder_params.init(hyper_params.hidden_dim,
                 hyper_params.word_dim + hyper_params.hidden_dim);
         model_params.hidden_to_wordvector_params.init(hyper_params.word_dim,
@@ -794,7 +794,7 @@ int main(int argc, char *argv[]) {
                     train_conversation_pairs.size() % hyper_params.batch_size :
                     hyper_params.batch_size;
                 profiler.BeginEvent("build braph");
-                Graph graph;
+                Graph graph(false);
                 vector<shared_ptr<GraphBuilder>> graph_builders;
                 vector<DecoderComponents> decoder_components_vector;
                 vector<ConversationPair> conversation_pair_in_batch;
@@ -821,40 +821,40 @@ int main(int argc, char *argv[]) {
                 }
                 profiler.EndCudaEvent();
 
-                graph.compute();
+//                graph.compute();
 
-                for (int i = 0; i < batch_size; ++i) {
-                    int instance_index = getSentenceIndex(i);
-                    int response_id = train_conversation_pairs.at(instance_index).response_id;
-                    vector<int> word_ids = toIds(response_sentences.at(response_id),
-                            model_params.lookup_table);
-                    vector<Node*> result_nodes =
-                        toNodePointers(decoder_components_vector.at(i).wordvector_to_onehots);
-                    auto result = maxLogProbabilityLoss(result_nodes, word_ids, 1.0 / len_sum);
-                    loss_sum += result.first;
+//                for (int i = 0; i < batch_size; ++i) {
+//                    int instance_index = getSentenceIndex(i);
+//                    int response_id = train_conversation_pairs.at(instance_index).response_id;
+//                    vector<int> word_ids = toIds(response_sentences.at(response_id),
+//                            model_params.lookup_table);
+//                    vector<Node*> result_nodes =
+//                        toNodePointers(decoder_components_vector.at(i).wordvector_to_onehots);
+//                    auto result = maxLogProbabilityLoss(result_nodes, word_ids, 1.0 / len_sum);
+//                    loss_sum += result.first;
 
-                    analyze(result.second, word_ids, *metric);
-                    unique_ptr<Metric> local_metric(unique_ptr<Metric>(new Metric));
-                    analyze(result.second, word_ids, *local_metric);
+//                    analyze(result.second, word_ids, *metric);
+//                    unique_ptr<Metric> local_metric(unique_ptr<Metric>(new Metric));
+//                    analyze(result.second, word_ids, *local_metric);
 
-                    if (local_metric->getAccuracy() < 1.0f) {
-                        static int count_for_print;
-                        if (++count_for_print % 100 == 0) {
-                            count_for_print = 0;
-                            int post_id = train_conversation_pairs.at(instance_index).post_id;
-                            cout << "post:" << post_id << endl;
-                            print(post_sentences.at(post_id));
-                            cout << "golden answer:" << endl;
-                            printWordIds(word_ids, model_params.lookup_table);
-                            cout << "output:" << endl;
-                            printWordIds(result.second, model_params.lookup_table);
-                        }
-                    }
-                }
+//                    if (local_metric->getAccuracy() < 1.0f) {
+//                        static int count_for_print;
+//                        if (++count_for_print % 100 == 0) {
+//                            count_for_print = 0;
+//                            int post_id = train_conversation_pairs.at(instance_index).post_id;
+//                            cout << "post:" << post_id << endl;
+//                            print(post_sentences.at(post_id));
+//                            cout << "golden answer:" << endl;
+//                            printWordIds(word_ids, model_params.lookup_table);
+//                            cout << "output:" << endl;
+//                            printWordIds(result.second, model_params.lookup_table);
+//                        }
+//                    }
+//                }
                 cout << "loss:" << loss_sum << endl;
                 metric->print();
 
-                graph.backward();
+//                graph.backward();
 
                 if (default_config.check_grad) {
                     auto loss_function = [&](const ConversationPair &conversation_pair) -> dtype {
