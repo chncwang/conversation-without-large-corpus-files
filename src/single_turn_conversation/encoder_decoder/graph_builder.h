@@ -290,23 +290,11 @@ struct GraphBuilder {
             const HyperParams &hyper_params,
             ModelParams &model_params,
             bool is_training) {
-        BucketNode *hidden_bucket = new BucketNode;
-        hidden_bucket->init(hyper_params.hidden_dim);
-        hidden_bucket->forward(graph);
-        BucketNode *word_bucket = new BucketNode;
-        word_bucket->init(hyper_params.word_dim);
-        word_bucket->forward(graph);
-
+        using namespace n3ldg_plus;
+        Node *hidden_bucket = bucket(graph, hyper_params.hidden_dim, 0);
         for (const string &word : sentence) {
-            LookupNode<Param>* input_lookup(new LookupNode<Param>);
-            input_lookup->init(hyper_params.word_dim);
-            input_lookup->setParam(model_params.lookup_table);
-            input_lookup->forward(graph, word);
-
-            DropoutNode* dropout_node(new DropoutNode(hyper_params.dropout, is_training));
-            dropout_node->init(hyper_params.word_dim);
-            dropout_node->forward(graph, *input_lookup);
-
+            Node *input_lookup = embedding(graph, model_params.lookup_table, word);
+            Node *dropout_node = dropout(graph, *input_lookup, hyper_params.dropout, is_training);
             encoder_lookups.push_back(dropout_node);
         }
 
@@ -332,23 +320,15 @@ struct GraphBuilder {
             const HyperParams &hyper_params,
             ModelParams &model_params,
             bool is_training) {
+        using namespace n3ldg_plus;
         Node *last_input;
         if (i > 0) {
-            LookupNode<Param>* before_dropout(new LookupNode<Param>);
-            before_dropout->init(hyper_params.word_dim);
-            before_dropout->setParam(model_params.lookup_table);
-            before_dropout->forward(graph, *answer);
-
-            DropoutNode* decoder_lookup(new DropoutNode(hyper_params.dropout, is_training));
-            decoder_lookup->init(hyper_params.word_dim);
-            decoder_lookup->forward(graph, *before_dropout);
+            Node *decoder_lookup = embedding(graph, model_params.lookup_table, *answer);
+            decoder_lookup = dropout(graph, *decoder_lookup, hyper_params.dropout, is_training);
             decoder_components.decoder_lookups.push_back(decoder_lookup);
             last_input = decoder_components.decoder_lookups.at(i - 1);
         } else {
-            BucketNode *bucket = new BucketNode;
-            bucket->init(hyper_params.word_dim);
-            bucket->forward(graph);
-            last_input = bucket;
+            last_input = bucket(graph, hyper_params.word_dim, 0);
         }
 
         decoder_components.forward(graph, hyper_params, model_params, *last_input,
@@ -357,14 +337,9 @@ struct GraphBuilder {
         Node *decoder_to_wordvector = decoder_components.decoderToWordVectors(graph, hyper_params,
                 model_params, i);
         decoder_components.decoder_to_wordvectors.push_back(decoder_to_wordvector);
-
-        LinearWordVectorNode *wordvector_to_onehot(new LinearWordVectorNode);
-        wordvector_to_onehot->init(model_params.lookup_table.nVSize);
-        wordvector_to_onehot->setParam(model_params.lookup_table.E);
-        wordvector_to_onehot->forward(graph, *decoder_to_wordvector);
-
+        Node *wordvector_to_onehot = linearWordVector(graph, model_params.lookup_table.nVSize,
+                model_params.lookup_table.E, *decoder_to_wordvector);
         Node *softmax = n3ldg_plus::softmax(graph, *wordvector_to_onehot);
-
         decoder_components.wordvector_to_onehots.push_back(softmax);
     }
 
