@@ -535,6 +535,7 @@ void preserveVector(vector<T> &vec, int count, int seed) {
 
 int main(int argc, char *argv[]) {
     cout << "dtype size:" << sizeof(dtype) << endl;
+    globalPoolEnabled() = false;
 
     Options options("single-turn-conversation", "single turn conversation");
     options.add_options()
@@ -875,7 +876,7 @@ int main(int argc, char *argv[]) {
                                     conversation_pair.response_id), model_params.lookup_table);
                         vector<Node*> result_nodes = toNodePointers(
                                 decoder_components.wordvector_to_onehots);
-                        return maxLogProbabilityLoss(result_nodes, word_ids, 1).first;
+                        return maxLogProbabilityLoss(result_nodes, word_ids, 1.0 / len_sum).first;
                     };
                     cout << format("checking grad - conversation_pair size:%1%") %
                         conversation_pair_in_batch.size() << endl;
