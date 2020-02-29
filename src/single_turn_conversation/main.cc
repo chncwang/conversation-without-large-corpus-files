@@ -535,7 +535,7 @@ void preserveVector(vector<T> &vec, int count, int seed) {
 
 int main(int argc, char *argv[]) {
     cout << "dtype size:" << sizeof(dtype) << endl;
-    globalPoolEnabled() = false;
+    globalPoolEnabled() = true;
 
     Options options("single-turn-conversation", "single turn conversation");
     options.add_options()
