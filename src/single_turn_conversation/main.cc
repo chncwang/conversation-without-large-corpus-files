@@ -1040,37 +1040,89 @@ int main(int argc, char *argv[]) {
                 profiler.BeginEvent("build braph");
                 Graph graph(false);
                 vector<shared_ptr<GraphBuilder>> graph_builders;
-                vector<DecoderComponents> normal_decoder_vector, keyword_decoder_vector;
                 vector<ConversationPair> conversation_pair_in_batch;
                 auto getSentenceIndex = [batch_i, batch_count](int i) {
                     return i * batch_count + batch_i;
                 };
-                int response_size_sum = 0;
-                int keyword_size_sum = 0;
+                vector<int> post_lens_in_batch;
                 for (int i = 0; i < batch_size; ++i) {
-                    shared_ptr<GraphBuilder> graph_builder(new GraphBuilder);
-                    graph_builders.push_back(graph_builder);
                     int instance_index = getSentenceIndex(i);
                     int post_id = train_conversation_pairs.at(instance_index).post_id;
-                    conversation_pair_in_batch.push_back(train_conversation_pairs.at(
-                                instance_index));
-                    auto post_sentence = post_sentences.at(post_id);
-                    graph_builder->forward(graph, post_sentence, hyper_params, model_params, true);
-                    int response_id = train_conversation_pairs.at(instance_index).response_id;
-                    auto response_sentence = response_sentences.at(response_id);
-                    response_size_sum += response_sentence.size();
-                    const WordIdfInfo &idf_info = response_idf_info_list.at(response_id);
-                    keyword_size_sum += idf_info.keyword_size;
-                    DecoderComponents keyword_decoder(hyper_params.keyword_decoder_layer),
-                                      normal_decoder(1);
-                    graph_builder->forwardDecoder(graph, normal_decoder, keyword_decoder,
-                            response_sentence, idf_info.keywords_behind, hyper_params,
-                            model_params, true);
-                    keyword_decoder_vector.push_back(keyword_decoder);
-                    normal_decoder_vector.push_back(normal_decoder);
+                    const auto &post_sentence = post_sentences.at(post_id);
+                    post_lens_in_batch.push_back(post_sentence.size());
                 }
 
-                graph.compute();
+                int max_len = *max_element(post_lens_in_batch.begin(), post_lens_in_batch.end());
+                cout << "max post len:" << max_len << endl;
+                Node *bucket = n3ldg_plus::bucket(graph, hyper_params.hidden_dim, 0);
+                for (int pos_i = 0; pos_i < max_len; ++pos_i) {
+                    for (int i = 0; i < batch_size; ++i) {
+                        int instance_index = getSentenceIndex(i);
+                        int post_id = train_conversation_pairs.at(instance_index).post_id;
+                        const auto &post_sentence = post_sentences.at(post_id);
+                        if (post_sentence.size() <= pos_i) {
+                            continue;
+                        }
+                        shared_ptr<GraphBuilder> graph_builder(new GraphBuilder);
+                        graph_builders.push_back(graph_builder);
+                        conversation_pair_in_batch.push_back(train_conversation_pairs.at(
+                                    instance_index));
+                        graph_builder->forward(graph, post_sentence.at(pos_i), *bucket,
+                                hyper_params, model_params, true);
+                    }
+                    graph.compute();
+                }
+
+                int response_size_sum = 0;
+                vector<int> response_lens_in_batch;
+                for (int i = 0; i < batch_size; ++i) {
+                    int instance_index = getSentenceIndex(i);
+                    int response_id = train_conversation_pairs.at(instance_index).response_id;
+                    const auto& response_sentence = response_sentences.at(response_id);
+                    response_size_sum += response_sentence.size();
+                    response_lens_in_batch.push_back(response_sentence.size());
+                }
+
+                int max_response_len = *max_element(response_lens_in_batch.begin(),
+                        response_lens_in_batch.end());
+
+                vector<shared_ptr<DecoderComponents>> normal_decoder_vector,
+                    keyword_decoder_vector;
+                int keyword_size_sum = 0;
+                for (int pos_i = 0; pos_i < max_response_len; ++pos_i) {
+                    for (int i = 0; i < batch_size; ++i) {
+                        GraphBuilder *graph_builder = graph_builders.at(i).get();
+                        int instance_index = getSentenceIndex(i);
+                        int response_id = train_conversation_pairs.at(instance_index).response_id;
+                        if (response_sentences.at(response_id).size() <= pos_i) {
+                            continue;
+                        }
+                        DecoderComponents *normal_decoder_ptr, *keyword_decoder_ptr;
+                        if (pos_i == 0) {
+                            shared_ptr<DecoderComponents> keyword_decoder(
+                                    new DecoderComponents(hyper_params.keyword_decoder_layer));
+                            keyword_decoder_vector.push_back(keyword_decoder);
+                            shared_ptr<DecoderComponents> normal_decoder(new DecoderComponents(1));
+                            normal_decoder_vector.push_back(normal_decoder);
+                            normal_decoder_ptr = normal_decoder.get();
+                            keyword_decoder_ptr = keyword_decoder.get();
+                        } else {
+                            normal_decoder_ptr = normal_decoder_vector.at(i).get();
+                            keyword_decoder_ptr = keyword_decoder_vector.at(i).get();
+                        }
+                        const WordIdfInfo &idf_info = response_idf_info_list.at(response_id);
+                        graph_builder->forwardDecoder(graph, *normal_decoder_ptr,
+                                *keyword_decoder_ptr,
+                                pos_i == 0 ? nullptr :
+                                &response_sentences.at(response_id).at(pos_i - 1),
+                                idf_info.keywords_behind.at(pos_i),
+                                pos_i == 0 ? nullptr : &idf_info.keywords_behind.at(pos_i - 1),
+                                pos_i, hyper_params, model_params, true);
+                        keyword_size_sum += (pos_i == 0 || idf_info.keywords_behind.at(pos_i - 1)
+                            == response_sentences.at(response_id).at(pos_i - 1) ? 1 : 0);
+                    }
+                    graph.compute();
+                }
 
                 for (int i = 0; i < batch_size; ++i) {
                     int instance_index = getSentenceIndex(i);
@@ -1078,7 +1130,7 @@ int main(int argc, char *argv[]) {
                     auto response_sentence = response_sentences.at(response_id);
                     vector<int> word_ids = toIds(response_sentence, model_params.lookup_table);
                     vector<Node*> result_nodes =
-                        toNodePointers(normal_decoder_vector.at(i).wordvector_to_onehots);
+                        toNodePointers(normal_decoder_vector.at(i)->wordvector_to_onehots);
                     std::pair<dtype, std::vector<int>> result;
                     try {
                         result = MaxLogProbabilityLossWithInconsistentDims(result_nodes,
@@ -1105,7 +1157,7 @@ int main(int argc, char *argv[]) {
                     normal_loss_sum += result.first * response_size_sum;
                     analyze(result.second, word_ids, *metric);
                     const WordIdfInfo &response_idf = response_idf_info_list.at(response_id);
-                    auto keyword_nodes_and_ids = keywordNodesAndIds(keyword_decoder_vector.at(i),
+                    auto keyword_nodes_and_ids = keywordNodesAndIds(*keyword_decoder_vector.at(i),
                             response_idf, model_params);
                     profiler.BeginEvent("loss");
                     auto keyword_result = MaxLogProbabilityLossWithInconsistentDims(

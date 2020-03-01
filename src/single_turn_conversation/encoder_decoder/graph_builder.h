@@ -513,19 +513,25 @@ vector<BeamSearchResult> mostProbableKeywords(
 struct GraphBuilder {
     DynamicLSTMBuilder left_to_right_encoder;
 
-    void forward(Graph &graph, const vector<string> &sentence, const HyperParams &hyper_params,
+    void forward(Graph &graph, const vector<string> &sentence,
+            const HyperParams &hyper_params,
+            ModelParams &model_params,
+            bool is_training) {
+        Node *bucket = n3ldg_plus::bucket(graph, hyper_params.hidden_dim, 0);
+        for (const string &w : sentence) {
+            forward(graph, w, *bucket, hyper_params, model_params, is_training);
+        }
+    }
+
+    void forward(Graph &graph, const string &word, Node &bucket, const HyperParams &hyper_params,
             ModelParams &model_params,
             bool is_training) {
         using namespace n3ldg_plus;
-        Node *hidden_bucket = bucket(graph, hyper_params.hidden_dim, 0);
-
-        for (int i = 0; i < sentence.size(); ++i) {
-            Node *input_lookup = embedding(graph, model_params.lookup_table, sentence.at(i));
-            Node *dropout_node = dropout(graph, *input_lookup, hyper_params.dropout, is_training);
-            left_to_right_encoder.forward(graph, model_params.left_to_right_encoder_params,
-                    *dropout_node, *hidden_bucket, *hidden_bucket, hyper_params.dropout,
-                    is_training);
-        }
+        Node *input_lookup = embedding(graph, model_params.lookup_table, word);
+        Node *dropout_node = dropout(graph, *input_lookup, hyper_params.dropout, is_training);
+        left_to_right_encoder.forward(graph, model_params.left_to_right_encoder_params,
+                *dropout_node, bucket, bucket, hyper_params.dropout,
+                is_training);
     }
 
     void forwardDecoder(Graph &graph, DecoderComponents &normal_decoder,
@@ -535,26 +541,44 @@ struct GraphBuilder {
             const HyperParams &hyper_params,
             ModelParams &model_params,
             bool is_training) {
+        for (int i = 0; i < answer.size(); ++i) {
+            forwardDecoder(graph, normal_decoder, keyword_decoder,
+                    i == 0 ? nullptr : &answer.at(i - 1), keywords.at(i),
+                    i == 0 ? nullptr : &keywords.at(i - 1), i, hyper_params, model_params,
+                    is_training);
+        }
+    }
+
+    void forwardDecoder(Graph &graph, DecoderComponents &normal_decoder,
+            DecoderComponents &keyword_decoder,
+            const std::string *last_normal_word,
+            const std::string &keyword,
+            const std::string *last_keyword,
+            int pos_i,
+            const HyperParams &hyper_params,
+            ModelParams &model_params,
+            bool is_training) {
         int keyword_bound = model_params.lookup_table.nVSize;
 
-        for (int i = 0; i < answer.size(); ++i) {
-            if (i > 0) {
-                keyword_bound = model_params.lookup_table.elems.from_string(keywords.at(i - 1)) + 1;
-            }
-            int normal_bound = model_params.lookup_table.elems.from_string(keywords.at(i)) + 1;
-            if (normal_bound > keyword_bound) {
-                print(answer);
-                print(keywords);
-                abort();
-            }
-            forwardKeywordDecoderByOneStep(graph, keyword_decoder, i,
-                    i == 0 ? nullptr : &answer.at(i - 1),
-                    i == 0 || answer.at(i - 1) == keywords.at(i - 1), hyper_params, model_params,
-                    is_training, keyword_bound);
-            forwardNormalDecoderByOneStep(graph, normal_decoder, i, keywords.at(i),
-                    i == 0 ? nullptr : &answer.at(i - 1), hyper_params, model_params, is_training,
-                    normal_bound);
+        if (pos_i > 0) {
+            keyword_bound = model_params.lookup_table.elems.from_string(*last_keyword) + 1;
         }
+        int normal_bound = model_params.lookup_table.elems.from_string(keyword) + 1;
+        if (normal_bound > keyword_bound) {
+            cout << boost::format("keyword:%1% normal:%2%") % keyword % last_normal_word << endl;
+            abort();
+        }
+//        if (pos_i == 0) {
+//            cout << boost::format("pos_i:0 keyword:%1%") % keyword << endl;
+//        } else {
+//            cout << boost::format("pos_i:%1% last normal:%2% last keyword:%3% keyword %4%") % pos_i %
+//                *last_normal_word % *last_keyword % keyword << endl;
+//        }
+        forwardKeywordDecoderByOneStep(graph, keyword_decoder, pos_i, last_normal_word,
+                pos_i == 0 || *last_normal_word == *last_keyword, hyper_params, model_params,
+                is_training, keyword_bound);
+        forwardNormalDecoderByOneStep(graph, normal_decoder, pos_i, keyword, last_normal_word,
+                hyper_params, model_params, is_training, normal_bound);
     }
 
     void forwardKeywordDecoderByOneStep(Graph &graph, DecoderComponents &decoder, int i,
