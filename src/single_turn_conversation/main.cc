@@ -552,6 +552,7 @@ int main(int argc, char *argv[]) {
     default_config = parseDefaultConfig(ini_reader);
     cout << "default_config:" << endl;
     default_config.print();
+    globalPoolEnabled() = (default_config.program_mode == ProgramMode::TRAINING);
 
 #if USE_GPU
     n3ldg_cuda::InitCuda(default_config.device_id, default_config.memory_in_gb);
