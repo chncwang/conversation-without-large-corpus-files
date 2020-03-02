@@ -806,7 +806,6 @@ int main(int argc, char *argv[]) {
                 auto getSentenceIndex = [batch_i, batch_count](int i) {
                     return i * batch_count + batch_i;
                 };
-                int len_sum = 0;
                 for (int i = 0; i < batch_size; ++i) {
                     shared_ptr<GraphBuilder> graph_builder(new GraphBuilder);
                     graph_builders.push_back(graph_builder);
@@ -821,8 +820,6 @@ int main(int argc, char *argv[]) {
                     graph_builder->forwardDecoder(graph, decoder_components,
                             response_sentences.at(response_id), hyper_params, model_params, true);
                     decoder_components_vector.push_back(decoder_components);
-
-                    len_sum += response_sentences.at(i).size();
                 }
                 profiler.EndCudaEvent();
 
@@ -835,7 +832,8 @@ int main(int argc, char *argv[]) {
                             model_params.lookup_table);
                     vector<Node*> result_nodes =
                         toNodePointers(decoder_components_vector.at(i).wordvector_to_onehots);
-                    auto result = maxLogProbabilityLoss(result_nodes, word_ids, 1.0 / len_sum);
+                    auto result = maxLogProbabilityLoss(result_nodes, word_ids,
+                            1.0 / batch_size / word_ids.size());
                     loss_sum += result.first;
 
                     analyze(result.second, word_ids, *metric);
@@ -880,7 +878,8 @@ int main(int argc, char *argv[]) {
                                     conversation_pair.response_id), model_params.lookup_table);
                         vector<Node*> result_nodes = toNodePointers(
                                 decoder_components.wordvector_to_onehots);
-                        return maxLogProbabilityLoss(result_nodes, word_ids, 1.0 / len_sum).first;
+                        return maxLogProbabilityLoss(result_nodes, word_ids, 1.0 /
+                                word_ids.size()).first;
                     };
                     cout << format("checking grad - conversation_pair size:%1%") %
                         conversation_pair_in_batch.size() << endl;
