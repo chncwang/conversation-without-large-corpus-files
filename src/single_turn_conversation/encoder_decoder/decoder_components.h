@@ -12,8 +12,7 @@ struct ResultAndKeywordVectors {
 };
 
 struct DecoderComponents {
-    std::vector<LookupNode<Param> *> decoder_lookups_before_dropout;
-    std::vector<DropoutNode *> decoder_lookups;
+    std::vector<Node *> decoder_lookups;
     std::vector<Node *> decoder_keyword_lookups;
     std::vector<Node *> decoder_to_wordvectors;
     std::vector<Node *> decoder_to_keyword_vectors;
@@ -22,13 +21,6 @@ struct DecoderComponents {
     DynamicLSTMBuilder decoder;
     vector<Node*> contexts;
 
-    BucketNode *bucket(int dim, Graph &graph) {
-        BucketNode *node(new BucketNode);
-        node->init(dim);
-        node->forward(graph, 0);
-        return node;
-    }
-
     void forward(Graph &graph, const HyperParams &hyper_params, ModelParams &model_params,
             Node &input,
             Node &keyword_input,
@@ -36,18 +28,17 @@ struct DecoderComponents {
             bool is_training) {
         shared_ptr<AdditiveAttentionBuilder> attention_builder(new AdditiveAttentionBuilder);
         Node *guide = decoder.size() == 0 ?
-            static_cast<Node*>(bucket(hyper_params.hidden_dim,
-                        graph)) : static_cast<Node*>(decoder._hiddens.at(decoder.size() - 1));
+            static_cast<Node*>(n3ldg_plus::bucket(graph, hyper_params.hidden_dim, 0)) :
+            static_cast<Node*>(decoder._hiddens.at(decoder.size() - 1));
         attention_builder->forward(graph, model_params.attention_params, encoder_hiddens, *guide);
         contexts.push_back(attention_builder->_hidden);
 
-        ConcatNode* concat = new ConcatNode;
-        concat->init(2 * hyper_params.word_dim + hyper_params.hidden_dim);
         vector<Node *> ins = {&input, &keyword_input, attention_builder->_hidden};
-        concat->forward(graph, ins);
+        Node *concat = n3ldg_plus::concat(graph, ins);
 
         decoder.forward(graph, model_params.left_to_right_decoder_params, *concat,
-                *bucket(hyper_params.hidden_dim, graph), *bucket(hyper_params.hidden_dim, graph),
+                *n3ldg_plus::bucket(graph, hyper_params.hidden_dim, 0),
+                *n3ldg_plus::bucket(graph, hyper_params.hidden_dim, 0),
                 hyper_params.dropout, is_training);
     }
 
@@ -58,7 +49,7 @@ struct DecoderComponents {
             bool return_keyword) {
         vector<Node *> concat_inputs = {
             contexts.at(i), decoder._hiddens.at(i),
-            i == 0 ? bucket(hyper_params.word_dim, graph) :
+            i == 0 ? n3ldg_plus::bucket(graph, hyper_params.word_dim, 0) :
                 static_cast<Node*>(decoder_lookups.at(i - 1))
         };
         if (decoder_lookups.size() != i) {
@@ -70,20 +61,16 @@ struct DecoderComponents {
 
         Node *keyword;
         if (return_keyword) {
-            ConcatNode *context_concated = new ConcatNode;
-            context_concated->init(2 * hyper_params.hidden_dim);
-            context_concated->forward(graph, {decoder._hiddens.at(i), contexts.at(i)});
-
+            Node *context_concated = n3ldg_plus::concat(graph, {decoder._hiddens.at(i),
+                    contexts.at(i)});
             keyword = n3ldg_plus::linear(graph, model_params.hidden_to_keyword_params,
                     *context_concated);
         } else {
             keyword = nullptr;
         }
 
-        ConcatNode *keyword_concated = new ConcatNode();
-        keyword_concated->init(concat_node->getDim() + hyper_params.word_dim);
-        keyword_concated->forward(graph, {concat_node, decoder_keyword_lookups.at(i)});
-
+        Node *keyword_concated = n3ldg_plus::concat(graph,
+                {concat_node, decoder_keyword_lookups.at(i)});
         Node *decoder_to_wordvector = n3ldg_plus::linear(graph,
                 model_params.hidden_to_wordvector_params, *keyword_concated);
 

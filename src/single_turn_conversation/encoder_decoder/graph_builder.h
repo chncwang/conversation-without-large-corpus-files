@@ -348,18 +348,14 @@ vector<BeamSearchResult> mostProbableKeywords(
         if (should_predict_keyword) {
             DecoderComponents &components = beam.at(ii);
 
-            ConcatNode *concat_node = new ConcatNode();
-            concat_node->init(hyper_params.hidden_dim);
             if (components.decoder_lookups.size() != word_pos) {
                 cerr << boost::format("size:%1% word_pos:%2%") % components.decoder_lookups.size()
                     % word_pos << endl;
                 abort();
             }
 
-            ConcatNode *context_concated = new ConcatNode;
-            context_concated->init(2 * hyper_params.hidden_dim);
-            context_concated->forward(graph, {components.decoder._hiddens.at(word_pos),
-                    components.contexts.at(word_pos)});
+            Node *context_concated = n3ldg_plus::concat(graph,
+                    {components.decoder._hiddens.at(word_pos), components.contexts.at(word_pos)});
 
             Node *keyword = n3ldg_plus::linear(graph, model_params.hidden_to_keyword_params,
                     *context_concated);
@@ -373,11 +369,8 @@ vector<BeamSearchResult> mostProbableKeywords(
                 last_keyword_id = path.at(path.size() - 2).word_id;
             }
 
-            LinearWordVectorNode *keyword_vector_to_onehot = new LinearWordVectorNode;
-            keyword_vector_to_onehot->init(last_keyword_id + 1);
-            keyword_vector_to_onehot->setParam(model_params.lookup_table.E);
-            keyword_vector_to_onehot->forward(graph, *keyword);
-
+            Node *keyword_vector_to_onehot = n3ldg_plus::linearWordVector(graph,
+                    last_keyword_id + 1, model_params.lookup_table.E, *keyword);
             Node *softmax = n3ldg_plus::softmax(graph, *keyword_vector_to_onehot);
 
             components.keyword_vector_to_onehots.push_back(softmax);
@@ -520,23 +513,12 @@ struct GraphBuilder {
     void forward(Graph &graph, const vector<string> &sentence, const HyperParams &hyper_params,
             ModelParams &model_params,
             bool is_training) {
-        BucketNode *hidden_bucket = new BucketNode;
-        hidden_bucket->init(hyper_params.hidden_dim);
-        hidden_bucket->forward(graph);
-        BucketNode *word_bucket = new BucketNode;
-        word_bucket->init(hyper_params.word_dim);
-        word_bucket->forward(graph);
-
+        Node *hidden_bucket = n3ldg_plus::bucket(graph, hyper_params.hidden_dim, 0);
         for (int i = 0; i < sentence.size(); ++i) {
-            LookupNode<Param>* input_lookup(new LookupNode<Param>);
-            input_lookup->init(hyper_params.word_dim);
-            input_lookup->setParam(model_params.lookup_table);
-            input_lookup->forward(graph, sentence.at(i));
-
-            DropoutNode* dropout_node(new DropoutNode(hyper_params.dropout, is_training));
-            dropout_node->init(hyper_params.word_dim);
-            dropout_node->forward(graph, *input_lookup);
-
+            Node *input_lookup = n3ldg_plus::embedding(graph, model_params.lookup_table,
+                    sentence.at(i));
+            Node *dropout_node = n3ldg_plus::dropout(graph, *input_lookup, hyper_params.dropout,
+                    is_training);
             left_to_right_encoder.forward(graph, model_params.left_to_right_encoder_params,
                     *dropout_node, *hidden_bucket, *hidden_bucket, hyper_params.dropout,
                     is_training);
@@ -561,7 +543,7 @@ struct GraphBuilder {
                 print(keywords);
                 abort();
             }
-            forwardDecoderByOneStep(graph, decoder_components, i,
+            forwardDecoderByOneStep(graph, decoder_components, i, i == answer.size() - 1,
                     i == 0 ? nullptr : &answer.at(i - 1), keywords.at(i),
                     i == 0 ||  answer.at(i - 1) == keywords.at(i - 1), hyper_params,
                     model_params, is_training, keyword_bound, normal_bound);
@@ -569,6 +551,7 @@ struct GraphBuilder {
     }
 
     void forwardDecoderByOneStep(Graph &graph, DecoderComponents &decoder_components, int i,
+            bool is_last,
             const std::string *answer,
             const std::string &keyword,
             bool should_predict_keyword,
@@ -591,14 +574,10 @@ struct GraphBuilder {
 
         Node *last_input, *last_keyword;
         if (i > 0) {
-            LookupNode<Param>* before_dropout(new LookupNode<Param>);
-            before_dropout->init(hyper_params.word_dim);
-            before_dropout->setParam(model_params.lookup_table);
-            before_dropout->forward(graph, *answer);
-
-            DropoutNode* decoder_lookup(new DropoutNode(hyper_params.dropout, is_training));
-            decoder_lookup->init(hyper_params.word_dim);
-            decoder_lookup->forward(graph, *before_dropout);
+            Node *before_dropout = n3ldg_plus::embedding(graph, model_params.lookup_table,
+                    *answer);
+            Node *decoder_lookup = n3ldg_plus::dropout(graph, *before_dropout,
+                    hyper_params.dropout, is_training);
             decoder_components.decoder_lookups.push_back(decoder_lookup);
             if (decoder_components.decoder_lookups.size() != i) {
                 cerr << boost::format("decoder_lookups size:%1% i:%2%") %
@@ -615,17 +594,12 @@ struct GraphBuilder {
             }
             last_keyword = decoder_components.decoder_keyword_lookups.back();
         } else {
-            BucketNode *bucket = new BucketNode;
-            bucket->init(hyper_params.word_dim);
-            bucket->forward(graph);
+            Node *bucket = n3ldg_plus::bucket(graph, hyper_params.word_dim, 0);
             last_input = bucket;
             last_keyword = bucket;
         }
 
-        LookupNode<Param> *keyword_node(new LookupNode<Param>);
-        keyword_node->init(hyper_params.word_dim);
-        keyword_node->setParam(model_params.lookup_table);
-        keyword_node->forward(graph, keyword);
+        Node *keyword_node = n3ldg_plus::embedding(graph, model_params.lookup_table, keyword);
         Node * dropout_keyword = n3ldg_plus::dropout(graph, *keyword_node, hyper_params.dropout,
                 is_training);
         decoder_components.decoder_keyword_lookups.push_back(dropout_keyword);
@@ -638,10 +612,13 @@ struct GraphBuilder {
         Node *decoder_to_wordvector = nodes.result;
         decoder_components.decoder_to_wordvectors.push_back(decoder_to_wordvector);
 
-        LinearWordVectorNode *wordvector_to_onehot(new LinearWordVectorNode);
-        wordvector_to_onehot->init(normal_word_id_upper_open_bound);
-        wordvector_to_onehot->setParam(model_params.lookup_table.E);
-        wordvector_to_onehot->forward(graph, *decoder_to_wordvector);
+        Node *wordvector_to_onehot = n3ldg_plus::linearWordVector(graph,
+                normal_word_id_upper_open_bound, model_params.lookup_table.E,
+                *decoder_to_wordvector);
+        if (!is_last) {
+            wordvector_to_onehot = n3ldg_plus::split(graph, wordvector_to_onehot->getDim() - 1,
+                    *wordvector_to_onehot, 1);
+        }
 
         Node *softmax = n3ldg_plus::softmax(graph, *wordvector_to_onehot);
 
@@ -654,7 +631,8 @@ struct GraphBuilder {
             keyword_vector_to_onehot = nullptr;
         } else {
             keyword_vector_to_onehot = n3ldg_plus::linearWordVector(graph,
-                    keyword_word_id_upper_open_bound, model_params.lookup_table.E, *nodes.keyword);
+                    keyword_word_id_upper_open_bound, model_params.lookup_table.E,
+                    *nodes.keyword);
             keyword_vector_to_onehot = n3ldg_plus::softmax(graph, *keyword_vector_to_onehot);
         }
         decoder_components.keyword_vector_to_onehots.push_back(keyword_vector_to_onehot);
@@ -664,11 +642,7 @@ struct GraphBuilder {
             const string &keyword,
             const HyperParams &hyper_params,
             ModelParams &model_params) {
-        LookupNode<Param> *keyword_lookup = new LookupNode<Param>;
-        keyword_lookup->init(hyper_params.word_dim);
-        keyword_lookup->setParam(model_params.lookup_table);
-        keyword_lookup->forward(graph, keyword);
-
+        Node *keyword_lookup = n3ldg_plus::embedding(graph, model_params.lookup_table, keyword);
         Node *dropout_keyword = n3ldg_plus::dropout(graph, *keyword_lookup, hyper_params.dropout,
                 false);
         decoder_components.decoder_keyword_lookups.push_back(dropout_keyword);
@@ -680,15 +654,11 @@ struct GraphBuilder {
             ModelParams &model_params) {
         Node *last_input, * last_keyword;
         if (i > 0) {
-            LookupNode<Param>* before_dropout(new LookupNode<Param>);
-            before_dropout->init(hyper_params.word_dim);
-            before_dropout->setParam(model_params.lookup_table);
-            before_dropout->forward(graph, *answer);
-            decoder_components.decoder_lookups_before_dropout.push_back(before_dropout);
+            Node *before_dropout = n3ldg_plus::embedding(graph, model_params.lookup_table,
+                    *answer);
 
-            DropoutNode* decoder_lookup(new DropoutNode(hyper_params.dropout, false));
-            decoder_lookup->init(hyper_params.word_dim);
-            decoder_lookup->forward(graph, *before_dropout);
+            Node *decoder_lookup = n3ldg_plus::dropout(graph, *before_dropout,
+                    hyper_params.dropout, false);
             decoder_components.decoder_lookups.push_back(decoder_lookup);
             if (decoder_components.decoder_lookups.size() != i) {
                 cerr << boost::format("decoder_lookups size:%1% i:%2%") %
@@ -704,9 +674,7 @@ struct GraphBuilder {
             }
             last_keyword = decoder_components.decoder_keyword_lookups.back();
         } else {
-            BucketNode *bucket = new BucketNode;
-            bucket->init(hyper_params.word_dim);
-            bucket->forward(graph);
+            Node *bucket = n3ldg_plus::bucket(graph, hyper_params.word_dim, 0);
             last_input = bucket;
             last_keyword = bucket;
         }
@@ -720,10 +688,8 @@ struct GraphBuilder {
             const HyperParams &hyper_params,
             ModelParams &model_params,
             vector<Node*> &encoder_hiddens) {
-        LookupNode<Param> *keyword_embedding = new LookupNode<Param>;
-        keyword_embedding->init(hyper_params.word_dim);
-        keyword_embedding->setParam(model_params.lookup_table);
-        keyword_embedding->forward(graph, keyword);
+        Node *keyword_embedding = n3ldg_plus::embedding(graph, model_params.lookup_table,
+                keyword);
         if (decoder_components.decoder_keyword_lookups.size() != i) {
             cerr << "keyword lookup size:" << decoder_components.decoder_keyword_lookups.size()
                 << endl;
@@ -735,10 +701,8 @@ struct GraphBuilder {
         Node *result_node = result.result;
 
         int keyword_id = model_params.lookup_table.elems.from_string(keyword);
-        LinearWordVectorNode *one_hot_node = new LinearWordVectorNode;
-        one_hot_node->init(keyword_id + 1);
-        one_hot_node->setParam(model_params.lookup_table.E);
-        one_hot_node->forward(graph, *result_node);
+        Node *one_hot_node = n3ldg_plus::linearWordVector(graph, keyword_id + 1,
+                model_params.lookup_table.E, *result_node);
         Node *softmax = n3ldg_plus::softmax(graph, *one_hot_node);
         decoder_components.wordvector_to_onehots.push_back(softmax);
     }
