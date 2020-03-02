@@ -230,7 +230,7 @@ HyperParams parseHyperParams(INIReader &ini_reader) {
     hyper_params.learning_rate = learning_rate;
 
     float min_learning_rate = ini_reader.GetReal("hyper", "min_learning_rate", 0.0001f);
-    if (min_learning_rate <= 0.0f) {
+    if (min_learning_rate < 0.0f) {
         cerr << "min_learning_rate wrong" << endl;
         abort();
     }
@@ -875,6 +875,14 @@ int main(int argc, char *argv[]) {
             root_ptr = loadModel(default_config.input_model_file);
             loadModel(default_config, hyper_params, model_params, root_ptr.get(),
                     allocate_model_params);
+            hyper_params.learning_rate_decay = ini_reader.GetFloat("hyper", "learning_rate_decay",
+                    0);
+            hyper_params.min_learning_rate = ini_reader.GetFloat("hyper", "min_learning_rate",
+                    0);
+            hyper_params.learning_rate = ini_reader.GetFloat("hyper", "learning_rate",
+                    0);
+            hyper_params.batch_size = ini_reader.GetFloat("hyper", "batch_size", 1);
+            hyper_params.print();
         }
     }
     auto black_list = readBlackList(default_config.black_list_file);
