@@ -294,9 +294,9 @@ string saveModel(const HyperParams &hyper_params, ModelParams &model_params,
     Json::StreamWriterBuilder builder;
     builder["commentStyle"] = "None";
     builder["indentation"] = "";
-    string json_str = Json::writeString(builder, root);
+    unique_ptr<Json::StreamWriter> writer(builder.newStreamWriter());
     ofstream out(filename);
-    out << json_str;
+    writer->write(root, &out);
     out.close();
     cout << format("model file %1% saved") % filename << endl;
     return filename;
