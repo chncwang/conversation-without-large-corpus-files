@@ -477,6 +477,14 @@ float metricTestPosts(const HyperParams &hyper_params, ModelParams &model_params
                         response_sentences.at(response_id), [&](const string &w) -> int {
                         return model_params.lookup_table.getElemId(w);
                         });
+                for (int i = 0; i < word_ids.size(); ++i) {
+                    if (i != word_ids.size() - 1) {
+                        --word_ids.at(i);
+                    } else if (word_ids.at(i) != 0) {
+                        cerr << "last word id is not 0:" << word_ids.at(i) << endl;
+                        abort();
+                    }
+                }
                 int word_ids_size = word_ids.size();
                 auto keyword_nodes_and_ids = keywordNodesAndIds(decoder_components, idf_info,
                         model_params);
@@ -485,15 +493,8 @@ float metricTestPosts(const HyperParams &hyper_params, ModelParams &model_params
                     nodes.push_back(keyword_nodes_and_ids.first.at(i));
                     word_ids.push_back(keyword_nodes_and_ids.second.at(i));
                 }
-                vector<int> filtered_word_ids;
-                vector<Node*> filtered_nodes;
-                for (int i = 0; i < word_ids.size(); ++i) {
-                    int word_id = word_ids.at(i);
-                    filtered_word_ids.push_back(word_id);
-                    filtered_nodes.push_back(nodes.at(i));
-                }
 
-                float perplex = computePerplex(filtered_nodes, filtered_word_ids, sentence_len);
+                float perplex = computePerplex(nodes, word_ids, sentence_len);
                 avg_perplex += perplex;
                 sum += word_ids_size;
             }
@@ -869,6 +870,7 @@ int main(int argc, char *argv[]) {
                     allocate_model_params);
         }
     } else {
+        globalPoolEnabled() = false;
         if (default_config.input_model_file == "") {
             abort();
         } else {
