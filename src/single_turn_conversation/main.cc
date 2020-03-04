@@ -731,8 +731,8 @@ int main(int argc, char *argv[]) {
 #if USE_GPU
     n3ldg_cuda::InitCuda(default_config.device_id, default_config.memory_in_gb);
 #endif
-    bool &pool_enabled = globalPoolEnabled();
-    pool_enabled = false;
+    globalPoolEnabled() = true;
+    globalLimitedDimEnabled() = true;
 
     HyperParams hyper_params = parseHyperParams(ini_reader);
     cout << "hyper_params:" << endl;
