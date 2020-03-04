@@ -22,6 +22,7 @@ struct HyperParams : public N3LDGSerializable {
     float dropout;
     int batch_size;
     int beam_size;
+    int decoder_layer;
     float learning_rate;
     float learning_rate_decay;
     float min_learning_rate;
@@ -58,6 +59,7 @@ struct HyperParams : public N3LDGSerializable {
         dropout = json["dropout"].asFloat();
         batch_size = json["batch_size"].asInt();
         beam_size = json["beam_size"].asInt();
+        decoder_layer = json["decoder_layer"].asInt();
         learning_rate = json["learning_rate"].asFloat();
         min_learning_rate = json["min_learning_rate"].asFloat();
         warm_up_learning_rate = json["warm_up_learning_rate"].asFloat();
@@ -75,6 +77,7 @@ struct HyperParams : public N3LDGSerializable {
             << "dropout:" << dropout << std::endl
             << "batch_size:" << batch_size << std::endl
             << "beam_size:" << beam_size << std::endl
+            << "decoder_layer:" << decoder_layer << std::endl
             << "learning_rate:" << learning_rate << std::endl
             << "learning_rate_decay:" << learning_rate_decay << std::endl
             << "warm_up_learning_rate:" << warm_up_learning_rate << std::endl

@@ -222,6 +222,9 @@ HyperParams parseHyperParams(INIReader &ini_reader) {
     }
     hyper_params.beam_size = beam_size;
 
+    int decoder_layer = ini_reader.GetInteger("hyper", "decoder_layer", 1);
+    hyper_params.decoder_layer = decoder_layer;
+
     float learning_rate = ini_reader.GetReal("hyper", "learning_rate", 0.001f);
     if (learning_rate <= 0.0f) {
         cerr << "learning_rate wrong" << endl;
@@ -852,8 +855,14 @@ int main(int argc, char *argv[]) {
         model_params.attention_params.init(hyper_params.hidden_dim, hyper_params.hidden_dim);
         model_params.left_to_right_encoder_params.init(hyper_params.hidden_dim,
                 hyper_params.word_dim);
-        model_params.left_to_right_decoder_params.init(hyper_params.hidden_dim,
-                2 * hyper_params.word_dim + hyper_params.hidden_dim);
+        function<void(LSTM1Params &, int)> init_decoder_param =
+            [&](LSTM1Params &params, int layer) {
+            params.init(hyper_params.hidden_dim, hyper_params.hidden_dim);
+        };
+        model_params.left_to_right_decoder_params.init(hyper_params.decoder_layer,
+                init_decoder_param);
+        model_params.decoder_input_linear_params.init(hyper_params.hidden_dim,
+                hyper_params.hidden_dim + 2 * hyper_params.word_dim);
         model_params.hidden_to_wordvector_params.init(hyper_params.word_dim,
                 2 * hyper_params.hidden_dim + 2 * hyper_params.word_dim, false);
         model_params.hidden_to_keyword_params.init(hyper_params.word_dim,
@@ -1034,6 +1043,7 @@ int main(int argc, char *argv[]) {
                     auto response_sentence = response_sentences.at(response_id);
                     const WordIdfInfo &idf_info = response_idf_info_list.at(response_id);
                     DecoderComponents decoder_components;
+                    decoder_components.init(hyper_params.decoder_layer);
                     graph_builder->forwardDecoder(graph, decoder_components, response_sentence,
                             idf_info.keywords_behind, hyper_params, model_params, true);
                     decoder_components_vector.push_back(decoder_components);

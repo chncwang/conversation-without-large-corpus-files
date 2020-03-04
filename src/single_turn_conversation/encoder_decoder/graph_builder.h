@@ -332,179 +332,177 @@ vector<BeamSearchResult> mostProbableKeywords(
         bool is_first,
         set<int> &searched_ids,
         const vector<string> &black_list) {
-    cout << "black size:" << black_list.size() << endl;
-    vector<Node *> keyword_nodes, hiddens, nodes;
-    for (int ii = 0; ii < beam.size(); ++ii) {
-        bool should_predict_keyword;
-        if (last_results.empty()) {
-            should_predict_keyword = true;
-        } else {
-            vector<WordIdAndProbability> path = last_results.at(ii).getPath();
-            int size = path.size();
-            should_predict_keyword = path.at(size - 2).word_id == path.at(size - 1).word_id;
-        }
-        Node *node, *keyword_node, *hidden;
-        hidden = beam.at(ii).decoder._hiddens.at(word_pos);
-        if (should_predict_keyword) {
-            DecoderComponents &components = beam.at(ii);
+//    cout << "black size:" << black_list.size() << endl;
+//    vector<Node *> keyword_nodes, hiddens, nodes;
+//    for (int ii = 0; ii < beam.size(); ++ii) {
+//        bool should_predict_keyword;
+//        if (last_results.empty()) {
+//            should_predict_keyword = true;
+//        } else {
+//            vector<WordIdAndProbability> path = last_results.at(ii).getPath();
+//            int size = path.size();
+//            should_predict_keyword = path.at(size - 2).word_id == path.at(size - 1).word_id;
+//        }
+//        Node *node, *keyword_node, *hidden;
+//        hidden = beam.at(ii).decoder._hiddens.at(word_pos);
+//        if (should_predict_keyword) {
+//            DecoderComponents &components = beam.at(ii);
 
-            if (components.decoder_lookups.size() != word_pos) {
-                cerr << boost::format("size:%1% word_pos:%2%") % components.decoder_lookups.size()
-                    % word_pos << endl;
-                abort();
-            }
+//            if (components.decoder_lookups.size() != word_pos) {
+//                cerr << boost::format("size:%1% word_pos:%2%") % components.decoder_lookups.size()
+//                    % word_pos << endl;
+//                abort();
+//            }
 
-            Node *context_concated = n3ldg_plus::concat(graph,
-                    {components.decoder._hiddens.at(word_pos), components.contexts.at(word_pos)});
+//            Node *context_concated = n3ldg_plus::concat(graph,
+//                    {components.decoder._hiddens.at(word_pos), components.contexts.at(word_pos)});
 
-            Node *keyword = n3ldg_plus::linear(graph, model_params.hidden_to_keyword_params,
-                    *context_concated);
-            keyword_node = keyword;
+//            Node *keyword = n3ldg_plus::linear(graph, model_params.hidden_to_keyword_params,
+//                    *context_concated);
+//            keyword_node = keyword;
 
-            int last_keyword_id;
-            if (last_results.empty()) {
-                last_keyword_id = model_params.lookup_table.nVSize - 1;
-            } else {
-                vector<WordIdAndProbability> path = last_results.at(ii).getPath();
-                last_keyword_id = path.at(path.size() - 2).word_id;
-            }
+//            int last_keyword_id;
+//            if (last_results.empty()) {
+//                last_keyword_id = model_params.lookup_table.nVSize - 1;
+//            } else {
+//                vector<WordIdAndProbability> path = last_results.at(ii).getPath();
+//                last_keyword_id = path.at(path.size() - 2).word_id;
+//            }
 
-            Node *keyword_vector_to_onehot = n3ldg_plus::linearWordVector(graph,
-                    last_keyword_id + 1, model_params.lookup_table.E, *keyword);
-            Node *softmax = n3ldg_plus::softmax(graph, *keyword_vector_to_onehot);
+//            Node *keyword_vector_to_onehot = n3ldg_plus::linearWordVector(graph,
+//                    last_keyword_id + 1, model_params.lookup_table.E, *keyword);
+//            Node *softmax = n3ldg_plus::softmax(graph, *keyword_vector_to_onehot);
 
-            components.keyword_vector_to_onehots.push_back(softmax);
-            node = softmax;
-        } else {
-            node = nullptr;
-            keyword_node = nullptr;
-        }
-        nodes.push_back(node);
-        keyword_nodes.push_back(keyword_node);
-        hiddens.push_back(hidden);
-    }
-    graph.compute();
+//            components.keyword_vector_to_onehots.push_back(softmax);
+//            node = softmax;
+//        } else {
+//            node = nullptr;
+//            keyword_node = nullptr;
+//        }
+//        nodes.push_back(node);
+//        keyword_nodes.push_back(keyword_node);
+//        hiddens.push_back(hidden);
+//    }
+//    graph.compute();
 
-    auto cmp = [](const BeamSearchResult &a, const BeamSearchResult &b) {
-        return a.finalScore() > b.finalScore();
-    };
-    priority_queue<BeamSearchResult, vector<BeamSearchResult>, decltype(cmp)> queue(cmp);
-    vector<BeamSearchResult> results;
-    for (int i = 0; i < (is_first ? 1 : nodes.size()); ++i) {
-//    for (int i = 0; i < nodes.size(); ++i) {
-        const Node *node_ptr = nodes.at(i);
-        if (node_ptr == nullptr) {
-            vector<WordIdAndProbability> new_id_and_probs = last_results.at(i).getPath();
-            WordIdAndProbability &last_keyword = new_id_and_probs.at(new_id_and_probs.size() - 2);
-            WordIdAndProbability &last_norm = new_id_and_probs.at(new_id_and_probs.size() - 1);
-            WordIdAndProbability w = {last_keyword.dim, last_keyword.word_id,
-                last_norm.probability};
-            new_id_and_probs.push_back(w);
-            BeamSearchResult beam_search_result(beam.at(i), new_id_and_probs,
-                    last_results.at(i).finalLogProbability());
-            if (queue.size() < k) {
-                queue.push(beam_search_result);
-            } else if (queue.top().finalScore() < beam_search_result.finalScore()) {
-                queue.pop();
-                queue.push(beam_search_result);
-            }
-        } else {
-            const Node &node = *nodes.at(i);
+//    auto cmp = [](const BeamSearchResult &a, const BeamSearchResult &b) {
+//        return a.finalScore() > b.finalScore();
+//    };
+//    priority_queue<BeamSearchResult, vector<BeamSearchResult>, decltype(cmp)> queue(cmp);
+//    vector<BeamSearchResult> results;
+//    for (int i = 0; i < (is_first ? 1 : nodes.size()); ++i) {
+//        const Node *node_ptr = nodes.at(i);
+//        if (node_ptr == nullptr) {
+//            vector<WordIdAndProbability> new_id_and_probs = last_results.at(i).getPath();
+//            WordIdAndProbability &last_keyword = new_id_and_probs.at(new_id_and_probs.size() - 2);
+//            WordIdAndProbability &last_norm = new_id_and_probs.at(new_id_and_probs.size() - 1);
+//            WordIdAndProbability w = {last_keyword.dim, last_keyword.word_id,
+//                last_norm.probability};
+//            new_id_and_probs.push_back(w);
+//            BeamSearchResult beam_search_result(beam.at(i), new_id_and_probs,
+//                    last_results.at(i).finalLogProbability());
+//            if (queue.size() < k) {
+//                queue.push(beam_search_result);
+//            } else if (queue.top().finalScore() < beam_search_result.finalScore()) {
+//                queue.pop();
+//                queue.push(beam_search_result);
+//            }
+//        } else {
+//            const Node &node = *nodes.at(i);
 
-            BeamSearchResult beam_search_result;
-            for (int j = 0; j < nodes.at(i)->getDim(); ++j) {
-                bool should_continue = false;
-                if (is_first) {
-                    if (searched_ids.find(j) != searched_ids.end()) {
-                        continue;
-                    }
-                }
-                if (j == model_params.lookup_table.getElemId(::unknownkey)) {
-                    continue;
-                }
+//            BeamSearchResult beam_search_result;
+//            for (int j = 0; j < nodes.at(i)->getDim(); ++j) {
+//                bool should_continue = false;
+//                if (is_first) {
+//                    if (searched_ids.find(j) != searched_ids.end()) {
+//                        continue;
+//                    }
+//                }
+//                if (j == model_params.lookup_table.getElemId(::unknownkey)) {
+//                    continue;
+//                }
 
-                if (word_idf_table.at(model_params.lookup_table.elems.from_id(j)) >= 9.0f) {
-                    break;
-                }
+//                if (word_idf_table.at(model_params.lookup_table.elems.from_id(j)) >= 9.0f) {
+//                    break;
+//                }
 
-                for (const string &black : black_list) {
-                    if (black == model_params.lookup_table.elems.from_id(j)) {
-                        should_continue = true;
-                    }
-                }
-                if (should_continue) {
-                    continue;
-                }
-                const string &word = model_params.lookup_table.elems.from_id(j);
-                if (word_pos == 0 && word_idf_table.at(word) <= default_config.keyword_bound) {
-                    continue;
-                }
-                dtype value = node.getVal().v[j];
-                dtype log_probability = log(value);
-                dtype word_probability = value;
-                vector<WordIdAndProbability> word_ids;
-                if (!last_results.empty()) {
-                    log_probability += last_results.at(i).finalLogProbability();
-                    word_ids = last_results.at(i).getPath();
-                }
-                if (log_probability != log_probability) {
-                    cerr << node.getVal().vec() << endl;
-                    cerr << "keyword node:" << endl << keyword_nodes.at(i)->getVal().vec() << endl;
-                    cerr << "hidden node:" << endl << hiddens.at(i)->getVal().vec() << endl;
-                    Json::StreamWriterBuilder builder;
-                    builder["commentStyle"] = "None";
-                    builder["indentation"] = "";
-                    string json_str = Json::writeString(builder, model_params.hidden_to_keyword_params.W.toJson());
-                    cerr << "param W:" << endl << json_str << endl;
-                    abort();
-                }
-                word_ids.push_back(WordIdAndProbability(node.getDim(), j, word_probability));
+//                for (const string &black : black_list) {
+//                    if (black == model_params.lookup_table.elems.from_id(j)) {
+//                        should_continue = true;
+//                    }
+//                }
+//                if (should_continue) {
+//                    continue;
+//                }
+//                const string &word = model_params.lookup_table.elems.from_id(j);
+//                if (word_pos == 0 && word_idf_table.at(word) <= default_config.keyword_bound) {
+//                    continue;
+//                }
+//                dtype value = node.getVal().v[j];
+//                dtype log_probability = log(value);
+//                dtype word_probability = value;
+//                vector<WordIdAndProbability> word_ids;
+//                if (!last_results.empty()) {
+//                    log_probability += last_results.at(i).finalLogProbability();
+//                    word_ids = last_results.at(i).getPath();
+//                }
+//                if (log_probability != log_probability) {
+//                    cerr << node.getVal().vec() << endl;
+//                    cerr << "keyword node:" << endl << keyword_nodes.at(i)->getVal().vec() << endl;
+//                    cerr << "hidden node:" << endl << hiddens.at(i)->getVal().vec() << endl;
+//                    Json::StreamWriterBuilder builder;
+//                    builder["commentStyle"] = "None";
+//                    builder["indentation"] = "";
+//                    string json_str = Json::writeString(builder, model_params.hidden_to_keyword_params.W.toJson());
+//                    cerr << "param W:" << endl << json_str << endl;
+//                    abort();
+//                }
+//                word_ids.push_back(WordIdAndProbability(node.getDim(), j, word_probability));
 
-                BeamSearchResult local = BeamSearchResult(beam.at(i), word_ids, log_probability);
-//                if (local_queue.size() < min(k, node.getDim() / 10 + 1)) {
-                if (queue.size() < k) {
-                    queue.push(local);
-                } else if (queue.top().finalScore() < local.finalScore()) {
-                    queue.pop();
-                    queue.push(local);
-                }
-            }
-        }
-    }
+//                BeamSearchResult local = BeamSearchResult(beam.at(i), word_ids, log_probability);
+//                if (queue.size() < k) {
+//                    queue.push(local);
+//                } else if (queue.top().finalScore() < local.finalScore()) {
+//                    queue.pop();
+//                    queue.push(local);
+//                }
+//            }
+//        }
+//    }
 
-    while (!queue.empty()) {
-        auto &e = queue.top();
-        if (e.finalScore() != e.finalScore()) {
-            printWordIdsWithKeywords(e.getPath(), model_params.lookup_table, word_idf_table);
-            cerr << "final score nan" << endl;
-            abort();
-        }
-        if (is_first) {
-            int size = e.getPath().size();
-            if (size != 1) {
-                cerr << boost::format("size is not 1:%1%\n") % size;
-                abort();
-            }
-            searched_ids.insert(e.getPath().at(0).word_id);
-        }
-        results.push_back(e);
-        queue.pop();
-    }
+//    while (!queue.empty()) {
+//        auto &e = queue.top();
+//        if (e.finalScore() != e.finalScore()) {
+//            printWordIdsWithKeywords(e.getPath(), model_params.lookup_table, word_idf_table);
+//            cerr << "final score nan" << endl;
+//            abort();
+//        }
+//        if (is_first) {
+//            int size = e.getPath().size();
+//            if (size != 1) {
+//                cerr << boost::format("size is not 1:%1%\n") % size;
+//                abort();
+//            }
+//            searched_ids.insert(e.getPath().at(0).word_id);
+//        }
+//        results.push_back(e);
+//        queue.pop();
+//    }
 
-    vector<BeamSearchResult> final_results;
-    int i = 0;
-    for (const BeamSearchResult &result : results) {
-        vector<int> ids = transferVector<int, WordIdAndProbability>(result.getPath(),
-                [](const WordIdAndProbability &in) ->int {return in.word_id;});
-        string sentence = ::getSentence(ids, model_params);
-        final_results.push_back(result);
-        cout << boost::format("mostProbableKeywords - i:%1% prob:%2% score:%3%") % i %
-            result.finalLogProbability() % result.finalScore() << endl;
-        printWordIdsWithKeywords(result.getPath(), model_params.lookup_table, word_idf_table);
-        ++i;
-    }
+//    vector<BeamSearchResult> final_results;
+//    int i = 0;
+//    for (const BeamSearchResult &result : results) {
+//        vector<int> ids = transferVector<int, WordIdAndProbability>(result.getPath(),
+//                [](const WordIdAndProbability &in) ->int {return in.word_id;});
+//        string sentence = ::getSentence(ids, model_params);
+//        final_results.push_back(result);
+//        cout << boost::format("mostProbableKeywords - i:%1% prob:%2% score:%3%") % i %
+//            result.finalLogProbability() % result.finalScore() << endl;
+//        printWordIdsWithKeywords(result.getPath(), model_params.lookup_table, word_idf_table);
+//        ++i;
+//    }
 
-    return final_results;
+//    return final_results;
 }
 
 struct GraphBuilder {

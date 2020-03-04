@@ -15,12 +15,14 @@ struct ModelParams : public N3LDGSerializable, public TunableCombination<BasePar
     UniParams hidden_to_wordvector_params;
     UniParams hidden_to_keyword_params;
     LSTM1Params left_to_right_encoder_params;
-    LSTM1Params left_to_right_decoder_params;
+    ParamArray<LSTM1Params> left_to_right_decoder_params;
+    UniParams decoder_input_linear_params;
     AdditiveAttentionParams attention_params;
 
     ModelParams() : hidden_to_wordvector_params("hidden_to_wordvector_params"),
     hidden_to_keyword_params("hidden_to_keyword_params"), left_to_right_encoder_params("encoder"),
-    left_to_right_decoder_params("decoder"), attention_params("attention"){}
+    left_to_right_decoder_params("decoder"),
+    decoder_input_linear_params("decoder_input_linear_params"), attention_params("attention"){}
 
     Json::Value toJson() const override {
         Json::Value json;
@@ -29,6 +31,7 @@ struct ModelParams : public N3LDGSerializable, public TunableCombination<BasePar
         json["hidden_to_keyword_params"] = hidden_to_keyword_params.toJson();
         json["left_to_right_encoder_params"] = left_to_right_encoder_params.toJson();
         json["left_to_right_decoder_params"] = left_to_right_decoder_params.toJson();
+        json["decoder_input_linear_params"] = decoder_input_linear_params.toJson();
         json["attention_params"] = attention_params.toJson();
         return json;
     }
@@ -39,20 +42,23 @@ struct ModelParams : public N3LDGSerializable, public TunableCombination<BasePar
         hidden_to_keyword_params.fromJson(json["hidden_to_keyword_params"]);
         left_to_right_encoder_params.fromJson(json["left_to_right_encoder_params"]);
         left_to_right_decoder_params.fromJson(json["left_to_right_decoder_params"]);
+        decoder_input_linear_params.fromJson(json["decoder_input_linear_params"]);
         attention_params.fromJson(json["attention_params"]);
     }
 
 #if USE_GPU
     std::vector<n3ldg_cuda::Transferable *> transferablePtrs() override {
         return {&lookup_table, &hidden_to_wordvector_params, &hidden_to_keyword_params,
-            &left_to_right_encoder_params, &left_to_right_decoder_params, &attention_params};
+            &left_to_right_encoder_params, &left_to_right_decoder_params,
+            &decoder_input_linear_params, &attention_params};
     }
 #endif
 
 protected:
     virtual std::vector<Tunable<BaseParam> *> tunableComponents() override {
         return {&lookup_table, &hidden_to_wordvector_params, &hidden_to_keyword_params,
-            &left_to_right_encoder_params, &left_to_right_decoder_params, &attention_params};
+            &left_to_right_encoder_params, &left_to_right_decoder_params,
+            &decoder_input_linear_params, &attention_params};
     }
 };
 
