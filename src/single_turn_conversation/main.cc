@@ -344,55 +344,53 @@ float metricTestPosts(const HyperParams &hyper_params, ModelParams &model_params
         const vector<PostAndResponses> &post_and_responses_vector,
         const vector<vector<string>> &post_sentences,
         const vector<vector<string>> &response_sentences) {
-    cout << "metricTestPosts begin" << endl;
-    hyper_params.print();
-    float rep_perplex(0.0f);
-    int size_sum = 0;
-    thread_pool pool(16);
-    mutex rep_perplex_mutex;
+//    cout << "metricTestPosts begin" << endl;
+//    hyper_params.print();
+//    float rep_perplex(0.0f);
+//    int size_sum = 0;
+//    thread_pool pool(16);
+//    mutex rep_perplex_mutex;
 
-    for (const PostAndResponses &post_and_responses : post_and_responses_vector) {
-        auto f = [&]() {
-            cout << "post:" << endl;
-            print(post_sentences.at(post_and_responses.post_id));
+//    for (const PostAndResponses &post_and_responses : post_and_responses_vector) {
+//        auto f = [&]() {
+//            cout << "post:" << endl;
+//            print(post_sentences.at(post_and_responses.post_id));
 
-            const vector<int> &response_ids = post_and_responses.response_ids;
-            float sum = 0.0f;
-            int word_sum = 0;
-            cout << "response size:" << response_ids.size() << endl;
-            for (int response_id : response_ids) {
-                //            cout << "response:" << endl;
-                //            print(response_sentences.at(response_id));
-                Graph graph;
-                GraphBuilder graph_builder;
-                graph_builder.forward(graph, post_sentences.at(post_and_responses.post_id),
-                        hyper_params, model_params, false);
-                DecoderComponents decoder_components;
-                graph_builder.forwardDecoder(graph, decoder_components,
-                        response_sentences.at(response_id), hyper_params, model_params, false);
-                graph.compute();
-                vector<Node*> nodes = toNodePointers(decoder_components.wordvector_to_onehots);
-                vector<int> word_ids = transferVector<int, string>(
-                        response_sentences.at(response_id), [&](const string &w) -> int {
-                        return model_params.lookup_table.getElemId(w);
-                        });
-                float perplex = computePerplex(nodes, word_ids);
-                sum += perplex;
-                word_sum += word_ids.size();
-            }
-            cout << "avg_perplex:" << exp(sum/word_sum) << endl;
-            rep_perplex_mutex.lock();
-            rep_perplex += sum;
-            size_sum += word_sum;
-            rep_perplex_mutex.unlock();
-        };
-        post(pool, f);
-    }
-    pool.join();
+//            const vector<int> &response_ids = post_and_responses.response_ids;
+//            float sum = 0.0f;
+//            int word_sum = 0;
+//            cout << "response size:" << response_ids.size() << endl;
+//            for (int response_id : response_ids) {
+//                Graph graph;
+//                GraphBuilder graph_builder;
+//                graph_builder.forward(graph, post_sentences.at(post_and_responses.post_id),
+//                        hyper_params, model_params, false);
+//                DecoderComponents decoder_components;
+//                graph_builder.forwardDecoder(graph, decoder_components,
+//                        response_sentences.at(response_id), hyper_params, model_params, false);
+//                graph.compute();
+//                vector<Node*> nodes = toNodePointers(decoder_components.wordvector_to_onehots);
+//                vector<int> word_ids = transferVector<int, string>(
+//                        response_sentences.at(response_id), [&](const string &w) -> int {
+//                        return model_params.lookup_table.getElemId(w);
+//                        });
+//                float perplex = computePerplex(nodes, word_ids);
+//                sum += perplex;
+//                word_sum += word_ids.size();
+//            }
+//            cout << "avg_perplex:" << exp(sum/word_sum) << endl;
+//            rep_perplex_mutex.lock();
+//            rep_perplex += sum;
+//            size_sum += word_sum;
+//            rep_perplex_mutex.unlock();
+//        };
+//        post(pool, f);
+//    }
+//    pool.join();
 
-    rep_perplex = exp(rep_perplex / size_sum);
-    cout << "total avg perplex:" << rep_perplex << endl;
-    return rep_perplex;
+//    rep_perplex = exp(rep_perplex / size_sum);
+//    cout << "total avg perplex:" << rep_perplex << endl;
+//    return rep_perplex;
 }
 
 void decodeTestPosts(const HyperParams &hyper_params, ModelParams &model_params,
@@ -649,6 +647,9 @@ int main(int argc, char *argv[]) {
                 post_ids_and_response_ids.second);
     }
 
+    unordered_map<string, unordered_map<string, float>> pmi_map = calPMI(post_sentences,
+            response_sentences, train_conversation_pairs);
+
     ModelParams model_params;
     int beam_size = hyper_params.beam_size;
 
@@ -671,7 +672,7 @@ int main(int argc, char *argv[]) {
         model_params.left_to_right_encoder_params.init(hyper_params.hidden_dim,
                 hyper_params.word_dim);
         model_params.left_to_right_decoder_params.init(hyper_params.hidden_dim,
-                hyper_params.word_dim + hyper_params.hidden_dim);
+                2 * hyper_params.word_dim + hyper_params.hidden_dim);
         model_params.hidden_to_wordvector_params.init(hyper_params.word_dim,
                 hyper_params.hidden_dim + hyper_params.hidden_dim + hyper_params.word_dim, false);
     };
@@ -814,6 +815,7 @@ int main(int argc, char *argv[]) {
                 auto getSentenceIndex = [batch_i, batch_count](int i) {
                     return i * batch_count + batch_i;
                 };
+                vector<string> keywords;
                 for (int i = 0; i < batch_size; ++i) {
                     shared_ptr<GraphBuilder> graph_builder(new GraphBuilder);
                     graph_builders.push_back(graph_builder);
@@ -824,9 +826,13 @@ int main(int argc, char *argv[]) {
                     graph_builder->forward(graph, post_sentences.at(post_id), hyper_params,
                             model_params, true);
                     int response_id = train_conversation_pairs.at(instance_index).response_id;
+                    string keyword = getKeyword(post_sentences.at(post_id),
+                            response_sentences.at(response_id), pmi_map);
+                    keywords.push_back(keyword);
                     DecoderComponents decoder_components;
                     graph_builder->forwardDecoder(graph, decoder_components,
-                            response_sentences.at(response_id), hyper_params, model_params, true);
+                            response_sentences.at(response_id), keyword, hyper_params,
+                            model_params, true);
                     decoder_components_vector.push_back(decoder_components);
                 }
                 profiler.EndCudaEvent();
@@ -855,6 +861,7 @@ int main(int argc, char *argv[]) {
                             int post_id = train_conversation_pairs.at(instance_index).post_id;
                             cout << "post:" << post_id << endl;
                             print(post_sentences.at(post_id));
+                            cout << "keyword:" << keywords.at(i) << endl;
                             cout << "golden answer:" << endl;
                             printWordIds(word_ids, model_params.lookup_table);
                             cout << "output:" << endl;
@@ -869,25 +876,25 @@ int main(int argc, char *argv[]) {
 
                 if (default_config.check_grad) {
                     auto loss_function = [&](const ConversationPair &conversation_pair) -> dtype {
-                        GraphBuilder graph_builder;
-                        Graph graph(false);
+//                        GraphBuilder graph_builder;
+//                        Graph graph(false);
 
-                        graph_builder.forward(graph, post_sentences.at(conversation_pair.post_id),
-                                hyper_params, model_params, true);
+//                        graph_builder.forward(graph, post_sentences.at(conversation_pair.post_id),
+//                                hyper_params, model_params, true);
 
-                        DecoderComponents decoder_components;
-                        graph_builder.forwardDecoder(graph, decoder_components,
-                                response_sentences.at(conversation_pair.response_id),
-                                hyper_params, model_params, true);
+//                        DecoderComponents decoder_components;
+//                        graph_builder.forwardDecoder(graph, decoder_components,
+//                                response_sentences.at(conversation_pair.response_id),
+//                                hyper_params, model_params, true);
 
-                        graph.compute();
+//                        graph.compute();
 
-                        vector<int> word_ids = toIds(response_sentences.at(
-                                    conversation_pair.response_id), model_params.lookup_table);
-                        vector<Node*> result_nodes = toNodePointers(
-                                decoder_components.wordvector_to_onehots);
-                        return maxLogProbabilityLoss(result_nodes, word_ids, 1.0 /
-                                word_ids.size()).first;
+//                        vector<int> word_ids = toIds(response_sentences.at(
+//                                    conversation_pair.response_id), model_params.lookup_table);
+//                        vector<Node*> result_nodes = toNodePointers(
+//                                decoder_components.wordvector_to_onehots);
+//                        return maxLogProbabilityLoss(result_nodes, word_ids, 1.0 /
+//                                word_ids.size()).first;
                     };
                     cout << format("checking grad - conversation_pair size:%1%") %
                         conversation_pair_in_batch.size() << endl;
