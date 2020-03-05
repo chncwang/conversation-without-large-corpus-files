@@ -343,54 +343,58 @@ void loadModel(const DefaultConfig &default_config, HyperParams &hyper_params,
 float metricTestPosts(const HyperParams &hyper_params, ModelParams &model_params,
         const vector<PostAndResponses> &post_and_responses_vector,
         const vector<vector<string>> &post_sentences,
-        const vector<vector<string>> &response_sentences) {
-//    cout << "metricTestPosts begin" << endl;
-//    hyper_params.print();
-//    float rep_perplex(0.0f);
-//    int size_sum = 0;
-//    thread_pool pool(16);
-//    mutex rep_perplex_mutex;
+        const vector<vector<string>> &response_sentences,
+        const unordered_map<string, unordered_map<string, float>> &pmi_map) {
+    cout << "metricTestPosts begin" << endl;
+    hyper_params.print();
+    float rep_perplex(0.0f);
+    int size_sum = 0;
+    thread_pool pool(16);
+    mutex rep_perplex_mutex;
 
-//    for (const PostAndResponses &post_and_responses : post_and_responses_vector) {
-//        auto f = [&]() {
-//            cout << "post:" << endl;
-//            print(post_sentences.at(post_and_responses.post_id));
+    for (const PostAndResponses &post_and_responses : post_and_responses_vector) {
+        auto f = [&]() {
+            cout << "post:" << endl;
+            print(post_sentences.at(post_and_responses.post_id));
 
-//            const vector<int> &response_ids = post_and_responses.response_ids;
-//            float sum = 0.0f;
-//            int word_sum = 0;
-//            cout << "response size:" << response_ids.size() << endl;
-//            for (int response_id : response_ids) {
-//                Graph graph;
-//                GraphBuilder graph_builder;
-//                graph_builder.forward(graph, post_sentences.at(post_and_responses.post_id),
-//                        hyper_params, model_params, false);
-//                DecoderComponents decoder_components;
-//                graph_builder.forwardDecoder(graph, decoder_components,
-//                        response_sentences.at(response_id), hyper_params, model_params, false);
-//                graph.compute();
-//                vector<Node*> nodes = toNodePointers(decoder_components.wordvector_to_onehots);
-//                vector<int> word_ids = transferVector<int, string>(
-//                        response_sentences.at(response_id), [&](const string &w) -> int {
-//                        return model_params.lookup_table.getElemId(w);
-//                        });
-//                float perplex = computePerplex(nodes, word_ids);
-//                sum += perplex;
-//                word_sum += word_ids.size();
-//            }
-//            cout << "avg_perplex:" << exp(sum/word_sum) << endl;
-//            rep_perplex_mutex.lock();
-//            rep_perplex += sum;
-//            size_sum += word_sum;
-//            rep_perplex_mutex.unlock();
-//        };
-//        post(pool, f);
-//    }
-//    pool.join();
+            const vector<int> &response_ids = post_and_responses.response_ids;
+            float sum = 0.0f;
+            int word_sum = 0;
+            cout << "response size:" << response_ids.size() << endl;
+            for (int response_id : response_ids) {
+                Graph graph;
+                GraphBuilder graph_builder;
+                graph_builder.forward(graph, post_sentences.at(post_and_responses.post_id),
+                        hyper_params, model_params, false);
+                DecoderComponents decoder_components;
+                string keyword = getKeyword(post_sentences.at(post_and_responses.post_id),
+                        response_sentences.at(response_id), pmi_map);
+                graph_builder.forwardDecoder(graph, decoder_components,
+                        response_sentences.at(response_id), keyword, hyper_params, model_params,
+                        false);
+                graph.compute();
+                vector<Node*> nodes = toNodePointers(decoder_components.wordvector_to_onehots);
+                vector<int> word_ids = transferVector<int, string>(
+                        response_sentences.at(response_id), [&](const string &w) -> int {
+                        return model_params.lookup_table.getElemId(w);
+                        });
+                float perplex = computePerplex(nodes, word_ids);
+                sum += perplex;
+                word_sum += word_ids.size();
+            }
+            cout << "avg_perplex:" << exp(sum/word_sum) << endl;
+            rep_perplex_mutex.lock();
+            rep_perplex += sum;
+            size_sum += word_sum;
+            rep_perplex_mutex.unlock();
+        };
+        post(pool, f);
+    }
+    pool.join();
 
-//    rep_perplex = exp(rep_perplex / size_sum);
-//    cout << "total avg perplex:" << rep_perplex << endl;
-//    return rep_perplex;
+    rep_perplex = exp(rep_perplex / size_sum);
+    cout << "total avg perplex:" << rep_perplex << endl;
+    return rep_perplex;
 }
 
 void decodeTestPosts(const HyperParams &hyper_params, ModelParams &model_params,
@@ -737,7 +741,7 @@ int main(int argc, char *argv[]) {
             loadModel(default_config, hyper_params, model_params, root_ptr.get(),
                     allocate_model_params);
             float rep_perplex = metricTestPosts(hyper_params, model_params,
-                    dev_post_and_responses, post_sentences, response_sentences);
+                    dev_post_and_responses, post_sentences, response_sentences, pmi_map);
             cout << format("model %1% rep_perplex is %2%") % model_file_path % rep_perplex << endl;
             if (max_rep_perplex < rep_perplex) {
                 max_rep_perplex = rep_perplex;
