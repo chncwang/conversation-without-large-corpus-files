@@ -457,11 +457,7 @@ float metricTestPosts(const HyperParams &hyper_params, ModelParams &model_params
             int sum = 0;
             cout << "response size:" << response_ids.size() << endl;
             for (int response_id : response_ids) {
-//                cout << "response:" << endl;
-//                auto response = response_sentences.at(response_id);
-//                print(response);
                 const WordIdfInfo &idf_info = response_idf_info_list.at(response_id);
-//                print(idf_info.keywords_behind);
                 n3ldg_cuda::Profiler &profiler = n3ldg_cuda::Profiler::Ins();
                 profiler.BeginEvent("build computation graph");
                 Graph graph;
@@ -469,6 +465,7 @@ float metricTestPosts(const HyperParams &hyper_params, ModelParams &model_params
                 graph_builder.forward(graph, post_sentences.at(post_and_responses.post_id),
                         hyper_params, model_params, false);
                 DecoderComponents decoder_components;
+                decoder_components.init(hyper_params.decoder_layer);
                 graph_builder.forwardDecoder(graph, decoder_components,
                         response_sentences.at(response_id),
                         idf_info.keywords_behind,
@@ -859,6 +856,10 @@ int main(int argc, char *argv[]) {
             [&](LSTM1Params &params, int layer) {
             params.init(hyper_params.hidden_dim, hyper_params.hidden_dim);
         };
+        if (hyper_params.decoder_layer == 0) {
+            cout << "warning: decoder layer is 0, fixed to 2" << endl;
+            const_cast<HyperParams&>(hyper_params).decoder_layer = 2;
+        }
         model_params.left_to_right_decoder_params.init(hyper_params.decoder_layer,
                 init_decoder_param);
         model_params.decoder_input_linear_params.init(hyper_params.hidden_dim,

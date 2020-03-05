@@ -43,6 +43,7 @@ struct HyperParams : public N3LDGSerializable {
         json["beam_size"] = beam_size;
         json["learning_rate"] = learning_rate;
         json["learning_rate_decay"] = learning_rate_decay;
+        json["decoder_layer"] = decoder_layer;
         json["min_learning_rate"] = min_learning_rate;
         json["warm_up_learning_rate"] = warm_up_learning_rate;
         json["word_cutoff"] = word_cutoff;
