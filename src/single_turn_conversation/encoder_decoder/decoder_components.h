@@ -31,9 +31,19 @@ struct DecoderComponents {
             vector<Node *> &encoder_hiddens,
             bool is_training) {
         shared_ptr<AdditiveAttentionBuilder> attention_builder(new AdditiveAttentionBuilder);
-        Node *guide = decoders.at(0).size() == 0 ?
-            static_cast<Node*>(n3ldg_plus::bucket(graph, hyper_params.hidden_dim, 0)) :
-            static_cast<Node*>(decoders.at(0)._hiddens.at(decoders.at(0).size() - 1));
+        Node *guide;
+        if (decoders.at(0).size() == 0) {
+            guide = n3ldg_plus::bucket(graph, hyper_params.hidden_dim, 0);
+        } else {
+            int prev_i = decoders.at(0).size() - 1;
+            vector<Node *> ins;
+            for (auto &decoder : decoders) {
+                ins.push_back(decoder._hiddens.at(prev_i));
+            }
+            guide = n3ldg_plus::add(graph, ins);
+            guide = n3ldg_plus::dropout(graph, *guide, 1 - 1.0 / ins.size(), false);
+        }
+
         attention_builder->forward(graph, model_params.attention_params, encoder_hiddens, *guide);
         contexts.push_back(attention_builder->_hidden);
         vector<Node *> ins = {&input, &keyword_input, attention_builder->_hidden};

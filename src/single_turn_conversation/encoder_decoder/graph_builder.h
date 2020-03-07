@@ -531,6 +531,8 @@ struct GraphBuilder {
             bool is_training) {
         int keyword_bound = model_params.lookup_table.nVSize;
 
+        string *last_keyword = nullptr;
+        Node *keyword_node;
         for (int i = 0; i < answer.size(); ++i) {
             if (i > 0) {
                 keyword_bound = model_params.lookup_table.elems.from_string(keywords.at(i - 1)) + 1;
@@ -541,8 +543,16 @@ struct GraphBuilder {
                 print(keywords);
                 abort();
             }
+
+            if (last_keyword == nullptr || *last_keyword != keywords.at(i)) {
+                keyword_node = n3ldg_plus::embedding(graph, model_params.lookup_table,
+                        keywords.at(i));
+                keyword_node = n3ldg_plus::dropout(graph, *keyword_node, hyper_params.dropout,
+                        is_training);
+            }
+
             forwardDecoderByOneStep(graph, decoder_components, i, i == answer.size() - 1,
-                    i == 0 ? nullptr : &answer.at(i - 1), keywords.at(i),
+                    i == 0 ? nullptr : &answer.at(i - 1), *keyword_node,
                     i == 0 ||  answer.at(i - 1) == keywords.at(i - 1), hyper_params,
                     model_params, is_training, keyword_bound, normal_bound);
         }
@@ -551,7 +561,7 @@ struct GraphBuilder {
     void forwardDecoderByOneStep(Graph &graph, DecoderComponents &decoder_components, int i,
             bool is_last,
             const std::string *answer,
-            const std::string &keyword,
+            Node &keyword_node,
             bool should_predict_keyword,
             const HyperParams &hyper_params,
             ModelParams &model_params,
@@ -597,8 +607,7 @@ struct GraphBuilder {
             last_keyword = bucket;
         }
 
-        Node *keyword_node = n3ldg_plus::embedding(graph, model_params.lookup_table, keyword);
-        Node * dropout_keyword = n3ldg_plus::dropout(graph, *keyword_node, hyper_params.dropout,
+        Node * dropout_keyword = n3ldg_plus::dropout(graph, keyword_node, hyper_params.dropout,
                 is_training);
         decoder_components.decoder_keyword_lookups.push_back(dropout_keyword);
 
