@@ -766,9 +766,13 @@ int main(int argc, char *argv[]) {
 
 
             unique_ptr<Metric> metric = unique_ptr<Metric>(new Metric);
+            using namespace std::chrono;
+            int duration_count = 1e3;
+
             for (int batch_i = 0; batch_i < batch_count +
                     (train_conversation_pairs.size() > hyper_params.batch_size * batch_count);
                     ++batch_i) {
+                auto start = high_resolution_clock::now();
                 model_update._alpha = learningRate(iteration, hyper_params.hidden_dim,
                         hyper_params.warm_up_iterations);
                 cout << format("batch_i:%1% iteration:%2%") % batch_i % iteration << endl;
@@ -875,6 +879,10 @@ int main(int argc, char *argv[]) {
                     cerr << "no optimzer set" << endl;
                     abort();
                 }
+                auto stop = high_resolution_clock::now();
+                auto duration = duration_cast<milliseconds>(stop - start);
+                duration_count = 0.99 * duration_count + 0.01 * duration.count();
+                cout << "duration:" << duration_count << endl;
 
                 if (default_config.save_model_per_batch) {
                     saveModel(hyper_params, model_params, default_config.output_model_file_prefix,
