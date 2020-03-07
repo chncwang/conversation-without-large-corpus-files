@@ -402,6 +402,7 @@ void decodeTestPosts(const HyperParams &hyper_params, ModelParams &model_params,
         const vector<PostAndResponses> &post_and_responses_vector,
         const vector<vector<string>> &post_sentences,
         const vector<vector<string>> &response_sentences,
+        const unordered_map<string, unordered_map<string, float>> &pmi_map,
         const vector<string> &black_list) {
     cout << "decodeTestPosts begin" << endl;
     hyper_params.print();
@@ -409,14 +410,18 @@ void decodeTestPosts(const HyperParams &hyper_params, ModelParams &model_params,
     for (const PostAndResponses &post_and_responses : post_and_responses_vector) {
         cout << "post:" << endl;
         print(post_sentences.at(post_and_responses.post_id));
+        string keyword = getMostRelatedKeyword(post_sentences.at(post_and_responses.post_id),
+                pmi_map);
+        cout << "keyword:" << keyword << endl;
         Graph graph;
         GraphBuilder graph_builder;
         graph_builder.forward(graph, post_sentences.at(post_and_responses.post_id), hyper_params,
                 model_params, false);
         vector<DecoderComponents> decoder_components_vector;
         decoder_components_vector.resize(hyper_params.beam_size);
-        auto pair = graph_builder.forwardDecoderUsingBeamSearch(graph, decoder_components_vector,
-                hyper_params.beam_size, hyper_params, model_params, default_config, black_list);
+        auto pair = graph_builder.forwardDecoderUsingBeamSearch(graph, keyword,
+                decoder_components_vector, hyper_params.beam_size, hyper_params, model_params,
+                default_config, black_list);
         const vector<WordIdAndProbability> &word_ids_and_probability = pair.first;
         cout << "post:" << endl;
         print(post_sentences.at(post_and_responses.post_id));
@@ -464,38 +469,38 @@ void interact(const DefaultConfig &default_config, const HyperParams &hyper_para
         unordered_map<string, int> &word_counts,
         int word_cutoff,
         const vector<string> black_list) {
-    hyper_params.print();
-    while (true) {
-        string post;
-        getline(cin >> ws, post);
-        utf8_string utf8_post(post);
-        vector<string> words;
-        for (int i = 0; i < utf8_post.length(); ++i) {
-            words.push_back(utf8_post.substr(i, 1).cpp_str());
-        }
-        words.push_back(STOP_SYMBOL);
+//    hyper_params.print();
+//    while (true) {
+//        string post;
+//        getline(cin >> ws, post);
+//        utf8_string utf8_post(post);
+//        vector<string> words;
+//        for (int i = 0; i < utf8_post.length(); ++i) {
+//            words.push_back(utf8_post.substr(i, 1).cpp_str());
+//        }
+//        words.push_back(STOP_SYMBOL);
 
-        if (default_config.split_unknown_words) {
-            words = reprocessSentence(words, word_counts, word_cutoff);
-        }
+//        if (default_config.split_unknown_words) {
+//            words = reprocessSentence(words, word_counts, word_cutoff);
+//        }
 
-        Graph graph;
-        GraphBuilder graph_builder;
-        graph_builder.forward(graph, words, hyper_params, model_params, false);
-        vector<DecoderComponents> decoder_components_vector;
-        decoder_components_vector.resize(hyper_params.beam_size);
-        cout << format("decodeTestPosts - beam_size:%1% decoder_components_vector.size:%2%") %
-            hyper_params.beam_size % decoder_components_vector.size() << endl;
-        auto pair = graph_builder.forwardDecoderUsingBeamSearch(graph, decoder_components_vector,
-                hyper_params.beam_size, hyper_params, model_params, default_config, black_list);
-        const vector<WordIdAndProbability> &word_ids = pair.first;
-        cout << "post:" << endl;
-        cout << post << endl;
-        cout << "response:" << endl;
-        printWordIds(word_ids, model_params.lookup_table);
-        dtype probability = pair.second;
-        cout << format("probability:%1%") % probability << endl;
-    }
+//        Graph graph;
+//        GraphBuilder graph_builder;
+//        graph_builder.forward(graph, words, hyper_params, model_params, false);
+//        vector<DecoderComponents> decoder_components_vector;
+//        decoder_components_vector.resize(hyper_params.beam_size);
+//        cout << format("decodeTestPosts - beam_size:%1% decoder_components_vector.size:%2%") %
+//            hyper_params.beam_size % decoder_components_vector.size() << endl;
+//        auto pair = graph_builder.forwardDecoderUsingBeamSearch(graph, decoder_components_vector,
+//                hyper_params.beam_size, hyper_params, model_params, default_config, black_list);
+//        const vector<WordIdAndProbability> &word_ids = pair.first;
+//        cout << "post:" << endl;
+//        cout << post << endl;
+//        cout << "response:" << endl;
+//        printWordIds(word_ids, model_params.lookup_table);
+//        dtype probability = pair.second;
+//        cout << format("probability:%1%") % probability << endl;
+//    }
 }
 
 pair<unordered_set<int>, unordered_set<int>> PostAndResponseIds(
@@ -708,7 +713,7 @@ int main(int argc, char *argv[]) {
     } else if (default_config.program_mode == ProgramMode::DECODING) {
         hyper_params.beam_size = beam_size;
         decodeTestPosts(hyper_params, model_params, default_config, test_post_and_responses,
-                post_sentences, response_sentences, black_list);
+                post_sentences, response_sentences, pmi_map, black_list);
     } else if (default_config.program_mode == ProgramMode::METRIC) {
         path dir_path(default_config.input_model_dir);
         if (!is_directory(dir_path)) {

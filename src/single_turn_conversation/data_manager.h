@@ -411,6 +411,38 @@ unordered_map<string, unordered_map<string, float>> calPMI(
     return pmi_map;
 }
 
+string getMostRelatedKeyword(const vector<string> &post,
+        const unordered_map<string, unordered_map<string, float>> &pmi_map) {
+    unordered_map<string, float> scores;
+    for (const string &post_word : post) {
+        const auto &it = pmi_map.find(post_word);
+        if (it == pmi_map.end()) {
+            cout << "warning: post word " << post_word << " not found" << endl;
+        } else {
+            for (const auto &inner_it : it->second) {
+                auto scores_it = scores.find(inner_it.first);
+                if (scores_it == scores.end()) {
+                    scores.insert(make_pair(inner_it.first, 0.0f));
+                    scores_it = scores.find(inner_it.first);
+                }
+                scores_it->second += inner_it.second;
+            }
+        }
+    }
+    float min_score = -1;
+    const string *most_related_keyword = nullptr;
+    for (const auto &it : scores) {
+        if (it.second > min_score) {
+            most_related_keyword = &it.first;
+        }
+    }
+    if (most_related_keyword == nullptr) {
+        cerr << "getMostRelatedKeyword - most_related_keyword is nullptr" << endl;
+        abort();
+    }
+    return *most_related_keyword;
+}
+
 string getKeyword(const vector<string> &post, const vector<string> &response,
         const unordered_map<string, unordered_map<string, float>> &pmi_map) {
     vector<float> word_pmis;

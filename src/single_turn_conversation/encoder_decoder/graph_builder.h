@@ -352,103 +352,108 @@ struct GraphBuilder {
     }
 
     pair<vector<WordIdAndProbability>, dtype> forwardDecoderUsingBeamSearch(Graph &graph,
+            const string &keyword,
             const vector<DecoderComponents> &decoder_components_beam,
             int k,
             const HyperParams &hyper_params,
             ModelParams &model_params,
             const DefaultConfig &default_config,
             const vector<string> &black_list) {
-//        vector<pair<vector<WordIdAndProbability>, dtype>> word_ids_result;
-//        vector<BeamSearchResult> most_probable_results;
-//        vector<string> last_answers;
-//        bool succeeded = false;
-//        set<int> searched_word_ids;
+        vector<pair<vector<WordIdAndProbability>, dtype>> word_ids_result;
+        vector<BeamSearchResult> most_probable_results;
+        vector<string> last_answers;
+        bool succeeded = false;
+        set<int> searched_word_ids;
 
-//        for (int iter = 0; ; ++iter) {
-//            cout << boost::format("forwardDecoderUsingBeamSearch iter:%1%\n") % iter;
-//            most_probable_results.clear();
-//            auto beam = decoder_components_beam;
-//            cout << boost::format("beam size:%1%\n") % beam.size();
+        Node *keyword_embedding = n3ldg_plus::embedding(graph, model_params.lookup_table, keyword);
+        keyword_embedding = n3ldg_plus::dropout(graph, *keyword_embedding, hyper_params.dropout,
+                false);
 
-//            int ended_count = word_ids_result.size();
-//            if (ended_count >= default_config.result_count_factor * k) {
-//                break;
-//            }
+        for (int iter = 0; ; ++iter) {
+            cout << boost::format("forwardDecoderUsingBeamSearch iter:%1%\n") % iter;
+            most_probable_results.clear();
+            auto beam = decoder_components_beam;
+            cout << boost::format("beam size:%1%\n") % beam.size();
 
-//            for (int i = 0;; ++i) {
-//                cout << boost::format("forwardDecoderUsingBeamSearch i:%1%\n") % i;
-//                if (word_ids_result.size() >= default_config.result_count_factor * k ||
-//                        i > default_config.cut_length) {
-//                    break;
-//                }
+            int ended_count = word_ids_result.size();
+            if (ended_count >= default_config.result_count_factor * k) {
+                break;
+            }
 
-//                last_answers.clear();
-//                if (i > 0) {
-//                    most_probable_results = mostProbableResults(beam, most_probable_results, i,
-//                            k, model_params, default_config, i == 1, black_list,
-//                            searched_word_ids);
-//                    cout << boost::format("most_probable_results size:%1%") %
-//                        most_probable_results.size() << endl;
-//                    auto last_beam = beam;
-//                    beam.clear();
-//                    vector<BeamSearchResult> stop_removed_results;
-//                    int j = 0;
-//                    for (BeamSearchResult &beam_search_result : most_probable_results) {
-//                        const vector<WordIdAndProbability> &word_ids =
-//                            beam_search_result.getPath();
+            for (int i = 0;; ++i) {
+                cout << boost::format("forwardDecoderUsingBeamSearch i:%1%\n") % i;
+                if (word_ids_result.size() >= default_config.result_count_factor * k ||
+                        i > default_config.cut_length) {
+                    break;
+                }
 
-//                        int last_word_id = word_ids.at(word_ids.size() - 1).word_id;
-//                        const string &word = model_params.lookup_table.elems.from_id(
-//                                last_word_id);
-//                        if (word == STOP_SYMBOL) {
-//                            word_ids_result.push_back(make_pair(word_ids,
-//                                        beam_search_result.finalScore()));
-//                            succeeded = word == STOP_SYMBOL;
-//                        } else {
-//                            stop_removed_results.push_back(beam_search_result);
-//                            last_answers.push_back(word);
-//                            beam.push_back(beam_search_result.decoderComponents());
-//                        }
-//                        ++j;
-//                    }
-//                    most_probable_results = stop_removed_results;
-//                }
+                last_answers.clear();
+                if (i > 0) {
+                    most_probable_results = mostProbableResults(beam, most_probable_results, i,
+                            k, model_params, default_config, i == 1, black_list,
+                            searched_word_ids);
+                    cout << boost::format("most_probable_results size:%1%") %
+                        most_probable_results.size() << endl;
+                    auto last_beam = beam;
+                    beam.clear();
+                    vector<BeamSearchResult> stop_removed_results;
+                    int j = 0;
+                    for (BeamSearchResult &beam_search_result : most_probable_results) {
+                        const vector<WordIdAndProbability> &word_ids =
+                            beam_search_result.getPath();
 
-//                if (beam.empty()) {
-//                    cout << boost::format("break for beam empty\n");
-//                    break;
-//                }
+                        int last_word_id = word_ids.at(word_ids.size() - 1).word_id;
+                        const string &word = model_params.lookup_table.elems.from_id(
+                                last_word_id);
+                        if (word == STOP_SYMBOL) {
+                            word_ids_result.push_back(make_pair(word_ids,
+                                        beam_search_result.finalScore()));
+                            succeeded = word == STOP_SYMBOL;
+                        } else {
+                            stop_removed_results.push_back(beam_search_result);
+                            last_answers.push_back(word);
+                            beam.push_back(beam_search_result.decoderComponents());
+                        }
+                        ++j;
+                    }
+                    most_probable_results = stop_removed_results;
+                }
 
-//                for (int beam_i = 0; beam_i < beam.size(); ++beam_i) {
-//                    DecoderComponents &decoder_components = beam.at(beam_i);
-//                    forwardDecoderByOneStep(graph, decoder_components, i,
-//                            i == 0 ? nullptr : &last_answers.at(beam_i), hyper_params,
-//                            model_params, false);
-//                }
+                if (beam.empty()) {
+                    cout << boost::format("break for beam empty\n");
+                    break;
+                }
 
-//                graph.compute();
-//            }
-//        }
+                for (int beam_i = 0; beam_i < beam.size(); ++beam_i) {
+                    DecoderComponents &decoder_components = beam.at(beam_i);
+                    forwardDecoderByOneStep(graph, decoder_components, i,
+                            i == 0 ? nullptr : &last_answers.at(beam_i), *keyword_embedding,
+                            hyper_params, model_params, false);
+                }
 
-//        if (word_ids_result.size() < default_config.result_count_factor * k) {
-//            cerr << boost::format("word_ids_result size is %1%, but beam_size is %2%") %
-//                word_ids_result.size() % k << endl;
-//            abort();
-//        }
+                graph.compute();
+            }
+        }
 
-//        for (const auto &pair : word_ids_result) {
-//            const vector<WordIdAndProbability> ids = pair.first;
-//            cout << boost::format("beam result:%1%") % exp(pair.second) << endl;
-//            printWordIds(ids, model_params.lookup_table);
-//        }
+        if (word_ids_result.size() < default_config.result_count_factor * k) {
+            cerr << boost::format("word_ids_result size is %1%, but beam_size is %2%") %
+                word_ids_result.size() % k << endl;
+            abort();
+        }
 
-//        auto compair = [](const pair<vector<WordIdAndProbability>, dtype> &a,
-//                const pair<vector<WordIdAndProbability>, dtype> &b) {
-//            return a.second < b.second;
-//        };
-//        auto max = max_element(word_ids_result.begin(), word_ids_result.end(), compair);
+        for (const auto &pair : word_ids_result) {
+            const vector<WordIdAndProbability> ids = pair.first;
+            cout << boost::format("beam result:%1%") % exp(pair.second) << endl;
+            printWordIds(ids, model_params.lookup_table);
+        }
 
-//        return make_pair(max->first, exp(max->second));
+        auto compair = [](const pair<vector<WordIdAndProbability>, dtype> &a,
+                const pair<vector<WordIdAndProbability>, dtype> &b) {
+            return a.second < b.second;
+        };
+        auto max = max_element(word_ids_result.begin(), word_ids_result.end(), compair);
+
+        return make_pair(max->first, exp(max->second));
     }
 };
 
