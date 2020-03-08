@@ -626,6 +626,9 @@ struct GraphBuilder {
                 model_params.hidden_to_wordvector_params, i);
         Node *one_hot = n3ldg_plus::linearWordVector(graph, normal_id_upper_open_bound,
                 model_params.lookup_table.E, *decoder_to_wordvector);
+//        if (one_hot->getDim() > 1) {
+//            one_hot = n3ldg_plus::split(graph, one_hot->getDim() - 1, *one_hot, 1);
+//        }
         one_hot = n3ldg_plus::softmax(graph, *one_hot);
         decoder.wordvector_to_onehots.push_back(one_hot);
     }

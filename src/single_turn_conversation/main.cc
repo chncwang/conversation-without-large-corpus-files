@@ -656,6 +656,10 @@ vector<string> getAllWordsByIdfAscendingly(const unordered_map<string, float> &i
     };
 
     sort(result.begin(), result.end(), cmp);
+    if (result.front() != STOP_SYMBOL) {
+        cerr << "first word in table is " << result.front() << endl;
+        abort();
+    }
 
     return result;
 }
@@ -1045,8 +1049,6 @@ int main(int argc, char *argv[]) {
                 auto getSentenceIndex = [batch_i, batch_count](int i) {
                     return i * batch_count + batch_i;
                 };
-                int response_size_sum = 0;
-                int keyword_size_sum = 0;
                 for (int i = 0; i < batch_size; ++i) {
                     shared_ptr<GraphBuilder> graph_builder(new GraphBuilder);
                     graph_builders.push_back(graph_builder);
@@ -1058,9 +1060,7 @@ int main(int argc, char *argv[]) {
                     graph_builder->forward(graph, post_sentence, hyper_params, model_params, true);
                     int response_id = train_conversation_pairs.at(instance_index).response_id;
                     auto response_sentence = response_sentences.at(response_id);
-                    response_size_sum += response_sentence.size();
                     const WordIdfInfo &idf_info = response_idf_info_list.at(response_id);
-                    keyword_size_sum += idf_info.keyword_size;
                     DecoderComponents keyword_decoder(hyper_params.keyword_decoder_layer),
                                       normal_decoder(1);
                     graph_builder->forwardDecoder(graph, normal_decoder, keyword_decoder,
@@ -1077,12 +1077,18 @@ int main(int argc, char *argv[]) {
                     int response_id = train_conversation_pairs.at(instance_index).response_id;
                     auto response_sentence = response_sentences.at(response_id);
                     vector<int> word_ids = toIds(response_sentence, model_params.lookup_table);
+                    for (int &id : word_ids) {
+                        if (&id != &word_ids.back()) {
+                            --id;
+                        }
+                    }
                     vector<Node*> result_nodes =
                         toNodePointers(normal_decoder_vector.at(i).wordvector_to_onehots);
                     std::pair<dtype, std::vector<int>> result;
                     try {
                         result = MaxLogProbabilityLossWithInconsistentDims(result_nodes,
-                                word_ids, response_size_sum, model_params.lookup_table.nVSize);
+                                word_ids, batch_size * response_sentence.size(),
+                                model_params.lookup_table.nVSize);
                     } catch (const InformedRuntimeError &e) {
                         cerr << e.what() << endl;
                         int i = e.getInfo()["i"].asInt();
@@ -1102,7 +1108,7 @@ int main(int argc, char *argv[]) {
                     }
                     profiler.EndCudaEvent();
                     loss_sum += result.first;
-                    normal_loss_sum += result.first * response_size_sum;
+                    normal_loss_sum += result.first;
                     analyze(result.second, word_ids, *metric);
                     const WordIdfInfo &response_idf = response_idf_info_list.at(response_id);
                     auto keyword_nodes_and_ids = keywordNodesAndIds(keyword_decoder_vector.at(i),
@@ -1110,10 +1116,11 @@ int main(int argc, char *argv[]) {
                     profiler.BeginEvent("loss");
                     auto keyword_result = MaxLogProbabilityLossWithInconsistentDims(
                             keyword_nodes_and_ids.first, keyword_nodes_and_ids.second,
-                            keyword_size_sum, model_params.lookup_table.nVSize);
+                            batch_size * response_sentence.size(),
+                            model_params.lookup_table.nVSize);
                     profiler.EndCudaEvent();
                     loss_sum += keyword_result.first;
-                    keyword_loss_sum += keyword_result.first * keyword_size_sum;
+                    keyword_loss_sum += keyword_result.first;
                     analyze(keyword_result.second, keyword_nodes_and_ids.second, *keyword_metric);
 
                     static int count_for_print;
@@ -1122,6 +1129,11 @@ int main(int argc, char *argv[]) {
                         cout << "post:" << post_id << endl;
                         print(post_sentences.at(post_id));
 
+                        for (int &id : word_ids) {
+                            if (&id != &word_ids.back()) {
+                                ++id;
+                            }
+                        }
                         cout << "golden answer:" << endl;
                         printWordIds(word_ids, model_params.lookup_table);
                         cout << "output:" << endl;
