@@ -490,6 +490,11 @@ float metricTestPosts(const HyperParams &hyper_params, ModelParams &model_params
                         response_sentences.at(response_id), [&](const string &w) -> int {
                         return model_params.lookup_table.getElemId(w);
                         });
+                for (int &id : word_ids) {
+                    if (&id != &word_ids.back()) {
+                        --id;
+                    }
+                }
                 int sentence_len = nodes.size();
                 float normal_perplex = computePerplex(nodes, word_ids, sentence_len);
                 normal_sum += normal_perplex;
@@ -902,6 +907,8 @@ int main(int argc, char *argv[]) {
                     allocate_model_params);
         }
     } else {
+        globalPoolEnabled() = false;
+        globalLimitedDimEnabled() = false;
         if (default_config.input_model_file == "") {
             abort();
         } else {
