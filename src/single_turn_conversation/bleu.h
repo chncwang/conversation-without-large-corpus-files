@@ -10,6 +10,7 @@
 #include "conversation_structure.h"
 #include "print.h"
 #include "tinyutf8.h"
+#include "mteval/NISTEvaluator.h"
 
 using namespace std;
 
@@ -86,8 +87,7 @@ float mostMatchedCount(const CandidateAndReferences &candidate_and_references,
 
                 bool finded = false;
                 for (int k = 0; k < gram_len; ++k) {
-                    if (includePunctuation(candidate.at(i + k)) ||
-                            candidate.at(i + k) != reference.at(j + k)) {
+                    if (candidate.at(i + k) != reference.at(j + k)) {
                         break;
                     }
                     if (k == gram_len - 1) {
@@ -127,13 +127,14 @@ float mostMatchedCount(const CandidateAndReferences &candidate_and_references,
 }
 
 int puncRemovedLen(const vector<string> &sentence) {
-    int len = 0;
-    for (const string &w : sentence) {
-        if (!includePunctuation(w)) {
-            ++len;
-        }
-    }
-    return len;
+    return sentence.size();
+//    int len = 0;
+//    for (const string &w : sentence) {
+//        if (!includePunctuation(w)) {
+//            ++len;
+//        }
+//    }
+//    return len;
 }
 
 int mostMatchedLength(const CandidateAndReferences &candidate_and_references) {
@@ -170,8 +171,7 @@ float ngramCount(const vector<string> sentence, int ngram) {
 //            }
 //        }
 //    }
-    int len = sentence.size() + 1 - ngram;
-    return len;
+    return sentence.size() + 1 - ngram;
 }
 
 vector<string> toChars(const vector<string> &src) {
@@ -225,6 +225,32 @@ float computeBleu(vector<CandidateAndReferences> &candidate_and_references_vecto
     float bp = c_sum > r_sum ? 1.0f : exp(1 - static_cast<float>(r_sum) / c_sum);
     cout << boost::format("candidate sum:%1% ref:%2% bp:%3%") % c_sum % r_sum % bp << endl;
     return bp * exp(weighted_sum);
+}
+
+float computeNist(vector<CandidateAndReferences> &candidate_and_references_vector,
+        int max_gram_len) {
+    using namespace MTEval;
+    EvaluatorParam param;
+    param.name = "ngram";
+    param.int_val = max_gram_len;
+    NISTEvaluator evaluator({param});
+    vector<Sample> samples;
+    for (const CandidateAndReferences &e : candidate_and_references_vector) {
+        Sample sample;
+        sample.hypothesis = e.candidate;
+        sample.references = e.references;
+        evaluator.prepare(sample);
+        samples.push_back(move(sample));
+    }
+
+    Statistics stats;
+    for (const Sample sample : samples) {
+        stats += evaluator.map(sample);
+    }
+
+    float score = evaluator.integrate(stats);
+
+    return score;
 }
 
 #endif
