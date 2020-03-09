@@ -170,7 +170,8 @@ float ngramCount(const vector<string> sentence, int ngram) {
 //            }
 //        }
 //    }
-    return sentence.size() + 1 - ngram;
+    int len = sentence.size() + 1 - ngram;
+    return len;
 }
 
 vector<string> toChars(const vector<string> &src) {
