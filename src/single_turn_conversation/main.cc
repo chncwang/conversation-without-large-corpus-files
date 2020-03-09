@@ -450,9 +450,11 @@ void decodeTestPosts(const HyperParams &hyper_params, ModelParams &model_params,
         CandidateAndReferences candidate_and_references(decoded_word_ids, id_references);
         candidate_and_references_vector.push_back(candidate_and_references);
 
-        for (int i = 1; i <= 4; ++i) {
-            float bleu = computeBleu(candidate_and_references_vector, i);
-            cout << "bleu_:" << i << ":" << bleu << endl;
+        for (int ngram = 1; ngram <=4; ++ngram) {
+            float bleu_value = computeBleu(candidate_and_references_vector, ngram);
+            cout << "bleu_" << ngram << ":" << bleu_value << endl;
+            float nist_value = computeNist(candidate_and_references_vector, ngram);
+            cout << "nist_" << ngram << ":" << nist_value << endl;
         }
     }
 }
