@@ -10,6 +10,7 @@
 #include "conversation_structure.h"
 #include "print.h"
 #include "tinyutf8.h"
+#include "mteval/NISTEvaluator.h"
 
 using namespace std;
 
@@ -224,6 +225,32 @@ float computeBleu(vector<CandidateAndReferences> &candidate_and_references_vecto
     float bp = c_sum > r_sum ? 1.0f : exp(1 - static_cast<float>(r_sum) / c_sum);
     cout << boost::format("candidate sum:%1% ref:%2% bp:%3%") % c_sum % r_sum % bp << endl;
     return bp * exp(weighted_sum);
+}
+
+float computeNist(vector<CandidateAndReferences> &candidate_and_references_vector,
+        int max_gram_len) {
+    using namespace MTEval;
+    EvaluatorParam param;
+    param.name = "ngram";
+    param.int_val = max_gram_len;
+    NISTEvaluator evaluator({param});
+    vector<Sample> samples;
+    for (const CandidateAndReferences &e : candidate_and_references_vector) {
+        Sample sample;
+        sample.hypothesis = e.candidate;
+        sample.references = e.references;
+        evaluator.prepare(sample);
+        samples.push_back(move(sample));
+    }
+
+    Statistics stats;
+    for (const Sample sample : samples) {
+        stats += evaluator.map(sample);
+    }
+
+    float score = evaluator.integrate(stats);
+
+    return score;
 }
 
 #endif
