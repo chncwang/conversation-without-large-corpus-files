@@ -512,6 +512,7 @@ vector<BeamSearchResult> mostProbableKeywords(
 
 struct GraphBuilder {
     DynamicLSTMBuilder left_to_right_encoder;
+    DynamicLSTMBuilder keyword_encoder;
 
     void forward(Graph &graph, const vector<string> &sentence, const HyperParams &hyper_params,
             ModelParams &model_params,
@@ -525,6 +526,8 @@ struct GraphBuilder {
             left_to_right_encoder.forward(graph, model_params.left_to_right_encoder_params,
                     *dropout_node, *hidden_bucket, *hidden_bucket, hyper_params.dropout,
                     is_training);
+            keyword_encoder.forward(graph, model_params.keyword_encoder_params, *dropout_node,
+                    *hidden_bucket, *hidden_bucket, hyper_params.dropout, is_training);
         }
     }
 
@@ -579,8 +582,8 @@ struct GraphBuilder {
         }
         decoder.decoder_lookups.push_back(last_input);
         decoder.forward(graph, hyper_params, model_params.keyword_decoder_params.ptrs(),
-                model_params.keyword_attention_params, &model_params.clip_input_params, *last_input,
-                left_to_right_encoder._hiddens, is_training);
+                model_params.keyword_attention_params, &model_params.clip_input_params,
+                *last_input, keyword_encoder._hiddens, is_training);
 
         if (should_predict_keyword) {
             Node *decoder_to_wordvector = decoder.decoderToWordVectors(graph, hyper_params,

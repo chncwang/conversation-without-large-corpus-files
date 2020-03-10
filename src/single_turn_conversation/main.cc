@@ -884,6 +884,7 @@ int main(int argc, char *argv[]) {
                 hyper_params.hidden_dim);
         model_params.left_to_right_encoder_params.init(hyper_params.hidden_dim,
                 hyper_params.word_dim);
+        model_params.keyword_encoder_params.init(hyper_params.hidden_dim, hyper_params.word_dim);
         model_params.left_to_right_decoder_params.init(hyper_params.hidden_dim,
                 2 * hyper_params.word_dim + hyper_params.hidden_dim);
         function<void(LSTM1Params &, int)> init_param = [&](LSTM1Params &param, int layer) {
