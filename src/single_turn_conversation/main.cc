@@ -523,13 +523,15 @@ void decodeTestPosts(const HyperParams &hyper_params, ModelParams &model_params,
         const vector<vector<string>> &response_sentences,
         const vector<string> &black_list) {
     cout << "decodeTestPosts begin" << endl;
+    globalLimitedDimEnabled() = false;
+    globalPoolEnabled() = false;
     hyper_params.print();
     vector<CandidateAndReferences> candidate_and_references_vector;
     for (const PostAndResponses &post_and_responses : post_and_responses_vector) {
         cout << "post:" << endl;
         auto post_sentence = post_sentences.at(post_and_responses.post_id);
         print(post_sentence);
-        Graph graph;
+        Graph graph(true);
         GraphBuilder graph_builder;
         graph_builder.forward(graph, post_sentences.at(post_and_responses.post_id),
                 hyper_params, model_params, false);
