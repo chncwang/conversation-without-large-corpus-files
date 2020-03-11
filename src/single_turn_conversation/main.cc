@@ -845,8 +845,11 @@ int main(int argc, char *argv[]) {
                     default_config.input_model_file == "") {
                 model_params.lookup_table.init(*alphabet, hyper_params.word_file,
                         hyper_params.word_finetune);
+                model_params.keyword_table.init(*alphabet, hyper_params.word_file,
+                        hyper_params.word_finetune);
             } else {
                 model_params.lookup_table.init(*alphabet, hyper_params.word_dim, true);
+                model_params.keyword_table.init(*alphabet, hyper_params.word_dim, true);
             }
         }
         model_params.attention_params.init(hyper_params.hidden_dim, hyper_params.hidden_dim);

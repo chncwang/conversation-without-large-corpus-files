@@ -638,7 +638,7 @@ struct GraphBuilder {
             keyword_vector_to_onehot = nullptr;
         } else {
             keyword_vector_to_onehot = n3ldg_plus::linearWordVector(graph,
-                    keyword_word_id_upper_open_bound, model_params.lookup_table.E,
+                    keyword_word_id_upper_open_bound, model_params.keyword_table.E,
                     *nodes.keyword);
             keyword_vector_to_onehot = n3ldg_plus::softmax(graph, *keyword_vector_to_onehot);
         }
