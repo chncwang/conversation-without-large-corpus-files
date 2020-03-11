@@ -400,6 +400,7 @@ void decodeTestPosts(const HyperParams &hyper_params, ModelParams &model_params,
         const vector<PostAndResponses> &post_and_responses_vector,
         const vector<vector<string>> &post_sentences,
         const vector<vector<string>> &response_sentences,
+        const unordered_map<string, float> &all_idf,
         const vector<string> &black_list) {
     cout << "decodeTestPosts begin" << endl;
     hyper_params.print();
@@ -455,6 +456,8 @@ void decodeTestPosts(const HyperParams &hyper_params, ModelParams &model_params,
             cout << "bleu_" << ngram << ":" << bleu_value << endl;
             float nist_value = computeNist(candidate_and_references_vector, ngram);
             cout << "nist_" << ngram << ":" << nist_value << endl;
+            float idf_value = computeEntropy(candidate_and_references_vector, all_idf);
+            cout << "idf:" << idf_value << endl;
         }
     }
 }
@@ -535,6 +538,49 @@ void preserveVector(vector<T> &vec, int count, int seed) {
     vec.erase(vec.begin() + std::min<int>(count, vec.size()), vec.end());
 }
 
+unordered_map<string, float> calculateIdf(const vector<vector<string>> sentences) {
+    cout << "sentences size:" << sentences.size() << endl;
+    unordered_map<string, int> doc_counts;
+    int i = 0;
+    for (const vector<string> &sentence : sentences) {
+        if (i++ % 10000 == 0) {
+            cout << i << " ";
+        }
+        set<string> words;
+        for (const string &word : sentence) {
+            words.insert(word);
+        }
+
+        for (const string &word : words) {
+            auto it = doc_counts.find(word);
+            if (it == doc_counts.end()) {
+                doc_counts.insert(make_pair(word, 1));
+            } else {
+                ++doc_counts.at(word);
+            }
+        }
+    }
+    cout << endl;
+
+    unordered_map<string, float> result;
+    for (const auto &it : doc_counts) {
+        float idf = log(sentences.size() / static_cast<float>(it.second));
+        if (idf < 0.0) {
+            cerr << "idf:" << idf << endl;
+            abort();
+        }
+
+        utf8_string utf8(it.first);
+//        if (includePunctuation(utf8.cpp_str()) || !isPureChinese(it.first) || idf <= 5) {
+//            idf = -idf;
+//        }
+
+        result.insert(make_pair(it.first, idf));
+    }
+
+    return result;
+}
+
 int main(int argc, char *argv[]) {
     cout << "dtype size:" << sizeof(dtype) << endl;
 
@@ -593,6 +639,16 @@ int main(int argc, char *argv[]) {
 
     vector<vector<string>> post_sentences = readSentences(default_config.post_file);
     vector<vector<string>> response_sentences = readSentences(default_config.response_file);
+
+    vector<vector<string>> all_sentences;
+    for (auto &p : train_conversation_pairs) {
+        auto &s = response_sentences.at(p.response_id);
+        all_sentences.push_back(s);
+        auto &s2 = post_sentences.at(p.post_id);
+        all_sentences.push_back(s2);
+    }
+
+    auto all_idf = calculateIdf(all_sentences);
 
     Alphabet alphabet;
     shared_ptr<Json::Value> root_ptr;
@@ -705,7 +761,7 @@ int main(int argc, char *argv[]) {
     } else if (default_config.program_mode == ProgramMode::DECODING) {
         hyper_params.beam_size = beam_size;
         decodeTestPosts(hyper_params, model_params, default_config, test_post_and_responses,
-                post_sentences, response_sentences, black_list);
+                post_sentences, response_sentences, all_idf, black_list);
     } else if (default_config.program_mode == ProgramMode::METRIC) {
         path dir_path(default_config.input_model_dir);
         if (!is_directory(dir_path)) {

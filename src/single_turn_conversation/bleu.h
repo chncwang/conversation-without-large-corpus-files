@@ -6,6 +6,7 @@
 #include <algorithm>
 #include <cmath>
 #include <set>
+#include <unordered_map>
 #include <boost/format.hpp>
 #include "conversation_structure.h"
 #include "print.h"
@@ -261,6 +262,26 @@ float computeNist(const vector<CandidateAndReferences> &candidate_and_references
     float score = evaluator.integrate(stats);
 
     return score;
+}
+
+float computeEntropy(const vector<CandidateAndReferences> &candidate_and_references_vector,
+        const unordered_map<string, float> &idf_table) {
+    float idf_sum = 0;
+    int len_sum = 0;
+    for (const CandidateAndReferences &e : candidate_and_references_vector) {
+        const auto &s = e.candidate;
+        for (const string &word : s) {
+             const auto &it = idf_table.find(word);
+             if (it == idf_table.end()) {
+                 cerr << "word " << word << " not found" << endl;
+                 abort();
+             }
+             float idf = it->second;
+             idf_sum += idf;
+        }
+        len_sum += s.size();
+    }
+    return idf_sum / len_sum;
 }
 
 #endif
