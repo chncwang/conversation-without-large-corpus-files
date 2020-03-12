@@ -406,7 +406,9 @@ void decodeTestPosts(const HyperParams &hyper_params, ModelParams &model_params,
     hyper_params.print();
     vector<CandidateAndReferences> candidate_and_references_vector;
     int64_t flops = 0;
+    int loop_i = 0;
     for (const PostAndResponses &post_and_responses : post_and_responses_vector) {
+        ++loop_i;
         cout << "post:" << endl;
         print(post_sentences.at(post_and_responses.post_id));
         Graph graph(false, true);
@@ -423,7 +425,8 @@ void decodeTestPosts(const HyperParams &hyper_params, ModelParams &model_params,
         cout << "response:" << endl;
         printWordIds(word_ids_and_probability, model_params.lookup_table);
         flops += graph.getFLOPs();
-        cout << "FLOPs:" << graph.getFLOPs() << " overall:" << flops << endl;
+        cout << "FLOPs:" << graph.getFLOPs() << " overall:" << flops << " avg:" <<
+            static_cast<float>(flops) / loop_i << endl;
         dtype probability = pair.second;
         cout << format("probability:%1%") % probability << endl;
         if (word_ids_and_probability.empty()) {
