@@ -405,10 +405,11 @@ void decodeTestPosts(const HyperParams &hyper_params, ModelParams &model_params,
     cout << "decodeTestPosts begin" << endl;
     hyper_params.print();
     vector<CandidateAndReferences> candidate_and_references_vector;
+    int64_t flops = 0;
     for (const PostAndResponses &post_and_responses : post_and_responses_vector) {
         cout << "post:" << endl;
         print(post_sentences.at(post_and_responses.post_id));
-        Graph graph;
+        Graph graph(false, true);
         GraphBuilder graph_builder;
         graph_builder.forward(graph, post_sentences.at(post_and_responses.post_id), hyper_params,
                 model_params, false);
@@ -421,6 +422,8 @@ void decodeTestPosts(const HyperParams &hyper_params, ModelParams &model_params,
         print(post_sentences.at(post_and_responses.post_id));
         cout << "response:" << endl;
         printWordIds(word_ids_and_probability, model_params.lookup_table);
+        flops += graph.getFLOPs();
+        cout << "FLOPs:" << graph.getFLOPs() << " overall:" << flops << endl;
         dtype probability = pair.second;
         cout << format("probability:%1%") % probability << endl;
         if (word_ids_and_probability.empty()) {
