@@ -222,7 +222,8 @@ vector<BeamSearchResult> mostProbableResults(
         const DefaultConfig &default_config,
         bool is_first,
         const vector<string> &black_list,
-        const unordered_map<string, float> &idf_table) {
+        const unordered_map<string, float> &idf_table,
+        Graph &graph) {
     vector<Node *> nodes;
     int beam_i = 0;
     for (const DecoderComponents &decoder_components : beam) {
@@ -247,7 +248,6 @@ vector<BeamSearchResult> mostProbableResults(
     };
     priority_queue<BeamSearchResult, vector<BeamSearchResult>, decltype(cmp)> queue(cmp);
     vector<BeamSearchResult> results;
-//    for (int i = 0; i < (is_first ? 1 : nodes.size()); ++i) {
     for (int i = 0; i < nodes.size(); ++i) {
         const Node &node = *nodes.at(i);
 
@@ -263,15 +263,16 @@ vector<BeamSearchResult> mostProbableResults(
             }
             dtype value = node.getVal().v[j];
             dtype log_probability = log(value);
+            graph.addFLOPs(1);
             dtype word_probability = value;
             vector<WordIdAndProbability> word_ids;
             if (!last_results.empty()) {
                 log_probability += last_results.at(i).finalLogProbability();
+                graph.addFLOPs(1);
                 word_ids = last_results.at(i).getPath();
             }
             word_ids.push_back(WordIdAndProbability(node.getDim(), j, word_probability));
             beam_search_result =  BeamSearchResult(beam.at(i), word_ids, log_probability);
-//            int local_size = min(k, 1 + node.getDim() / 10);
             int local_size = k;
             if (queue.size() < local_size) {
                 queue.push(beam_search_result);
@@ -279,6 +280,7 @@ vector<BeamSearchResult> mostProbableResults(
                 queue.pop();
                 queue.push(beam_search_result);
             }
+            graph.addFLOPs(1);
         }
     }
 
@@ -294,17 +296,6 @@ vector<BeamSearchResult> mostProbableResults(
         vector<int> ids = transferVector<int, WordIdAndProbability>(result.getPath(),
                 [](const WordIdAndProbability &in) ->int {return in.word_id;});
         string sentence = ::getSentence(ids, model_params);
-//        bool contain_black = false;
-//        for (const string str : black_list) {
-//            utf8_string utf8_str(str), utf8_sentece(sentence);
-//            if (utf8_sentece.find(utf8_str) != string::npos) {
-//                contain_black = true;
-//                break;
-//            }
-//        }
-//        if (contain_black) {
-//            continue;
-//        }
         final_results.push_back(result);
         cout << boost::format("mostProbableResults - i:%1% prob:%2% score:%3%") % i %
             result.finalLogProbability() % result.finalScore() << endl;
@@ -785,8 +776,8 @@ struct GraphBuilder {
                 graph.compute();
 
                 last_answers.clear();
-                most_probable_results = mostProbableResults(beam, most_probable_results, i,
-                        k, model_params, default_config, i == 0, black_list, word_idf_table);
+                most_probable_results = mostProbableResults(beam, most_probable_results, i, k,
+                        model_params, default_config, i == 0, black_list, word_idf_table, graph);
                 cout << boost::format("most_probable_results size:%1%") %
                     most_probable_results.size() << endl;
                 beam.clear();
