@@ -527,7 +527,7 @@ void decodeTestPosts(const HyperParams &hyper_params, ModelParams &model_params,
     globalPoolEnabled() = false;
     hyper_params.print();
     vector<CandidateAndReferences> candidate_and_references_vector;
-    int64_t overall_flops = 0;
+    map<string, int64_t> overall_flops;
     int loop_i = 0;
     for (const PostAndResponses &post_and_responses : post_and_responses_vector) {
         ++loop_i;
@@ -550,9 +550,25 @@ void decodeTestPosts(const HyperParams &hyper_params, ModelParams &model_params,
         printWordIdsWithKeywords(word_ids_and_probability, model_params.lookup_table,
                 word_idf_table);
 
-        overall_flops += graph.getFLOPs();
-        cout << boost::format("flops:%1% overall:%2% avg:%3%") % graph.getFLOPs() % overall_flops %
-            (static_cast<float>(overall_flops) / loop_i) << endl;
+        const auto &flops = graph.getFLOPs();
+        if (loop_i == 1) {
+            overall_flops = flops;
+        } else {
+            for (const auto &it : flops) {
+                overall_flops.at(it.first) += it.second;
+            }
+        }
+
+        float flops_sum = 0;
+        for (const auto &it : overall_flops) {
+            flops_sum += it.second;
+        }
+        for (const auto &it : overall_flops) {
+            cout << it.first << ":" << it.second / flops_sum << endl;
+        }
+
+        cout << boost::format("flops:%1% overall:%2% avg:%3%") % 0 % flops_sum %
+            (static_cast<float>(flops_sum) / loop_i) << endl;
 
         dtype probability = pair.second;
         cout << format("probability:%1%") % probability << endl;
