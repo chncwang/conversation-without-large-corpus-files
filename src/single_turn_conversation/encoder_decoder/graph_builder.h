@@ -81,7 +81,7 @@ public:
         return final_log_probability;
     }
 
-    vector<WordIdAndProbability> getPath() const {
+    const vector<WordIdAndProbability> &getPath() const {
         return path_;
     }
 
@@ -148,26 +148,6 @@ int countNgramDuplicate(const vector<int> &ids, int n) {
     return duplicate_count;
 }
 
-void updateBeamSearchResultScore(BeamSearchResult &beam_search_result,
-        const NgramPenalty& penalty) {
-    vector<WordIdAndProbability> word_id_and_probability = beam_search_result.getPath();
-    vector<int> ids = transferVector<int, WordIdAndProbability>(word_id_and_probability, [](
-                const WordIdAndProbability &a) {return a.word_id;});
-    dtype extra_score = 0.0f;
-    vector<dtype> penalties = {penalty.one, penalty.two, penalty.three};
-    std::array<int, 3> counts;
-    for (int i = 3; i > 0; --i) {
-        int duplicate_count = countNgramDuplicate(ids, i);
-        counts.at(i - 1) = duplicate_count;
-        extra_score -= penalties.at(i - 1) * duplicate_count;
-    }
-    beam_search_result.setExtraScore(beam_search_result.getExtraScore() + extra_score);
-    std::array<int, 3> original_counts = beam_search_result.ngramCounts();
-    std::array<int, 3> new_counts = {original_counts.at(0) + counts.at(0),
-        original_counts.at(1) = counts.at(1), original_counts.at(2) + counts.at(2)};
-    beam_search_result.setNgramCounts(new_counts);
-}
-
 vector<BeamSearchResult> mostProbableResults(
         const vector<DecoderComponents> &beam,
         const vector<BeamSearchResult> &last_results,
@@ -177,7 +157,8 @@ vector<BeamSearchResult> mostProbableResults(
         const DefaultConfig &default_config,
         bool is_first,
         const vector<string> &black_list,
-        set<int> &searched_word_ids) {
+        set<int> &searched_word_ids,
+        Graph &graph) {
     vector<Node *> nodes;
     for (const DecoderComponents &decoder_components : beam) {
         nodes.push_back(decoder_components.wordvector_to_onehots.at(current_word - 1));
@@ -189,7 +170,8 @@ vector<BeamSearchResult> mostProbableResults(
         abort();
     }
 
-    auto cmp = [](const BeamSearchResult &a, const BeamSearchResult &b) {
+    auto cmp = [&](const BeamSearchResult &a, const BeamSearchResult &b) {
+        graph.addFLOPs(1);
         return a.finalScore() > b.finalScore();
     };
     priority_queue<BeamSearchResult, vector<BeamSearchResult>, decltype(cmp)> queue(cmp);
@@ -214,28 +196,27 @@ vector<BeamSearchResult> mostProbableResults(
             }
             dtype word_probability = node.getVal().v[j];
             dtype log_probability = log(word_probability);
+            graph.addFLOPs(1);
             vector<WordIdAndProbability> word_ids;
-            std::array<int, 3> counts = {0, 0, 0};
-            dtype extra_score = 0.0f;
             if (!last_results.empty()) {
                 log_probability += last_results.at(i).finalLogProbability();
+                graph.addFLOPs(1);
                 word_ids = last_results.at(i).getPath();
-                counts = last_results.at(i).ngramCounts();
-                extra_score = last_results.at(i).getExtraScore();
             }
 
             word_ids.push_back(WordIdAndProbability(j, word_probability));
 
             BeamSearchResult beam_search_result(beam.at(i), word_ids, log_probability);
-            beam_search_result.setNgramCounts(counts);
-            beam_search_result.setExtraScore(extra_score);
-            updateBeamSearchResultScore(beam_search_result, default_config.toNgramPenalty());
+            graph.addFLOPs(1);
 
             if (queue.size() < k) {
                 queue.push(beam_search_result);
             } else if (queue.top().finalScore() < beam_search_result.finalScore()) {
+                graph.addFLOPs(1);
                 queue.pop();
                 queue.push(beam_search_result);
+            } else {
+                graph.addFLOPs(1);
             }
         }
     }
@@ -378,7 +359,7 @@ struct GraphBuilder {
                 if (i > 0) {
                     most_probable_results = mostProbableResults(beam, most_probable_results, i,
                             k, model_params, default_config, i == 1, black_list,
-                            searched_word_ids);
+                            searched_word_ids, graph);
                     cout << boost::format("most_probable_results size:%1%") %
                         most_probable_results.size() << endl;
                     auto last_beam = beam;
@@ -386,9 +367,6 @@ struct GraphBuilder {
                     vector<BeamSearchResult> stop_removed_results;
                     int j = 0;
                     for (BeamSearchResult &beam_search_result : most_probable_results) {
-//                        cout << boost::format("1gram:%1% len:%2%") %
-//                            beam_search_result.ngramCounts().at(0) %
-//                            beam_search_result.getPath().size() << endl;
                         const vector<WordIdAndProbability> &word_ids =
                             beam_search_result.getPath();
 
