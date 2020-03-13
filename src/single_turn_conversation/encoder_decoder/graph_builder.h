@@ -98,7 +98,7 @@ public:
         return final_log_probability;
     }
 
-    vector<WordIdAndProbability> getPath() const {
+    const vector<WordIdAndProbability> &getPath() const {
         return path_;
     }
 
@@ -243,7 +243,8 @@ vector<BeamSearchResult> mostProbableResults(
         abort();
     }
 
-    auto cmp = [](const BeamSearchResult &a, const BeamSearchResult &b) {
+    auto cmp = [&](const BeamSearchResult &a, const BeamSearchResult &b) {
+        graph.addFLOPs(1);
         return a.finalScore() > b.finalScore();
     };
     priority_queue<BeamSearchResult, vector<BeamSearchResult>, decltype(cmp)> queue(cmp);
@@ -273,14 +274,17 @@ vector<BeamSearchResult> mostProbableResults(
             }
             word_ids.push_back(WordIdAndProbability(node.getDim(), j, word_probability));
             beam_search_result =  BeamSearchResult(beam.at(i), word_ids, log_probability);
+            graph.addFLOPs(1);
             int local_size = k;
             if (queue.size() < local_size) {
                 queue.push(beam_search_result);
             } else if (queue.top().finalScore() < beam_search_result.finalScore()) {
+                graph.addFLOPs(1);
                 queue.pop();
                 queue.push(beam_search_result);
+            } else {
+                graph.addFLOPs(1);
             }
-            graph.addFLOPs(1);
         }
     }
 
@@ -326,7 +330,7 @@ vector<BeamSearchResult> mostProbableKeywords(
         if (last_results.empty()) {
             should_predict_keyword = true;
         } else {
-            vector<WordIdAndProbability> path = last_results.at(ii).getPath();
+            const vector<WordIdAndProbability> &path = last_results.at(ii).getPath();
             int size = path.size();
             should_predict_keyword = path.at(size - 2).word_id == path.at(size - 1).word_id;
         }
@@ -352,7 +356,7 @@ vector<BeamSearchResult> mostProbableKeywords(
             if (last_results.empty()) {
                 last_keyword_id = model_params.lookup_table.nVSize - 1;
             } else {
-                vector<WordIdAndProbability> path = last_results.at(ii).getPath();
+                const vector<WordIdAndProbability> &path = last_results.at(ii).getPath();
                 last_keyword_id = path.at(path.size() - 2).word_id;
             }
 
@@ -371,7 +375,8 @@ vector<BeamSearchResult> mostProbableKeywords(
     }
     graph.compute();
 
-    auto cmp = [](const BeamSearchResult &a, const BeamSearchResult &b) {
+    auto cmp = [&](const BeamSearchResult &a, const BeamSearchResult &b) {
+        graph.addFLOPs(1);
         return a.finalScore() > b.finalScore();
     };
     priority_queue<BeamSearchResult, vector<BeamSearchResult>, decltype(cmp)> queue(cmp);
@@ -387,11 +392,15 @@ vector<BeamSearchResult> mostProbableKeywords(
             new_id_and_probs.push_back(w);
             BeamSearchResult beam_search_result(beam.at(i), new_id_and_probs,
                     last_results.at(i).finalLogProbability());
+            graph.addFLOPs(1);
             if (queue.size() < k) {
                 queue.push(beam_search_result);
             } else if (queue.top().finalScore() < beam_search_result.finalScore()) {
+                graph.addFLOPs(1);
                 queue.pop();
                 queue.push(beam_search_result);
+            } else {
+                graph.addFLOPs(1);
             }
         } else {
             const Node &node = *nodes.at(i);
@@ -430,6 +439,7 @@ vector<BeamSearchResult> mostProbableKeywords(
                 vector<WordIdAndProbability> word_ids;
                 if (!last_results.empty()) {
                     log_probability += last_results.at(i).finalLogProbability();
+                    graph.addFLOPs(1);
                     word_ids = last_results.at(i).getPath();
                 }
                 if (log_probability != log_probability) {
@@ -446,11 +456,15 @@ vector<BeamSearchResult> mostProbableKeywords(
                 word_ids.push_back(WordIdAndProbability(node.getDim(), j, word_probability));
 
                 BeamSearchResult local = BeamSearchResult(beam.at(i), word_ids, log_probability);
+                graph.addFLOPs(1);
                 if (queue.size() < k) {
                     queue.push(local);
                 } else if (queue.top().finalScore() < local.finalScore()) {
+                    graph.addFLOPs(1);
                     queue.pop();
                     queue.push(local);
+                } else {
+                    graph.addFLOPs(1);
                 }
             }
         }
