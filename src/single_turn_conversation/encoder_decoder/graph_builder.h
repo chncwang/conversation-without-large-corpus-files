@@ -39,6 +39,8 @@ string getSentence(const vector<int> &word_ids_vector, const ModelParams &model_
     return words;
 }
 
+#define BEAM_SEARCH_KEY "beam_search"
+
 class BeamSearchResult {
 public:
     BeamSearchResult() {
@@ -162,8 +164,11 @@ vector<BeamSearchResult> mostProbableResults(
     vector<Node *> nodes;
     for (const DecoderComponents &decoder_components : beam) {
         nodes.push_back(decoder_components.wordvector_to_onehots.at(current_word - 1));
+        if (is_first) {
+            break;
+        }
     }
-    if (nodes.size() != last_results.size() && !last_results.empty()) {
+    if (!is_first && nodes.size() != last_results.size() && !last_results.empty()) {
         cerr << boost::format(
                 "nodes size is not equal to last_results size, nodes size is %1% but last_results size is %2%")
             % nodes.size() % last_results.size() << endl;
@@ -171,7 +176,7 @@ vector<BeamSearchResult> mostProbableResults(
     }
 
     auto cmp = [&](const BeamSearchResult &a, const BeamSearchResult &b) {
-        graph.addFLOPs(1);
+        graph.addFLOPs(1, BEAM_SEARCH_KEY);
         return a.finalScore() > b.finalScore();
     };
     priority_queue<BeamSearchResult, vector<BeamSearchResult>, decltype(cmp)> queue(cmp);
@@ -196,27 +201,27 @@ vector<BeamSearchResult> mostProbableResults(
             }
             dtype word_probability = node.getVal().v[j];
             dtype log_probability = log(word_probability);
-            graph.addFLOPs(1);
+            graph.addFLOPs(1, BEAM_SEARCH_KEY);
             vector<WordIdAndProbability> word_ids;
             if (!last_results.empty()) {
                 log_probability += last_results.at(i).finalLogProbability();
-                graph.addFLOPs(1);
+                graph.addFLOPs(1, BEAM_SEARCH_KEY);
                 word_ids = last_results.at(i).getPath();
             }
 
             word_ids.push_back(WordIdAndProbability(j, word_probability));
 
             BeamSearchResult beam_search_result(beam.at(i), word_ids, log_probability);
-            graph.addFLOPs(1);
+            graph.addFLOPs(1, BEAM_SEARCH_KEY);
 
             if (queue.size() < k) {
                 queue.push(beam_search_result);
             } else if (queue.top().finalScore() < beam_search_result.finalScore()) {
-                graph.addFLOPs(1);
+                graph.addFLOPs(1, BEAM_SEARCH_KEY);
                 queue.pop();
                 queue.push(beam_search_result);
             } else {
-                graph.addFLOPs(1);
+                graph.addFLOPs(1, BEAM_SEARCH_KEY);
             }
         }
     }
@@ -397,6 +402,9 @@ struct GraphBuilder {
                     forwardDecoderByOneStep(graph, decoder_components, i,
                             i == 0 ? nullptr : &last_answers.at(beam_i), hyper_params,
                             model_params, false);
+                    if (i == 0) {
+                        break;
+                    }
                 }
 
                 graph.compute();
