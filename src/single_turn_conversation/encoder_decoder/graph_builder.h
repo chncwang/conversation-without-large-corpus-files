@@ -374,6 +374,9 @@ vector<BeamSearchResult> mostProbableKeywords(
         }
         nodes.push_back(node);
         keyword_nodes.push_back(keyword_node);
+        if (is_first) {
+            break;
+        }
     }
     graph.compute();
 
@@ -729,10 +732,6 @@ struct GraphBuilder {
             most_probable_results.clear();
             auto beam = decoder_components_beam;
             int closured_count = word_ids_result.size();
-//            for (int i = 0; i < closured_count; ++i) {
-//                auto & r = word_ids_result.at(i);
-//                ++closured_count;
-//            }
             if (closured_count >= default_config.result_count_factor * k) {
                 break;
             }
@@ -750,6 +749,9 @@ struct GraphBuilder {
                     forwardDecoderHiddenByOneStep(graph, decoder_components, i,
                             i == 0 ? nullptr : &last_answers.at(beam_i), hyper_params,
                             model_params);
+                    if (i == 0) {
+                        break;
+                    }
                 }
                 cout << "forwardDecoderHiddenByOneStep:" << endl;
                 graph.compute();
