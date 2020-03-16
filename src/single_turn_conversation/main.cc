@@ -873,6 +873,7 @@ int main(int argc, char *argv[]) {
         }
     } else {
         globalPoolEnabled() = false;
+        globalLimitedDimEnabled() = false;
         if (default_config.input_model_file == "") {
             abort();
         } else {
@@ -903,6 +904,7 @@ int main(int argc, char *argv[]) {
         interact(default_config, hyper_params, model_params, all_idf, word_counts,
                 hyper_params.word_cutoff, black_list);
     } else if (default_config.program_mode == ProgramMode::DECODING) {
+        globalPoolEnabled() = false;
         hyper_params.beam_size = beam_size;
         decodeTestPosts(hyper_params, model_params, default_config, all_idf,
                 response_idf_info_list, test_post_and_responses, post_sentences,
