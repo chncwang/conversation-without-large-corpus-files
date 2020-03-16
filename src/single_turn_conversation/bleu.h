@@ -6,10 +6,14 @@
 #include <algorithm>
 #include <cmath>
 #include <set>
+#include <unordered_map>
+#include <unordered_set>
 #include <boost/format.hpp>
 #include "conversation_structure.h"
 #include "print.h"
 #include "tinyutf8.h"
+#include "mteval/NISTEvaluator.h"
+#include "mteval/BLEUEvaluator.h"
 
 using namespace std;
 
@@ -159,18 +163,8 @@ int mostMatchedLength(const CandidateAndReferences &candidate_and_references) {
 }
 
 float ngramCount(const vector<string> sentence, int ngram) {
-//    int result = 0;
-//    for (int i = 0; i < 1 + sentence.size() - ngram; ++i) {
-//        for (int j = 0; j < ngram; ++j) {
-//            if (includePunctuation(sentence.at(i + j))) {
-//                break;
-//            }
-//            if (j == ngram - 1) {
-//                ++result;
-//            }
-//        }
-//    }
-    return sentence.size() + 1 - ngram;
+    int len = sentence.size() + 1 - ngram;
+    return len;
 }
 
 vector<string> toChars(const vector<string> &src) {
@@ -184,15 +178,8 @@ vector<string> toChars(const vector<string> &src) {
     return result;
 }
 
-float computeBleu(vector<CandidateAndReferences> &candidate_and_references_vector,
+float computeBleu(const vector<CandidateAndReferences> &candidate_and_references_vector,
         int max_gram_len) {
-//    for (auto &e : candidate_and_references_vector) {
-//        e.candidate = toChars(e.candidate);
-//        for (auto &ee : e.references) {
-//            ee = toChars(ee);
-//        }
-//    }
-
     using namespace std;
     float weighted_sum = 0.0f;
     int r_sum = 0;
@@ -224,6 +211,100 @@ float computeBleu(vector<CandidateAndReferences> &candidate_and_references_vecto
     float bp = c_sum > r_sum ? 1.0f : exp(1 - static_cast<float>(r_sum) / c_sum);
     cout << boost::format("candidate sum:%1% ref:%2% bp:%3%") % c_sum % r_sum % bp << endl;
     return bp * exp(weighted_sum);
+}
+
+float computeMtevalBleu(const vector<CandidateAndReferences> &candidate_and_references_vector,
+        int max_gram_len) {
+    using namespace MTEval;
+    EvaluatorParam param;
+    param.name = "ngram";
+    param.int_val = max_gram_len;
+    BLEUEvaluator evaluator({param});
+    vector<Sample> samples;
+    for (const CandidateAndReferences &e : candidate_and_references_vector) {
+        Sample sample;
+        sample.hypothesis = e.candidate;
+        sample.references = e.references;
+        evaluator.prepare(sample);
+        samples.push_back(move(sample));
+    }
+
+    Statistics stats;
+    for (const Sample sample : samples) {
+        stats += evaluator.map(sample);
+    }
+
+    float score = evaluator.integrate(stats);
+
+    return score;
+}
+
+float computeNist(const vector<CandidateAndReferences> &candidate_and_references_vector,
+        int max_gram_len) {
+    using namespace MTEval;
+    EvaluatorParam param;
+    param.name = "ngram";
+    param.int_val = max_gram_len;
+    NISTEvaluator evaluator({param});
+    vector<Sample> samples;
+    for (const CandidateAndReferences &e : candidate_and_references_vector) {
+        Sample sample;
+        sample.hypothesis = e.candidate;
+        sample.references = e.references;
+        evaluator.prepare(sample);
+        samples.push_back(move(sample));
+    }
+
+    Statistics stats;
+    for (const Sample sample : samples) {
+        stats += evaluator.map(sample);
+    }
+
+    float score = evaluator.integrate(stats);
+
+    return score;
+}
+
+float computeEntropy(const vector<CandidateAndReferences> &candidate_and_references_vector,
+        const unordered_map<string, float> &idf_table) {
+    float idf_sum = 0;
+    int len_sum = 0;
+    for (const CandidateAndReferences &e : candidate_and_references_vector) {
+        const auto &s = e.candidate;
+        for (const string &word : s) {
+             const auto &it = idf_table.find(word);
+             if (it == idf_table.end()) {
+                 cerr << "word " << word << " not found" << endl;
+                 abort();
+             }
+             float idf = it->second;
+             idf_sum += idf;
+        }
+        len_sum += s.size();
+    }
+    return idf_sum / len_sum;
+}
+
+float computeDist(const vector<CandidateAndReferences> &candidate_and_references_vector,
+        int ngram) {
+    unordered_set<string> distinctions;
+    int sentence_len_sum = 0;
+    for (const auto &e : candidate_and_references_vector) {
+        const auto &s = e.candidate;
+        int sentence_size = s.size();
+        int len = sentence_size - ngram + 1;
+        sentence_len_sum += std::max<int>(len, 0);
+        if (s.size() >= ngram) {
+            for (int begin_i = 0; begin_i < sentence_size - ngram + 1; ++begin_i) {
+                string ngram_str;
+                for (int pos_i = begin_i; pos_i < ngram; ++pos_i) {
+                    ngram_str += s.at(pos_i);
+                }
+                distinctions.insert(ngram_str);
+            }
+        }
+    }
+    return static_cast<float>(distinctions.size()) / sentence_len_sum;
 }
 
 #endif
