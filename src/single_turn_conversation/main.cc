@@ -662,8 +662,8 @@ int main(int argc, char *argv[]) {
     cout << "train size:" << train_conversation_pairs.size() << " dev size:" <<
         dev_post_and_responses.size() << " test size:" << test_post_and_responses.size() << endl;
 
-    vector<vector<string>> post_sentences = readSentences(default_config.post_file);
-    vector<vector<string>> response_sentences = readSentences(default_config.response_file);
+    vector<vector<string>> response_sentences = readSentences(default_config.post_file);
+    vector<vector<string>> post_sentences = readSentences(default_config.response_file);
 
     vector<vector<string>> all_sentences;
     for (auto &p : train_conversation_pairs) {

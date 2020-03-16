@@ -57,7 +57,7 @@ std::vector<PostAndResponses> readPostAndResponsesVector(const std::string &file
 std::vector<ConversationPair> toConversationPairs(const PostAndResponses &post_and_responses) {
     std::vector<ConversationPair> results;
     for (int response_id : post_and_responses.response_ids) {
-        ConversationPair conversation_pair(post_and_responses.post_id, response_id);
+        ConversationPair conversation_pair(response_id, post_and_responses.post_id);
         results.push_back(std::move(conversation_pair));
     }
     return results;
