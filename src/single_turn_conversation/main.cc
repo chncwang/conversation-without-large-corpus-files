@@ -403,17 +403,21 @@ void decodeTestPosts(const HyperParams &hyper_params, ModelParams &model_params,
         const vector<vector<string>> &post_sentences,
         const vector<vector<string>> &response_sentences,
         const unordered_map<string, unordered_map<string, float>> &pmi_map,
-        const vector<string> &black_list) {
+        const vector<string> &black_list,
+        const unordered_map<string, float> &idf_table) {
     cout << "decodeTestPosts begin" << endl;
     hyper_params.print();
     vector<CandidateAndReferences> candidate_and_references_vector;
+    map<string, int64_t> overall_flops;
+    int loop_i = 0;
     for (const PostAndResponses &post_and_responses : post_and_responses_vector) {
+        ++loop_i;
         cout << "post:" << endl;
         print(post_sentences.at(post_and_responses.post_id));
         string keyword = getMostRelatedKeyword(post_sentences.at(post_and_responses.post_id),
                 pmi_map);
         cout << "keyword:" << keyword << endl;
-        Graph graph;
+        Graph graph(false, true);
         GraphBuilder graph_builder;
         graph_builder.forward(graph, post_sentences.at(post_and_responses.post_id), hyper_params,
                 model_params, false);
@@ -433,6 +437,25 @@ void decodeTestPosts(const HyperParams &hyper_params, ModelParams &model_params,
             cerr << "empty result" << endl;
             abort();
         }
+
+        const auto &flops = graph.getFLOPs();
+        if (loop_i == 1) {
+            overall_flops = flops;
+        } else {
+            for (const auto &it : flops) {
+                overall_flops.at(it.first) += it.second;
+            }
+        }
+        float flops_sum = 0;
+        for (const auto &it : overall_flops) {
+            flops_sum += it.second;
+        }
+        for (const auto &it : overall_flops) {
+            cout << it.first << ":" << it.second / flops_sum << endl;
+        }
+
+        cout << boost::format("flops:%1% overall:%2% avg:%3%") % 0 % flops_sum %
+            (static_cast<float>(flops_sum) / loop_i) << endl;
 
         vector<string> decoded_word_ids;
         auto to_str = [&](const WordIdAndProbability &in) ->string {
@@ -458,9 +481,15 @@ void decodeTestPosts(const HyperParams &hyper_params, ModelParams &model_params,
         candidate_and_references_vector.push_back(candidate_and_references);
 
         for (int i = 1; i <= 4; ++i) {
-            float bleu = computeBleu(candidate_and_references_vector, i);
+            float bleu = computeMtevalBleu(candidate_and_references_vector, i);
             cout << "bleu_:" << i << ":" << bleu << endl;
+            float nist = computeNist(candidate_and_references_vector, i);
+            cout << "nist:" << i << ":" << nist << endl;
+            float dist = computeDist(candidate_and_references_vector, i);
+            cout << "dist:" << i << ":" << dist << endl;
         }
+        float entropy = computeEntropy(candidate_and_references_vector, idf_table);
+        cout << "idf:" << entropy << endl;
     }
 }
 
@@ -540,6 +569,49 @@ void preserveVector(vector<T> &vec, int count, int seed) {
     vec.erase(vec.begin() + std::min<int>(count, vec.size()), vec.end());
 }
 
+unordered_map<string, float> calculateIdf(const vector<vector<string>> sentences) {
+    cout << "sentences size:" << sentences.size() << endl;
+    unordered_map<string, int> doc_counts;
+    int i = 0;
+    for (const vector<string> &sentence : sentences) {
+        if (i++ % 10000 == 0) {
+            cout << i << " ";
+        }
+        set<string> words;
+        for (const string &word : sentence) {
+            words.insert(word);
+        }
+
+        for (const string &word : words) {
+            auto it = doc_counts.find(word);
+            if (it == doc_counts.end()) {
+                doc_counts.insert(make_pair(word, 1));
+            } else {
+                ++doc_counts.at(word);
+            }
+        }
+    }
+    cout << endl;
+
+    unordered_map<string, float> result;
+    for (const auto &it : doc_counts) {
+        float idf = log(sentences.size() / static_cast<float>(it.second));
+        if (idf < 0.0) {
+            cerr << "idf:" << idf << endl;
+            abort();
+        }
+
+        utf8_string utf8(it.first);
+//        if (includePunctuation(utf8.cpp_str()) || !isPureChinese(it.first) || idf <= 5) {
+//            idf = -idf;
+//        }
+
+        result.insert(make_pair(it.first, idf));
+    }
+
+    return result;
+}
+
 int main(int argc, char *argv[]) {
     cout << "dtype size:" << sizeof(dtype) << endl;
 
@@ -598,6 +670,16 @@ int main(int argc, char *argv[]) {
 
     vector<vector<string>> post_sentences = readSentences(default_config.post_file);
     vector<vector<string>> response_sentences = readSentences(default_config.response_file);
+
+    vector<vector<string>> all_sentences;
+    for (auto &p : train_conversation_pairs) {
+        auto &s = response_sentences.at(p.response_id);
+        all_sentences.push_back(s);
+        auto &s2 = post_sentences.at(p.post_id);
+        all_sentences.push_back(s2);
+    }
+
+    auto all_idf = calculateIdf(all_sentences);
 
     Alphabet alphabet;
     shared_ptr<Json::Value> root_ptr;
@@ -713,7 +795,7 @@ int main(int argc, char *argv[]) {
     } else if (default_config.program_mode == ProgramMode::DECODING) {
         hyper_params.beam_size = beam_size;
         decodeTestPosts(hyper_params, model_params, default_config, test_post_and_responses,
-                post_sentences, response_sentences, pmi_map, black_list);
+                post_sentences, response_sentences, pmi_map, black_list, all_idf);
     } else if (default_config.program_mode == ProgramMode::METRIC) {
         path dir_path(default_config.input_model_dir);
         if (!is_directory(dir_path)) {
