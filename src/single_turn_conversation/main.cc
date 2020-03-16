@@ -481,6 +481,8 @@ void decodeTestPosts(const HyperParams &hyper_params, ModelParams &model_params,
             cout << "nist_" << ngram << ":" << nist_value << endl;
             float idf_value = computeEntropy(candidate_and_references_vector, all_idf);
             cout << "idf:" << idf_value << endl;
+            float dist_value = computeDist(candidate_and_references_vector, ngram);
+            cout << "dist_" << ngram << ":" << dist_value << endl;
         }
     }
 }
