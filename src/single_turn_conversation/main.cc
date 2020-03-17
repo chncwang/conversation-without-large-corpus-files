@@ -1004,10 +1004,11 @@ int main(int argc, char *argv[]) {
                     (train_conversation_pairs.size() > hyper_params.batch_size * batch_count);
                     ++batch_i) {
                 cout << format("batch_i:%1% iteration:%2%") % batch_i % iteration << endl;
-                if (epoch == 0 && default_config.input_model_file != "") {
+                if (epoch == 0 && default_config.input_model_file == "") {
                     if (iteration < hyper_params.warm_up_iterations) {
                         model_update._alpha = hyper_params.learning_rate * (iteration + 1) /
                             hyper_params.warm_up_iterations;
+                        cout << "learning_rate:" << model_update._alpha << endl;
                     } else {
                         model_update._alpha = hyper_params.learning_rate;
                         cout << "warm up finished, learning rate now:" <<
