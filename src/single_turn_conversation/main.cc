@@ -365,15 +365,17 @@ float metricTestPosts(const HyperParams &hyper_params, ModelParams &model_params
                 //            print(response_sentences.at(response_id));
                 Graph graph;
                 GraphBuilder graph_builder;
-                graph_builder.forward(graph, post_sentences.at(post_and_responses.post_id),
+                graph_builder.forward(graph, post_sentences.at(response_id),
                         hyper_params, model_params, false);
                 DecoderComponents decoder_components;
                 graph_builder.forwardDecoder(graph, decoder_components,
-                        response_sentences.at(response_id), hyper_params, model_params, false);
+                        response_sentences.at(post_and_responses.post_id), hyper_params,
+                        model_params, false);
                 graph.compute();
                 vector<Node*> nodes = toNodePointers(decoder_components.wordvector_to_onehots);
                 vector<int> word_ids = transferVector<int, string>(
-                        response_sentences.at(response_id), [&](const string &w) -> int {
+                        response_sentences.at(post_and_responses.post_id),
+                        [&](const string &w) -> int {
                         return model_params.lookup_table.getElemId(w);
                         });
                 float perplex = computePerplex(nodes, word_ids);
