@@ -365,9 +365,13 @@ float metricTestPosts(const HyperParams &hyper_params, ModelParams &model_params
                 //            print(response_sentences.at(response_id));
                 Graph graph;
                 GraphBuilder graph_builder;
+                cout << "post:" << endl;
+                print(post_sentences.at(response_id));
                 graph_builder.forward(graph, post_sentences.at(response_id),
                         hyper_params, model_params, false);
                 DecoderComponents decoder_components;
+                cout << "response:" << endl;
+                print(response_sentences.at(post_and_responses.post_id));
                 graph_builder.forwardDecoder(graph, decoder_components,
                         response_sentences.at(post_and_responses.post_id), hyper_params,
                         model_params, false);
