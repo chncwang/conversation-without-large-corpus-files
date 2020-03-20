@@ -999,7 +999,7 @@ int main(int argc, char *argv[]) {
                 duration_count = 0.99 * duration_count + 0.01 * duration.count();
                 cout << "duration:" << duration_count << endl;
 
-                if (default_config.save_model_per_batch) {
+                if (iteration % 1000 == 999) {
                     saveModel(hyper_params, model_params, default_config.output_model_file_prefix,
                             epoch);
                 }
