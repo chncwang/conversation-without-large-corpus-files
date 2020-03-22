@@ -441,8 +441,10 @@ struct GraphBuilder {
             float log_prob = 0;
             int inner_i = 0;
             for (Node *node : nodes) {
-                log_prob += log(node->getVal()[
-                        model_params.lookup_table.elems.from_string(post_sentence.at(inner_i))]);
+                int id = model_params.lookup_table.elems.find_string(post_sentence.at(inner_i)) ?
+                        model_params.lookup_table.elems.from_string(post_sentence.at(inner_i)) :
+                            model_params.lookup_table.nUNKId;
+                log_prob += log(node->getVal()[id]);
                 ++inner_i;
             }
             e.second = log_prob / nodes.size();
