@@ -39,6 +39,7 @@ struct DefaultConfig {
     int max_epoch;
     std::string output_model_file_prefix;
     std::string input_model_file;
+    std::string mmi_model_file;
     std::string input_model_dir;
     std::string black_list_file;
     float memory_in_gb;
@@ -73,6 +74,7 @@ struct DefaultConfig {
             << "max_epoch:" << max_epoch << std::endl
             << "output_model_file_prefix" << output_model_file_prefix << std::endl
             << "input_model_file:" << input_model_file << std::endl
+            << "mmi_model_file:" << mmi_model_file << std::endl
             << "input_model_dir:" << input_model_dir << std::endl
             << "black_list_file:" << black_list_file << std::endl
             << "memory_in_gb:" << memory_in_gb << std::endl

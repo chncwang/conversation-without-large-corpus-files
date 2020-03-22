@@ -126,6 +126,7 @@ DefaultConfig parseDefaultConfig(INIReader &ini_reader) {
     default_config.output_model_file_prefix = ini_reader.Get(SECTION, "output_model_file_prefix",
             "");
     default_config.input_model_file = ini_reader.Get(SECTION, "input_model_file", "");
+    default_config.mmi_model_file = ini_reader.Get(SECTION, "mmi_model_file", "");
     default_config.input_model_dir = ini_reader.Get(SECTION, "input_model_dir", "");
     default_config.black_list_file = ini_reader.Get(SECTION, "black_list_file", "");
     default_config.memory_in_gb = ini_reader.GetReal(SECTION, "memory_in_gb", 0.0f);
@@ -326,6 +327,18 @@ shared_ptr<Json::Value> loadModel(const string &filename) {
     return root;
 }
 
+void loadMMIModel(const DefaultConfig &default_config, HyperParams &hyper_params,
+        ModelParams &model_params,
+        const Json::Value *root,
+        const function<void(const DefaultConfig &default_config, const HyperParams &hyper_params,
+            ModelParams &model_params, const Alphabet*)> &allocate_model_params) {
+    allocate_model_params(default_config, hyper_params, model_params, nullptr);
+    model_params.fromJson((*root)["model_params"]);
+#if USE_GPU
+    model_params.copyFromHostToDevice();
+#endif
+}
+
 void loadModel(const DefaultConfig &default_config, HyperParams &hyper_params,
         ModelParams &model_params,
         const Json::Value *root,
@@ -396,6 +409,7 @@ float metricTestPosts(const HyperParams &hyper_params, ModelParams &model_params
 }
 
 void decodeTestPosts(const HyperParams &hyper_params, ModelParams &model_params,
+        ModelParams &mmi_model_params,
         DefaultConfig &default_config,
         const vector<PostAndResponses> &post_and_responses_vector,
         const vector<vector<string>> &post_sentences,
@@ -404,6 +418,7 @@ void decodeTestPosts(const HyperParams &hyper_params, ModelParams &model_params,
         const vector<string> &black_list) {
     cout << "decodeTestPosts begin" << endl;
     hyper_params.print();
+
     vector<CandidateAndReferences> candidate_and_references_vector;
     map<string, int64_t> overall_flops;
     int loop_i = 0;
@@ -418,7 +433,8 @@ void decodeTestPosts(const HyperParams &hyper_params, ModelParams &model_params,
         vector<DecoderComponents> decoder_components_vector;
         decoder_components_vector.resize(hyper_params.beam_size);
         auto pair = graph_builder.forwardDecoderUsingBeamSearch(graph, decoder_components_vector,
-                hyper_params.beam_size, hyper_params, model_params, default_config, black_list);
+                post_sentences.at(post_and_responses.post_id), hyper_params.beam_size,
+                hyper_params, model_params, mmi_model_params, default_config, black_list);
         const vector<WordIdAndProbability> &word_ids_and_probability = pair.first;
         cout << "post:" << endl;
         print(post_sentences.at(post_and_responses.post_id));
@@ -492,38 +508,38 @@ void interact(const DefaultConfig &default_config, const HyperParams &hyper_para
         unordered_map<string, int> &word_counts,
         int word_cutoff,
         const vector<string> black_list) {
-    hyper_params.print();
-    while (true) {
-        string post;
-        getline(cin >> ws, post);
-        utf8_string utf8_post(post);
-        vector<string> words;
-        for (int i = 0; i < utf8_post.length(); ++i) {
-            words.push_back(utf8_post.substr(i, 1).cpp_str());
-        }
-        words.push_back(STOP_SYMBOL);
+//    hyper_params.print();
+//    while (true) {
+//        string post;
+//        getline(cin >> ws, post);
+//        utf8_string utf8_post(post);
+//        vector<string> words;
+//        for (int i = 0; i < utf8_post.length(); ++i) {
+//            words.push_back(utf8_post.substr(i, 1).cpp_str());
+//        }
+//        words.push_back(STOP_SYMBOL);
 
-        if (default_config.split_unknown_words) {
-            words = reprocessSentence(words, word_counts, word_cutoff);
-        }
+//        if (default_config.split_unknown_words) {
+//            words = reprocessSentence(words, word_counts, word_cutoff);
+//        }
 
-        Graph graph;
-        GraphBuilder graph_builder;
-        graph_builder.forward(graph, words, hyper_params, model_params, false);
-        vector<DecoderComponents> decoder_components_vector;
-        decoder_components_vector.resize(hyper_params.beam_size);
-        cout << format("decodeTestPosts - beam_size:%1% decoder_components_vector.size:%2%") %
-            hyper_params.beam_size % decoder_components_vector.size() << endl;
-        auto pair = graph_builder.forwardDecoderUsingBeamSearch(graph, decoder_components_vector,
-                hyper_params.beam_size, hyper_params, model_params, default_config, black_list);
-        const vector<WordIdAndProbability> &word_ids = pair.first;
-        cout << "post:" << endl;
-        cout << post << endl;
-        cout << "response:" << endl;
-        printWordIds(word_ids, model_params.lookup_table);
-        dtype probability = pair.second;
-        cout << format("probability:%1%") % probability << endl;
-    }
+//        Graph graph;
+//        GraphBuilder graph_builder;
+//        graph_builder.forward(graph, words, hyper_params, model_params, false);
+//        vector<DecoderComponents> decoder_components_vector;
+//        decoder_components_vector.resize(hyper_params.beam_size);
+//        cout << format("decodeTestPosts - beam_size:%1% decoder_components_vector.size:%2%") %
+//            hyper_params.beam_size % decoder_components_vector.size() << endl;
+//        auto pair = graph_builder.forwardDecoderUsingBeamSearch(graph, decoder_components_vector,
+//                hyper_params.beam_size, hyper_params, model_params, default_config, black_list);
+//        const vector<WordIdAndProbability> &word_ids = pair.first;
+//        cout << "post:" << endl;
+//        cout << post << endl;
+//        cout << "response:" << endl;
+//        printWordIds(word_ids, model_params.lookup_table);
+//        dtype probability = pair.second;
+//        cout << format("probability:%1%") % probability << endl;
+//    }
 }
 
 pair<unordered_set<int>, unordered_set<int>> PostAndResponseIds(
@@ -785,8 +801,12 @@ int main(int argc, char *argv[]) {
                 hyper_params.word_cutoff, black_list);
     } else if (default_config.program_mode == ProgramMode::DECODING) {
         hyper_params.beam_size = beam_size;
-        decodeTestPosts(hyper_params, model_params, default_config, test_post_and_responses,
-                post_sentences, response_sentences, all_idf, black_list);
+        ModelParams mmi_model_params;
+        auto ptr = loadModel(default_config.mmi_model_file);
+        loadMMIModel(default_config, hyper_params, mmi_model_params, root_ptr.get(),
+                    allocate_model_params);
+        decodeTestPosts(hyper_params, model_params, mmi_model_params, default_config,
+                test_post_and_responses, post_sentences, response_sentences, all_idf, black_list);
     } else if (default_config.program_mode == ProgramMode::METRIC) {
         path dir_path(default_config.input_model_dir);
         if (!is_directory(dir_path)) {

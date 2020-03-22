@@ -331,9 +331,11 @@ struct GraphBuilder {
 
     pair<vector<WordIdAndProbability>, dtype> forwardDecoderUsingBeamSearch(Graph &graph,
             const vector<DecoderComponents> &decoder_components_beam,
+            const vector<string> &post_sentence,
             int k,
             const HyperParams &hyper_params,
             ModelParams &model_params,
+            ModelParams &mmi_model_params,
             const DefaultConfig &default_config,
             const vector<string> &black_list) {
         vector<pair<vector<WordIdAndProbability>, dtype>> word_ids_result;
@@ -421,6 +423,31 @@ struct GraphBuilder {
             const vector<WordIdAndProbability> ids = pair.first;
             cout << boost::format("beam result:%1%") % exp(pair.second) << endl;
             printWordIds(ids, model_params.lookup_table);
+        }
+
+        for (auto &e : word_ids_result) {
+            vector<string> words;
+            for (const auto &ee : e.first) {
+                words.push_back(model_params.lookup_table.elems.from_id(ee.word_id));
+            }
+            Graph mmi_graph(false, false);
+            GraphBuilder mmi_graph_builder;
+            DecoderComponents components;
+            mmi_graph_builder.forward(mmi_graph, words, hyper_params, mmi_model_params, false);
+            mmi_graph_builder.forwardDecoder(mmi_graph, components, post_sentence, hyper_params,
+                    mmi_model_params, false);
+            mmi_graph.compute();
+            auto nodes = components.wordvector_to_onehots;
+            float log_prob = 0;
+            int inner_i = 0;
+            for (Node *node : nodes) {
+                log_prob += log(node->getVal()[
+                        model_params.lookup_table.elems.from_string(post_sentence.at(inner_i))]);
+                ++inner_i;
+            }
+            e.second = log_prob / nodes.size();
+            printWordIds(e.first, model_params.lookup_table);
+            cout << "reversal log prob:" << e.second << endl;
         }
 
         auto compair = [](const pair<vector<WordIdAndProbability>, dtype> &a,
