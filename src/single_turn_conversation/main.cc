@@ -42,7 +42,34 @@ using boost::filesystem::path;
 using boost::filesystem::is_directory;
 using boost::filesystem::directory_iterator;
 
-unordered_map<string, float> calculateIdf(const vector<vector<string>> sentences) {
+unordered_map<string, float> keywordProb(const unordered_map<string, float> &idf_table,
+        const vector<vector<string>> &responses) {
+    unordered_map<string, int> keyword_count_table;
+    for (const auto &it : idf_table) {
+        keyword_count_table.insert(make_pair(it.first, 1));
+    }
+
+    for (const auto &sentence : responses) {
+        float max_idf = -1e9;
+        const string *keyword = nullptr;
+        for (const auto &w : sentence) {
+            float idf = idf_table.at(w);
+            if (idf_table.at(w) > max_idf) {
+                max_idf = idf;
+                keyword = &w;
+            }
+        }
+        keyword_count_table.at(*keyword)++;
+    }
+    unordered_map<string, float> result_table;
+    float size = responses.size() + idf_table.size();
+    for (const auto &it : keyword_count_table) {
+        result_table.insert(make_pair(it.first, it.second / size));
+    }
+    return result_table;
+}
+
+unordered_map<string, float> calculateIdf(const vector<vector<string>> &sentences) {
     cout << "sentences size:" << sentences.size() << endl;
     unordered_map<string, int> doc_counts;
     int i = 0;
@@ -180,6 +207,7 @@ DefaultConfig parseDefaultConfig(INIReader &ini_reader) {
     default_config.ngram_penalty_2 = ini_reader.GetReal(SECTION, "ngram_penalty_2", 0.0f);
     default_config.ngram_penalty_3 = ini_reader.GetReal(SECTION, "ngram_penalty_3", 0.0f);
     default_config.result_count_factor = ini_reader.GetReal(SECTION, "result_count_factor", 1.0f);
+    default_config.anti_lm_factor = ini_reader.GetReal(SECTION, "anti_lm_factor", 1.0f);
 
     return default_config;
 }
@@ -517,6 +545,7 @@ float metricTestPosts(const HyperParams &hyper_params, ModelParams &model_params
 void decodeTestPosts(const HyperParams &hyper_params, ModelParams &model_params,
         DefaultConfig &default_config,
         const unordered_map<string, float> & word_idf_table,
+        const unordered_map<string, float> & keyword_prob_table,
         const vector<WordIdfInfo> &response_idf_info_list,
         const vector<PostAndResponses> &post_and_responses_vector,
         const vector<vector<string>> &post_sentences,
@@ -541,8 +570,8 @@ void decodeTestPosts(const HyperParams &hyper_params, ModelParams &model_params,
         vector<DecoderComponents> decoder_components_vector;
         decoder_components_vector.resize(hyper_params.beam_size);
         auto pair = graph_builder.forwardDecoderUsingBeamSearch(graph, decoder_components_vector,
-                word_idf_table, hyper_params.beam_size, hyper_params, model_params, default_config,
-                black_list);
+                word_idf_table, keyword_prob_table, hyper_params.beam_size, hyper_params,
+                model_params, default_config, black_list);
         const vector<WordIdAndProbability> &word_ids_and_probability = pair.first;
         cout << "post:" << endl;
         print(post_sentences.at(post_and_responses.post_id));
@@ -944,7 +973,15 @@ int main(int argc, char *argv[]) {
                 hyper_params.word_cutoff, black_list);
     } else if (default_config.program_mode == ProgramMode::DECODING) {
         hyper_params.beam_size = beam_size;
-        decodeTestPosts(hyper_params, model_params, default_config, all_idf,
+        auto keyword_prob_table = keywordProb(all_idf, response_sentences);
+        cout << "keyword table size:" << keyword_prob_table.size() << endl;
+        float prob_sum = 0;
+        for (const auto &it : keyword_prob_table) {
+            prob_sum += it.second;
+        }
+        cout << "prob_sum:" << prob_sum << endl;
+
+        decodeTestPosts(hyper_params, model_params, default_config, all_idf, keyword_prob_table,
                 response_idf_info_list, test_post_and_responses, post_sentences,
                 response_sentences, black_list);
     } else if (default_config.program_mode == ProgramMode::METRIC) {
