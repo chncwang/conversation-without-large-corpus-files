@@ -661,6 +661,16 @@ int main(int argc, char *argv[]) {
 
     cout << "train size:" << train_conversation_pairs.size() << " dev size:" <<
         dev_post_and_responses.size() << " test size:" << test_post_and_responses.size() << endl;
+    int pair_count_sum = 0;
+    for (const auto &e : dev_post_and_responses) {
+        pair_count_sum += e.response_ids.size();
+    }
+    cout << "dev pair size:" << pair_count_sum << endl;
+    pair_count_sum = 0;
+    for (const auto &e : test_post_and_responses) {
+        pair_count_sum += e.response_ids.size();
+    }
+    cout << "test pair size:" << pair_count_sum << endl;
 
     vector<vector<string>> post_sentences = readSentences(default_config.post_file);
     vector<vector<string>> response_sentences = readSentences(default_config.response_file);
@@ -731,6 +741,21 @@ int main(int argc, char *argv[]) {
         response_sentences = reprocessSentences(response_sentences, word_set,
                 post_ids_and_response_ids.second);
     }
+
+    double all_word_count = 0;
+    double known_count = 0;
+    for (const auto &e : all_sentences) {
+        for (const auto &w : e) {
+            if (word_counts[w] >= 40) {
+                known_count++;
+            }
+            all_word_count++;
+        }
+    }
+
+    cout << boost::format("known:%1% all:%2%") % known_count % all_word_count << endl;
+    cout << "known ratio:"  << known_count / all_word_count << endl;
+    abort();
 
     ModelParams model_params;
     int beam_size = hyper_params.beam_size;
