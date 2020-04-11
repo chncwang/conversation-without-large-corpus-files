@@ -9,6 +9,10 @@
 #include <unordered_map>
 #include <unordered_set>
 #include <boost/format.hpp>
+#include <boost/accumulators/accumulators.hpp>
+#include <boost/accumulators/statistics/stats.hpp>
+#include <boost/accumulators/statistics/mean.hpp>
+#include <boost/accumulators/statistics/moment.hpp>
 #include "conversation_structure.h"
 #include "print.h"
 #include "tinyutf8.h"
@@ -237,6 +241,37 @@ float computeMtevalBleu(const vector<CandidateAndReferences> &candidate_and_refe
     float score = evaluator.integrate(stats);
 
     return score;
+}
+
+float computeMtevalBleu(const CandidateAndReferences &candidate_and_references,
+        int max_gram_len) {
+    vector<CandidateAndReferences> v = {candidate_and_references};
+    return computeMtevalBleu(v, max_gram_len);
+}
+
+void computeMtevalBleuForEachResponse(
+        const vector<CandidateAndReferences> &candidate_and_references_vector,
+        int max_gram_len,
+        float &avg,
+        float &standard_deviation) {
+    using namespace boost::accumulators;
+
+    vector<float> bleus;
+    for (const auto &e : candidate_and_references_vector) {
+        float bleu = computeMtevalBleu(e, max_gram_len);
+        bleus.push_back(bleu);
+    }
+
+    avg = accumulate(bleus.begin(), bleus.end(), 0.0f) / bleus.size();
+    vector<float> zero_centralized_squares;
+    for (float bleu : bleus) {
+        float v = bleu - avg;
+        zero_centralized_squares.push_back(v * v);
+    }
+    float variance = zero_centralized_squares.size() == 1 ? 0 :
+        accumulate(zero_centralized_squares.begin(), zero_centralized_squares.end(), 0.0f) /
+        (zero_centralized_squares.size() - 1);
+    standard_deviation = sqrt(variance);
 }
 
 float computeNist(const vector<CandidateAndReferences> &candidate_and_references_vector,

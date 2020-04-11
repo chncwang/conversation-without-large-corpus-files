@@ -477,6 +477,11 @@ void decodeTestPosts(const HyperParams &hyper_params, ModelParams &model_params,
         for (int ngram = 1; ngram <=4; ++ngram) {
             float bleu_value = computeMtevalBleu(candidate_and_references_vector, ngram);
             cout << "bleu_" << ngram << ":" << bleu_value << endl;
+            float bleu_mean, bleu_deviation;
+            computeMtevalBleuForEachResponse(candidate_and_references_vector, ngram, bleu_mean,
+                    bleu_deviation);
+            cout << boost::format("bleu_%1% mean:%2% deviation:%3%") % ngram % bleu_mean %
+                bleu_deviation << endl;
             float nist_value = computeNist(candidate_and_references_vector, ngram);
             cout << "nist_" << ngram << ":" << nist_value << endl;
             float idf_value = computeEntropy(candidate_and_references_vector, all_idf);
