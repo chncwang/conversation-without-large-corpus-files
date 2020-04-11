@@ -837,7 +837,7 @@ int main(int argc, char *argv[]) {
     ModelParams model_params;
     int beam_size = hyper_params.beam_size;
 
-    auto allocate_model_params = [](const DefaultConfig &default_config,
+    auto allocate_model_params = [&](const DefaultConfig &default_config,
             const HyperParams &hyper_params,
             ModelParams &model_params,
             const Alphabet *alphabet) {
@@ -851,6 +851,8 @@ int main(int argc, char *argv[]) {
             } else {
                 model_params.lookup_table.init(*alphabet, hyper_params.word_dim, true);
             }
+            model_params.idf_table.init(*alphabet, hyper_params.word_dim, false);
+            initIdfTable(model_params.idf_table, all_idf);
         }
         model_params.attention_params.init(hyper_params.hidden_dim, hyper_params.hidden_dim);
         model_params.left_to_right_encoder_params.init(hyper_params.hidden_dim,

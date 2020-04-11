@@ -12,6 +12,7 @@ struct ModelParams : public N3LDGSerializable, public TunableCombination<BasePar
 #endif
 {
     LookupTable<Param> lookup_table;
+    LookupTable<Param> idf_table;
     UniParams hidden_to_wordvector_params;
     UniParams hidden_to_keyword_params;
     LSTM1Params left_to_right_encoder_params;
@@ -25,6 +26,7 @@ struct ModelParams : public N3LDGSerializable, public TunableCombination<BasePar
     Json::Value toJson() const override {
         Json::Value json;
         json["lookup_table"] = lookup_table.toJson();
+        json["idf_table"] = idf_table.toJson();
         json["hidden_to_wordvector_params"] = hidden_to_wordvector_params.toJson();
         json["hidden_to_keyword_params"] = hidden_to_keyword_params.toJson();
         json["left_to_right_encoder_params"] = left_to_right_encoder_params.toJson();
@@ -35,6 +37,7 @@ struct ModelParams : public N3LDGSerializable, public TunableCombination<BasePar
 
     void fromJson(const Json::Value &json) override {
         lookup_table.fromJson(json["lookup_table"]);
+        idf_table.fromJson(json["idf_table"]);
         hidden_to_wordvector_params.fromJson(json["hidden_to_wordvector_params"]);
         hidden_to_keyword_params.fromJson(json["hidden_to_keyword_params"]);
         left_to_right_encoder_params.fromJson(json["left_to_right_encoder_params"]);
@@ -44,16 +47,33 @@ struct ModelParams : public N3LDGSerializable, public TunableCombination<BasePar
 
 #if USE_GPU
     std::vector<n3ldg_cuda::Transferable *> transferablePtrs() override {
-        return {&lookup_table, &hidden_to_wordvector_params, &hidden_to_keyword_params,
+        return {&lookup_table, &idf_table, &hidden_to_wordvector_params, &hidden_to_keyword_params,
             &left_to_right_encoder_params, &left_to_right_decoder_params, &attention_params};
     }
 #endif
 
 protected:
     virtual std::vector<Tunable<BaseParam> *> tunableComponents() override {
-        return {&lookup_table, &hidden_to_wordvector_params, &hidden_to_keyword_params,
+        return {&lookup_table, &idf_table, &hidden_to_wordvector_params, &hidden_to_keyword_params,
             &left_to_right_encoder_params, &left_to_right_decoder_params, &attention_params};
     }
 };
+
+void initIdfTable(LookupTable<Param> &idf_embedding_table,
+        const unordered_map<string, float> &idf_table) {
+    for (const auto &it : idf_table) {
+        int id = idf_embedding_table.elems.from_string(it.first);
+        int dim = idf_embedding_table.E.outDim();
+        for (int dim_i = 0; dim_i < dim; ++dim_i) {
+            float idf = it.second;
+            float x = idf / pow(1e2, static_cast<float>(dim_i) / dim);
+            float y = dim_i % 2 == 0 ? sin(x) : cos(x);
+            idf_embedding_table.E.val[id][dim_i] = y;
+        }
+    }
+#if USE_GPU
+    idf_embedding_table.copyFromHostToDevice();
+#endif
+}
 
 #endif

@@ -372,6 +372,10 @@ vector<BeamSearchResult> mostProbableKeywords(
 
             Node *keyword_vector_to_onehot = n3ldg_plus::linearWordVector(graph,
                     last_keyword_id + 1, model_params.lookup_table.E, *keyword);
+            Node *idf_onehot = n3ldg_plus::linearWordVector(graph, last_keyword_id + 1,
+                    model_params.idf_table.E, *keyword);
+            keyword_vector_to_onehot = n3ldg_plus::add(graph,
+                    {keyword_vector_to_onehot, idf_onehot});
             Node *softmax = n3ldg_plus::softmax(graph, *keyword_vector_to_onehot);
 
             components.keyword_vector_to_onehots.push_back(softmax);
@@ -634,6 +638,10 @@ struct GraphBuilder {
             keyword_vector_to_onehot = n3ldg_plus::linearWordVector(graph,
                     keyword_word_id_upper_open_bound, model_params.lookup_table.E,
                     *nodes.keyword);
+            Node *idf_onehot = n3ldg_plus::linearWordVector(graph,
+                    keyword_word_id_upper_open_bound, model_params.idf_table.E, *nodes.keyword);
+            keyword_vector_to_onehot = n3ldg_plus::add(graph,
+                    {keyword_vector_to_onehot, idf_onehot});
             keyword_vector_to_onehot = n3ldg_plus::softmax(graph, *keyword_vector_to_onehot);
         }
         decoder_components.keyword_vector_to_onehots.push_back(keyword_vector_to_onehot);
