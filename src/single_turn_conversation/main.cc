@@ -866,7 +866,6 @@ int main(int argc, char *argv[]) {
         cout << all_idf.at(all_word_list.at(i)) << " ";
         cout << word_counts.at(all_word_list.at(i)) << "  ";
     }
-    abort();
     alphabet.init(all_word_list);
     cout << boost::format("alphabet size:%1%") % alphabet.size() << endl;
 
