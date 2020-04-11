@@ -68,7 +68,8 @@ unordered_map<string, float> calculateIdf(const vector<vector<string>> sentences
 
     unordered_map<string, float> result;
     for (const auto &it : doc_counts) {
-        float idf = log(sentences.size() / static_cast<float>(it.second));
+        float idf = it.first == unknownkey ? 1e-3 :
+            log(sentences.size() / static_cast<float>(it.second));
         if (idf < 0.0) {
             cerr << "idf:" << idf << endl;
             abort();
@@ -865,6 +866,7 @@ int main(int argc, char *argv[]) {
         cout << all_idf.at(all_word_list.at(i)) << " ";
         cout << word_counts.at(all_word_list.at(i)) << "  ";
     }
+    abort();
     alphabet.init(all_word_list);
     cout << boost::format("alphabet size:%1%") % alphabet.size() << endl;
 
