@@ -68,7 +68,8 @@ unordered_map<string, float> calculateIdf(const vector<vector<string>> sentences
 
     unordered_map<string, float> result;
     for (const auto &it : doc_counts) {
-        float idf = log(sentences.size() / static_cast<float>(it.second));
+        float idf = it.first == unknownkey ? 1e-3 :
+            log(sentences.size() / static_cast<float>(it.second));
         if (idf < 0.0) {
             cerr << "idf:" << idf << endl;
             abort();
