@@ -515,6 +515,25 @@ float metricTestPosts(const HyperParams &hyper_params, ModelParams &model_params
     return rep_perplex;
 }
 
+void computeMeanAndStandardDeviation(const vector<float> &nums, float &mean, float &sd) {
+    float sum = 0;
+    for (float num : nums) {
+        sum += num;
+    }
+    mean = sum / nums.size();
+    if (nums.size() == 1) {
+        sd = 0;
+    } else {
+        float variance = 0;
+        for (float num : nums) {
+            float x = num - mean;
+            variance += x * x;
+        }
+        variance /= (nums.size() - 1);
+        sd = sqrt(variance);
+    }
+}
+
 void decodeTestPosts(const HyperParams &hyper_params, ModelParams &model_params,
         DefaultConfig &default_config,
         const unordered_map<string, float> & word_idf_table,
@@ -526,6 +545,9 @@ void decodeTestPosts(const HyperParams &hyper_params, ModelParams &model_params,
     cout << "decodeTestPosts begin" << endl;
     hyper_params.print();
     vector<CandidateAndReferences> candidate_and_references_vector;
+    map<string, int64_t> overall_flops;
+    int loop_i = 0;
+    vector <float> greedy_matching_similarities;
     for (const PostAndResponses &post_and_responses : post_and_responses_vector) {
         cout << "post:" << endl;
         auto post_sentence = post_sentences.at(post_and_responses.post_id);
@@ -545,6 +567,26 @@ void decodeTestPosts(const HyperParams &hyper_params, ModelParams &model_params,
         cout << "response:" << endl;
         printWordIdsWithKeywords(word_ids_and_probability, model_params.lookup_table,
                 word_idf_table);
+        const auto &flops = graph.getFLOPs();
+        if (loop_i == 1) {
+            overall_flops = flops;
+        } else {
+            for (const auto &it : flops) {
+                overall_flops.at(it.first) += it.second;
+            }
+        }
+
+        float flops_sum = 0;
+        for (const auto &it : overall_flops) {
+            flops_sum += it.second;
+        }
+        for (const auto &it : overall_flops) {
+            cout << it.first << ":" << it.second / flops_sum << endl;
+        }
+
+        cout << boost::format("flops:%1% overall:%2% avg:%3%") % 0 % flops_sum %
+            (static_cast<float>(flops_sum) / loop_i) << endl;
+
         dtype probability = pair.second;
         cout << format("probability:%1%") % probability << endl;
         if (word_ids_and_probability.empty()) {
@@ -582,9 +624,26 @@ void decodeTestPosts(const HyperParams &hyper_params, ModelParams &model_params,
         for (int ngram = 1; ngram <=4; ++ngram) {
             float bleu_value = computeBleu(candidate_and_references_vector, ngram);
             cout << "bleu_" << ngram << ":" << bleu_value << endl;
+            float bleu_mean, bleu_deviation;
+            computeMtevalBleuForEachResponse(candidate_and_references_vector, ngram, bleu_mean,
+                    bleu_deviation);
+            cout << boost::format("bleu_%1% mean:%2% deviation:%3%") % ngram % bleu_mean %
+                bleu_deviation << endl;
             float nist_value = computeNist(candidate_and_references_vector, ngram);
             cout << "nist_" << ngram << ":" << nist_value << endl;
+            float dist_value = computeDist(candidate_and_references_vector, ngram);
+            cout << "dist_" << ngram << ":" << dist_value << endl;
         }
+        float idf_value = computeEntropy(candidate_and_references_vector, word_idf_table);
+        cout << "idf:" << idf_value << endl;
+        float greedy_matching_sim = computeGreedyMatching(candidate_and_references,
+                model_params.lookup_table);
+        greedy_matching_similarities.push_back(greedy_matching_sim);
+        float greedy_matching_sim_mean, greedy_matching_sim_sd;
+        computeMeanAndStandardDeviation(greedy_matching_similarities, greedy_matching_sim_mean,
+                greedy_matching_sim_sd);
+        cout << boost::format("greedy matching mean:%1% standard_deviation:%2%") %
+            greedy_matching_sim_mean % greedy_matching_sim_sd << endl;
     }
 }
 

@@ -44,6 +44,8 @@ string getSentence(const vector<int> &word_ids_vector, const ModelParams &model_
     return words;
 }
 
+#define BEAM_SEARCH_KEY "beam_search"
+
 class BeamSearchResult {
 public:
     BeamSearchResult() {
@@ -227,7 +229,8 @@ vector<BeamSearchResult> mostProbableResults(
         const DefaultConfig &default_config,
         bool is_first,
         const vector<string> &black_list,
-        const unordered_map<string, float> &idf_table) {
+        const unordered_map<string, float> &idf_table,
+        Graph &graph) {
     vector<Node *> nodes;
     int beam_i = 0;
     for (const DecoderComponents &decoder_components : beam) {
@@ -247,7 +250,8 @@ vector<BeamSearchResult> mostProbableResults(
         abort();
     }
 
-    auto cmp = [](const BeamSearchResult &a, const BeamSearchResult &b) {
+    auto cmp = [&](const BeamSearchResult &a, const BeamSearchResult &b) {
+        graph.addFLOPs(1, BEAM_SEARCH_KEY);
         return a.finalScore() > b.finalScore();
     };
     priority_queue<BeamSearchResult, vector<BeamSearchResult>, decltype(cmp)> queue(cmp);
@@ -268,21 +272,26 @@ vector<BeamSearchResult> mostProbableResults(
             }
             dtype value = node.getVal().v[j];
             dtype log_probability = log(value);
+            graph.addFLOPs(1, BEAM_SEARCH_KEY);
             dtype word_probability = value;
             vector<WordIdAndProbability> word_ids;
             if (!last_results.empty()) {
                 log_probability += last_results.at(i).finalLogProbability();
+                graph.addFLOPs(1, BEAM_SEARCH_KEY);
                 word_ids = last_results.at(i).getPath();
             }
             word_ids.push_back(WordIdAndProbability(node.getDim(), j, word_probability));
             beam_search_result =  BeamSearchResult(beam.at(i), word_ids, log_probability);
-//            int local_size = min(k, 1 + node.getDim() / 10);
+            graph.addFLOPs(1, BEAM_SEARCH_KEY);
             int local_size = k;
             if (queue.size() < local_size) {
                 queue.push(beam_search_result);
             } else if (queue.top().finalScore() < beam_search_result.finalScore()) {
+                graph.addFLOPs(1, BEAM_SEARCH_KEY);
                 queue.pop();
                 queue.push(beam_search_result);
+            } else {
+                graph.addFLOPs(1, BEAM_SEARCH_KEY);
             }
         }
     }
@@ -386,7 +395,8 @@ vector<BeamSearchResult> mostProbableKeywords(
     }
     graph.compute();
 
-    auto cmp = [](const BeamSearchResult &a, const BeamSearchResult &b) {
+    auto cmp = [&](const BeamSearchResult &a, const BeamSearchResult &b) {
+        graph.addFLOPs(1, BEAM_SEARCH_KEY);
         return a.finalScore() > b.finalScore();
     };
     priority_queue<BeamSearchResult, vector<BeamSearchResult>, decltype(cmp)> queue(cmp);
@@ -403,11 +413,15 @@ vector<BeamSearchResult> mostProbableKeywords(
             new_id_and_probs.push_back(w);
             BeamSearchResult beam_search_result(beam.at(i), new_id_and_probs,
                     last_results.at(i).finalLogProbability());
+            graph.addFLOPs(1, BEAM_SEARCH_KEY);
             if (queue.size() < k) {
                 queue.push(beam_search_result);
             } else if (queue.top().finalScore() < beam_search_result.finalScore()) {
+                graph.addFLOPs(1, BEAM_SEARCH_KEY);
                 queue.pop();
                 queue.push(beam_search_result);
+            } else {
+                graph.addFLOPs(1, BEAM_SEARCH_KEY);
             }
         } else {
             const Node &node = *nodes.at(i);
@@ -446,6 +460,7 @@ vector<BeamSearchResult> mostProbableKeywords(
                 vector<WordIdAndProbability> word_ids;
                 if (!last_results.empty()) {
                     log_probability += last_results.at(i).finalLogProbability();
+                    graph.addFLOPs(1, BEAM_SEARCH_KEY);
                     word_ids = last_results.at(i).getPath();
                 }
                 if (log_probability != log_probability) {
@@ -462,12 +477,15 @@ vector<BeamSearchResult> mostProbableKeywords(
                 word_ids.push_back(WordIdAndProbability(node.getDim(), j, word_probability));
 
                 BeamSearchResult local = BeamSearchResult(beam.at(i), word_ids, log_probability);
-//                if (local_queue.size() < min(k, node.getDim() / 10 + 1)) {
+                graph.addFLOPs(1, BEAM_SEARCH_KEY);
                 if (queue.size() < k) {
                     queue.push(local);
                 } else if (queue.top().finalScore() < local.finalScore()) {
+                    graph.addFLOPs(1, BEAM_SEARCH_KEY);
                     queue.pop();
                     queue.push(local);
+                } else {
+                    graph.addFLOPs(1, BEAM_SEARCH_KEY);
                 }
             }
         }
@@ -793,7 +811,8 @@ struct GraphBuilder {
 
                 last_answers.clear();
                 most_probable_results = mostProbableResults(beam, most_probable_results, i,
-                        k, model_params, default_config, i == 0, black_list, word_idf_table);
+                        k, model_params, default_config, i == 0, black_list, word_idf_table,
+                        graph);
                 cout << boost::format("most_probable_results size:%1%") %
                     most_probable_results.size() << endl;
                 beam.clear();
