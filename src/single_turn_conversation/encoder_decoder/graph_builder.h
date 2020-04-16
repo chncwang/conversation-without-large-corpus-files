@@ -608,6 +608,8 @@ struct GraphBuilder {
         }
 
         Node *keyword_node = n3ldg_plus::embedding(graph, model_params.lookup_table, keyword);
+        Node *idf = n3ldg_plus::embedding(graph, model_params.idf_table, keyword);
+        keyword_node = n3ldg_plus::add(graph, {keyword_node, idf});
         Node * dropout_keyword = n3ldg_plus::dropout(graph, *keyword_node, hyper_params.dropout,
                 is_training);
         decoder_components.decoder_keyword_lookups.push_back(dropout_keyword);
@@ -655,6 +657,8 @@ struct GraphBuilder {
             const HyperParams &hyper_params,
             ModelParams &model_params) {
         Node *keyword_lookup = n3ldg_plus::embedding(graph, model_params.lookup_table, keyword);
+        Node *idf = n3ldg_plus::embedding(graph, model_params.idf_table, keyword);
+        keyword_lookup = n3ldg_plus::add(graph, {keyword_lookup, idf});
         Node *dropout_keyword = n3ldg_plus::dropout(graph, *keyword_lookup, hyper_params.dropout,
                 false);
         decoder_components.decoder_keyword_lookups.push_back(dropout_keyword);
@@ -702,6 +706,8 @@ struct GraphBuilder {
             vector<Node*> &encoder_hiddens) {
         Node *keyword_embedding = n3ldg_plus::embedding(graph, model_params.lookup_table,
                 keyword);
+        Node *idf = n3ldg_plus::embedding(graph, model_params.idf_table, keyword);
+        keyword_embedding = n3ldg_plus::add(graph, {keyword_embedding, idf});
         if (decoder_components.decoder_keyword_lookups.size() != i) {
             cerr << "keyword lookup size:" << decoder_components.decoder_keyword_lookups.size()
                 << endl;
