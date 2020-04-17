@@ -55,10 +55,10 @@ public:
             }
 
     dtype finalScore() const {
-        set<int> unique_words;
-        for (const auto &p : path_) {
-            unique_words.insert(p.word_id);
-        }
+//        set<int> unique_words;
+//        for (const auto &p : path_) {
+//            unique_words.insert(p.word_id);
+//        }
 //        for (int n = 2; n < 10; ++n) {
 //            if (path_.size() >= n * 2) {
 //                for (int i = path_.size() - n * 2; i>=0;--i) {
@@ -75,7 +75,7 @@ public:
 //                }
 //            }
 //        }
-        return (final_log_probability ) / unique_words.size();
+        return (final_log_probability ) / path_.size();
 //        return final_log_probability;
     }
 
