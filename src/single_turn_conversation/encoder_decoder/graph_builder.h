@@ -60,40 +60,20 @@ public:
             }
 
     dtype finalScore() const {
-//        if (path_.size() % 2 == 0) {
-//            for (int n = 2; n < 10; ++n) {
-//                if (path_.size() >= n * 4) {
-//                    for (int i = path_.size() - n * 4 + 1; i>=0;--i) {
-//                        bool ngram_hit = true;
-//                        for (int j = 0; j < n; ++j) {
-//                            if (path_.at(i + 2 * j).word_id != path_.at(path_.size() - n * 2 + j * 2).word_id) {
-//                                ngram_hit = false;
-//                                break;
-//                            }
-//                        }
-//                        if (ngram_hit) {
-//                            return -1e10;
-//                        }
-//                    }
-//                }
-//            }
+//        set<int> all_words;
+//        for (int i = 0; i < path_.size(); ++i) {
+//            all_words.insert(path_.at(i).word_id);
 //        }
-        set<int> all_words, normal_words;
-        for (int i = 0; i < path_.size(); ++i) {
-            all_words.insert(path_.at(i).word_id);
-            if (i % 2 == 1) {
-                normal_words.insert(path_.at(i).word_id);
+        int len = 0;
+        for (int i = 0; i < path_.size(); i += 2) {
+            if (i == 0 || (i >= 2 && path_.at(i - 1).word_id == path_.at(i - 2).word_id)) {
+                ++len;
+            }
+            if (i + 1 < path_.size() && path_.at(i + 1).word_id != path_.at(i).word_id) {
+                ++len;
             }
         }
-        return final_log_probability / all_words.size();
-//        set<int> keys;
-//        for (int i = 0; i < path_.size(); i +=2) {
-//            keys.insert(path_.at(i).word_id);
-//        }
-//        return final_log_probability / path_.size();
-//        int len = (path_.size() % 2 == 1 ? all_words.size() : normal_words.size());
-//        return final_log_probability / pow(len, 1);
-//        return final_log_probability / (normal_words.size() + 1e-10);
+        return final_log_probability / len;
     }
 
     dtype finalLogProbability() const {
