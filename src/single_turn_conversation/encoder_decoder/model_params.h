@@ -67,7 +67,8 @@ void initIdfTable(LookupTable<Param> &idf_embedding_table,
         for (int dim_i = 0; dim_i < dim; ++dim_i) {
             float idf = it.second;
             float x = idf / pow(1e2, static_cast<float>(dim_i) / dim);
-            float y = dim_i % 2 == 0 ? sin(x) : cos(x);
+            float y = 4 / (1 + exp(-x)) - 3;
+            y = dim_i % 2 == 0 ? y : -y;
             idf_embedding_table.E.val[id][dim_i] = y;
         }
     }
