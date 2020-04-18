@@ -324,6 +324,7 @@ vector<BeamSearchResult> mostProbableKeywords(
         vector<DecoderComponents> &beam,
         const vector<BeamSearchResult> &last_results,
         const unordered_map<string ,float> word_idf_table,
+        Node &last_idf_embedding,
         int word_pos,
         int k,
         Graph &graph,
@@ -357,6 +358,10 @@ vector<BeamSearchResult> mostProbableKeywords(
 
             Node *context_concated = n3ldg_plus::concat(graph,
                     {components.decoder._hiddens.at(word_pos), components.contexts.at(word_pos)});
+            Node *bucket = n3ldg_plus::bucket(graph, 2 * hyper_params.hidden_dim -
+                    hyper_params.word_dim, 0.0f);
+            Node *clipped = n3ldg_plus::concat(graph, {&last_idf_embedding, bucket});
+            context_concated = n3ldg_plus::add(graph, {context_concated, clipped});
 
             Node *keyword = n3ldg_plus::linear(graph, model_params.hidden_to_keyword_params,
                     *context_concated);
@@ -548,8 +553,18 @@ struct GraphBuilder {
                 print(keywords);
                 abort();
             }
+            Node *last_idf_embedding;
+            if (i == 0) {
+                int max_id = model_params.idf_table.nVSize - 1;
+                last_idf_embedding = n3ldg_plus::embedding(graph, model_params.idf_table.E, max_id,
+                        false);
+            } else {
+                last_idf_embedding = n3ldg_plus::embedding(graph, model_params.idf_table,
+                        keywords.at(i - 1), false);
+            }
+
             forwardDecoderByOneStep(graph, decoder_components, i, i == answer.size() - 1,
-                    i == 0 ? nullptr : &answer.at(i - 1), keywords.at(i),
+                    i == 0 ? nullptr : &answer.at(i - 1), keywords.at(i), *last_idf_embedding,
                     i == 0 ||  answer.at(i - 1) == keywords.at(i - 1), hyper_params,
                     model_params, is_training, keyword_bound, normal_bound);
         }
@@ -559,6 +574,7 @@ struct GraphBuilder {
             bool is_last,
             const std::string *answer,
             const std::string &keyword,
+            Node &last_idf_embedding,
             bool should_predict_keyword,
             const HyperParams &hyper_params,
             ModelParams &model_params,
@@ -613,7 +629,8 @@ struct GraphBuilder {
                 left_to_right_encoder._hiddens, is_training);
 
         auto nodes = decoder_components.decoderToWordVectors(graph, hyper_params,
-                model_params, left_to_right_encoder._hiddens, i, should_predict_keyword);
+                model_params, left_to_right_encoder._hiddens, last_idf_embedding, i,
+                should_predict_keyword);
         Node *decoder_to_wordvector = nodes.result;
         decoder_components.decoder_to_wordvectors.push_back(decoder_to_wordvector);
 
@@ -694,6 +711,7 @@ struct GraphBuilder {
 
     void forwardDecoderKeywordByOneStep(Graph &graph, DecoderComponents &decoder_components, int i,
             const std::string &keyword,
+            Node &last_idf,
             const HyperParams &hyper_params,
             ModelParams &model_params,
             vector<Node*> &encoder_hiddens) {
@@ -706,7 +724,7 @@ struct GraphBuilder {
         }
         decoder_components.decoder_keyword_lookups.push_back(keyword_embedding);
         ResultAndKeywordVectors result =  decoder_components.decoderToWordVectors(graph,
-                hyper_params, model_params, encoder_hiddens, i, false);
+                hyper_params, model_params, encoder_hiddens, last_idf, i, false);
         Node *result_node = result.result;
 
         int keyword_id = model_params.lookup_table.elems.from_string(keyword);
@@ -762,9 +780,10 @@ struct GraphBuilder {
                 cout << "forwardDecoderHiddenByOneStep:" << endl;
                 graph.compute();
 
-                most_probable_results = mostProbableKeywords(beam, most_probable_results,
-                        word_idf_table, i, k, graph, model_params, hyper_params,
-                        default_config, i == 0, searched_ids, black_list);
+                // TODO
+//                most_probable_results = mostProbableKeywords(beam, most_probable_results,
+//                        word_idf_table, i, k, graph, model_params, hyper_params,
+//                        default_config, i == 0, searched_ids, black_list);
                 for (int beam_i = 0; beam_i < beam.size(); ++beam_i) {
                     DecoderComponents &decoder_components = beam.at(beam_i);
                     int keyword_id = most_probable_results.at(beam_i).getPath().back().word_id;
@@ -790,9 +809,10 @@ struct GraphBuilder {
 
                 int beam_i = 0;
                 for (auto &decoder_components : beam) {
-                    forwardDecoderKeywordByOneStep(graph, decoder_components, i,
-                            last_keywords.at(beam_i), hyper_params, model_params,
-                            left_to_right_encoder._hiddens);
+                    //TODO
+//                    forwardDecoderKeywordByOneStep(graph, decoder_components, i,
+//                            last_keywords.at(beam_i), hyper_params, model_params,
+//                            left_to_right_encoder._hiddens);
                     ++beam_i;
                 }
                 last_keywords.clear();
