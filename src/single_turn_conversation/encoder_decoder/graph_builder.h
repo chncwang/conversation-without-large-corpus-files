@@ -363,8 +363,14 @@ vector<BeamSearchResult> mostProbableKeywords(
             Node *clipped = n3ldg_plus::concat(graph, {&last_idf_embedding, bucket});
             context_concated = n3ldg_plus::add(graph, {context_concated, clipped});
 
-            Node *keyword = n3ldg_plus::linear(graph, model_params.hidden_to_keyword_params,
-                    *context_concated);
+            Node *keyword = n3ldg_plus::linear(graph,
+                    *model_params.hidden_to_keyword_params.ptrs().at(0), *context_concated);
+            keyword = n3ldg_plus::linear(graph,
+                    *model_params.hidden_to_keyword_params.ptrs().at(1), *keyword);
+            Node *activated = n3ldg_plus::relu(graph, *keyword);
+            keyword = n3ldg_plus::add(graph, {keyword, activated});
+            keyword = n3ldg_plus::linear(graph,
+                    *model_params.hidden_to_keyword_params.ptrs().at(2), *keyword);
             keyword = n3ldg_plus::tanh(graph, *keyword);
             keyword_node = keyword;
 
@@ -462,11 +468,6 @@ vector<BeamSearchResult> mostProbableKeywords(
                     cerr << node.getVal().vec() << endl;
                     cerr << "keyword node:" << endl << keyword_nodes.at(i)->getVal().vec() << endl;
                     cerr << "hidden node:" << endl << hiddens.at(i)->getVal().vec() << endl;
-                    Json::StreamWriterBuilder builder;
-                    builder["commentStyle"] = "None";
-                    builder["indentation"] = "";
-                    string json_str = Json::writeString(builder, model_params.hidden_to_keyword_params.W.toJson());
-                    cerr << "param W:" << endl << json_str << endl;
                     abort();
                 }
                 word_ids.push_back(WordIdAndProbability(node.getDim(), j, word_probability));

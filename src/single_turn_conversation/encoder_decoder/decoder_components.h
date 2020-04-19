@@ -68,8 +68,14 @@ struct DecoderComponents {
                     hyper_params.word_dim, 0.0f);
             Node *clipped = n3ldg_plus::concat(graph, {&last_idf_embedding, bucket});
             context_concated = n3ldg_plus::add(graph, {context_concated, clipped});
-            keyword = n3ldg_plus::linear(graph, model_params.hidden_to_keyword_params,
-                    *context_concated);
+            keyword = n3ldg_plus::linear(graph,
+                    *model_params.hidden_to_keyword_params.ptrs().at(0), *context_concated);
+            keyword = n3ldg_plus::linear(graph,
+                    *model_params.hidden_to_keyword_params.ptrs().at(1), *keyword);
+            Node *activated = n3ldg_plus::relu(graph, *keyword);
+            keyword = n3ldg_plus::add(graph, {keyword, activated});
+            keyword = n3ldg_plus::linear(graph,
+                    *model_params.hidden_to_keyword_params.ptrs().at(2), *keyword);
             keyword = n3ldg_plus::tanh(graph, *keyword);
         } else {
             keyword = nullptr;

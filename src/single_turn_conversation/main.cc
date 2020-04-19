@@ -861,8 +861,22 @@ int main(int argc, char *argv[]) {
                 2 * hyper_params.word_dim + hyper_params.hidden_dim);
         model_params.hidden_to_wordvector_params.init(hyper_params.word_dim,
                 2 * hyper_params.hidden_dim + 2 * hyper_params.word_dim, false);
-        model_params.hidden_to_keyword_params.init(hyper_params.word_dim,
-                2 * hyper_params.hidden_dim, false);
+        function<void(UniParams &, int)> init_hidden_to_keyword =
+            [&](UniParams &param, int layer) {
+                int in_dim, dim;
+                if (layer == 0) {
+                    in_dim = 2 * hyper_params.hidden_dim;
+                    dim = hyper_params.hidden_dim;
+                } else if (layer == 2) {
+                    in_dim = hyper_params.hidden_dim;
+                    dim = hyper_params.word_dim;
+                } else {
+                    in_dim = hyper_params.hidden_dim;
+                    dim = hyper_params.hidden_dim;
+                }
+                param.init(dim, in_dim, false);
+        };
+        model_params.hidden_to_keyword_params.init(3, init_hidden_to_keyword);
     };
 
     if (default_config.program_mode != ProgramMode::METRIC) {

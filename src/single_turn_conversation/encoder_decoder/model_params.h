@@ -14,7 +14,7 @@ struct ModelParams : public N3LDGSerializable, public TunableCombination<BasePar
     LookupTable<Param> lookup_table;
     LookupTable<Param> idf_table;
     UniParams hidden_to_wordvector_params;
-    UniParams hidden_to_keyword_params;
+    ParamArray<UniParams> hidden_to_keyword_params;
     LSTM1Params left_to_right_encoder_params;
     LSTM1Params left_to_right_decoder_params;
     AdditiveAttentionParams attention_params;
