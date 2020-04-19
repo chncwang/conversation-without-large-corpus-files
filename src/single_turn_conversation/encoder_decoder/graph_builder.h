@@ -365,6 +365,7 @@ vector<BeamSearchResult> mostProbableKeywords(
 
             Node *keyword = n3ldg_plus::linear(graph, model_params.hidden_to_keyword_params,
                     *context_concated);
+            keyword = n3ldg_plus::tanh(graph, *keyword);
             keyword_node = keyword;
 
             int last_keyword_id;
