@@ -321,6 +321,46 @@ float computeEntropy(const vector<CandidateAndReferences> &candidate_and_referen
     return idf_sum / len_sum;
 }
 
+float computeMatchedEntropy(const vector<CandidateAndReferences> &candidate_and_references_vector,
+        const unordered_map<string, float> &idf_table) {
+    float idf_sum = 0;
+    int len_sum = 0;
+    for (const CandidateAndReferences &e : candidate_and_references_vector) {
+        const auto &s = e.candidate;
+        float max_idf = -1;
+        for (const auto &ref : e.references) {
+            vector<bool> used;
+            used.resize(ref.size());
+            for (int i = 0; i < used.size(); ++i) {
+                used.at(i) = false;
+            }
+            float idf_inner_sum = 0;
+            for (const string &word : s) {
+                const auto &it = idf_table.find(word);
+                if (it == idf_table.end()) {
+                    cerr << "word " << word << " not found" << endl;
+                    abort();
+                }
+                float idf = it->second;
+                int i = 0;
+                for (const auto &ref_word : ref) {
+                    if (!used.at(i) && ref_word == it->first) {
+                        used.at(i) = true;
+                        idf_inner_sum += idf;
+                    }
+                    ++i;
+                }
+            }
+            if (idf_inner_sum > max_idf) {
+                max_idf = idf_inner_sum;
+            }
+        }
+        idf_sum += max_idf;
+        len_sum += s.size();
+    }
+    return idf_sum / len_sum;
+}
+
 float computeDist(const vector<CandidateAndReferences> &candidate_and_references_vector,
         int ngram) {
     unordered_set<string> distinctions;

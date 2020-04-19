@@ -640,6 +640,8 @@ void decodeTestPosts(const HyperParams &hyper_params, ModelParams &model_params,
         }
         float idf_value = computeEntropy(candidate_and_references_vector, word_idf_table);
         cout << "idf:" << idf_value << endl;
+        float matched_idf = computeMatchedEntropy(candidate_and_references_vector, word_idf_table);
+        cout << "matched idf:" << matched_idf << endl;
         float greedy_matching_sim = computeGreedyMatching(candidate_and_references,
                 model_params.lookup_table);
         greedy_matching_similarities.push_back(greedy_matching_sim);
