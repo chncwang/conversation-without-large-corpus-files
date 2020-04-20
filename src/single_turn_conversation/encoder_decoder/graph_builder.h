@@ -529,6 +529,8 @@ struct GraphBuilder {
         for (int i = 0; i < sentence.size(); ++i) {
             Node *input_lookup = n3ldg_plus::embedding(graph, model_params.lookup_table,
                     sentence.at(i));
+            Node *idf = n3ldg_plus::embedding(graph, model_params.lookup_table, sentence.at(i));
+            input_lookup = n3ldg_plus::add(graph, {input_lookup, idf});
             Node *dropout_node = n3ldg_plus::dropout(graph, *input_lookup, hyper_params.dropout,
                     is_training);
             left_to_right_encoder.forward(graph, model_params.left_to_right_encoder_params,
