@@ -429,6 +429,7 @@ void decodeTestPosts(const HyperParams &hyper_params, ModelParams &model_params,
         const vector<WordIdAndProbability> &word_ids_and_probability = pair.first;
         cout << "post:" << endl;
         print(post_sentences.at(post_and_responses.post_id));
+        cout << "keyword:" << keyword << endl;
         cout << "response:" << endl;
         printWordIds(word_ids_and_probability, model_params.lookup_table);
         dtype probability = pair.second;

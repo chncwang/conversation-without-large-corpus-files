@@ -429,10 +429,11 @@ string getMostRelatedKeyword(const vector<string> &post,
             }
         }
     }
-    float min_score = -1;
+    float max_score = -1;
     const string *most_related_keyword = nullptr;
     for (const auto &it : scores) {
-        if (it.second > min_score) {
+        if (it.second > max_score) {
+            max_score = it.second;
             most_related_keyword = &it.first;
         }
     }
