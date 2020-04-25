@@ -411,8 +411,9 @@ unordered_map<string, unordered_map<string, float>> calPMI(
     return pmi_map;
 }
 
-string getMostRelatedKeyword(const vector<string> &post,
-        const unordered_map<string, unordered_map<string, float>> &pmi_map) {
+vector<string> getMostRelatedKeyword(const vector<string> &post,
+        const unordered_map<string, unordered_map<string, float>> &pmi_map,
+        const unordered_map<string, float> &idf_map) {
     unordered_map<string, float> scores;
     for (const string &post_word : post) {
         const auto &it = pmi_map.find(post_word);
@@ -429,19 +430,24 @@ string getMostRelatedKeyword(const vector<string> &post,
             }
         }
     }
-    float max_score = -1;
-    const string *most_related_keyword = nullptr;
+    vector<pair<string, float>> word_and_pmi_vec;
     for (const auto &it : scores) {
-        if (it.second > max_score) {
-            max_score = it.second;
-            most_related_keyword = &it.first;
+        const auto &inner_it = idf_map.find(it.first);
+        if (inner_it != idf_map.end() && isPureChinese(it.first)) {
+            word_and_pmi_vec.push_back(it);
         }
     }
-    if (most_related_keyword == nullptr) {
-        cerr << "getMostRelatedKeyword - most_related_keyword is nullptr" << endl;
-        abort();
+    function<bool(const pair<string, float> &a, const pair<string, float> &b)> cmp =
+        [](const pair<string, float> &a, const pair<string, float> &b)->bool {
+            return a.second > b.second;
+        };
+    std::sort(word_and_pmi_vec.begin(), word_and_pmi_vec.end(), cmp);
+    vector<string> result;
+    for (const auto &it : word_and_pmi_vec) {
+        cout << "keyword:" << it.first << " value:" << it.second << endl;
+        result.push_back(it.first);
     }
-    return *most_related_keyword;
+    return result;
 }
 
 string getKeyword(const vector<string> &post, const vector<string> &response,

@@ -53,28 +53,11 @@ public:
             }
 
     dtype finalScore() const {
-        set<int> unique_words;
-        for (const auto &p : path_) {
-            unique_words.insert(p.word_id);
+        set<int> s;
+        for (const auto &it : path_) {
+            s.insert(it.word_id);
         }
-//        for (int n = 2; n < 10; ++n) {
-//            if (path_.size() >= n * 2) {
-//                for (int i = path_.size() - n * 2; i>=0;--i) {
-//                    bool ngram_hit = true;
-//                    for (int j = 0; j < n; ++j) {
-//                        if (path_.at(i + j).word_id != path_.at(path_.size() - n + j).word_id) {
-//                            ngram_hit = false;
-//                            break;
-//                        }
-//                    }
-//                    if (ngram_hit) {
-//                        return -1e10;
-//                    }
-//                }
-//            }
-//        }
-        return (final_log_probability ) / unique_words.size();
-//        return final_log_probability;
+        return (final_log_probability ) / s.size();
     }
 
     dtype finalLogProbability() const {
@@ -351,7 +334,8 @@ struct GraphBuilder {
         decoder_components.wordvector_to_onehots.push_back(softmax);
     }
 
-    pair<vector<WordIdAndProbability>, dtype> forwardDecoderUsingBeamSearch(Graph &graph,
+    unique_ptr<pair<vector<WordIdAndProbability>, dtype>> forwardDecoderUsingBeamSearch(
+            Graph &graph,
             const string &keyword,
             const vector<DecoderComponents> &decoder_components_beam,
             int k,
@@ -362,7 +346,6 @@ struct GraphBuilder {
         vector<pair<vector<WordIdAndProbability>, dtype>> word_ids_result;
         vector<BeamSearchResult> most_probable_results;
         vector<string> last_answers;
-        bool succeeded = false;
         set<int> searched_word_ids;
 
         Node *keyword_embedding = n3ldg_plus::embedding(graph, model_params.lookup_table, keyword);
@@ -408,7 +391,6 @@ struct GraphBuilder {
                         if (word == STOP_SYMBOL) {
                             word_ids_result.push_back(make_pair(word_ids,
                                         beam_search_result.finalScore()));
-                            succeeded = word == STOP_SYMBOL;
                         } else {
                             stop_removed_results.push_back(beam_search_result);
                             last_answers.push_back(word);
@@ -438,7 +420,6 @@ struct GraphBuilder {
         if (word_ids_result.size() < default_config.result_count_factor * k) {
             cerr << boost::format("word_ids_result size is %1%, but beam_size is %2%") %
                 word_ids_result.size() % k << endl;
-            abort();
         }
 
         for (const auto &pair : word_ids_result) {
@@ -453,7 +434,9 @@ struct GraphBuilder {
         };
         auto max = max_element(word_ids_result.begin(), word_ids_result.end(), compair);
 
-        return make_pair(max->first, exp(max->second));
+        return std::unique_ptr<pair<vector<WordIdAndProbability>, dtype>>(
+                new pair<vector<WordIdAndProbability>, dtype>(make_pair(max->first,
+                        exp(max->second))));
     }
 };
 

@@ -414,25 +414,27 @@ void decodeTestPosts(const HyperParams &hyper_params, ModelParams &model_params,
         ++loop_i;
         cout << "post:" << endl;
         print(post_sentences.at(post_and_responses.post_id));
-        string keyword = getMostRelatedKeyword(post_sentences.at(post_and_responses.post_id),
-                pmi_map);
-        cout << "keyword:" << keyword << endl;
+        vector<string> keywords =
+            getMostRelatedKeyword(post_sentences.at(post_and_responses.post_id), pmi_map,
+                    idf_table);
+        int keyword_i = 0;
+        cout << "keyword:" << keywords.at(keyword_i) << endl;
         Graph graph(false, true);
         GraphBuilder graph_builder;
         graph_builder.forward(graph, post_sentences.at(post_and_responses.post_id), hyper_params,
                 model_params, false);
         vector<DecoderComponents> decoder_components_vector;
         decoder_components_vector.resize(hyper_params.beam_size);
-        auto pair = graph_builder.forwardDecoderUsingBeamSearch(graph, keyword,
+        auto pair = graph_builder.forwardDecoderUsingBeamSearch(graph, keywords.at(keyword_i),
                 decoder_components_vector, hyper_params.beam_size, hyper_params, model_params,
                 default_config, black_list);
-        const vector<WordIdAndProbability> &word_ids_and_probability = pair.first;
+        const vector<WordIdAndProbability> &word_ids_and_probability = pair->first;
         cout << "post:" << endl;
         print(post_sentences.at(post_and_responses.post_id));
-        cout << "keyword:" << keyword << endl;
+        cout << "keyword:" << keywords.at(keyword_i) << endl;
         cout << "response:" << endl;
         printWordIds(word_ids_and_probability, model_params.lookup_table);
-        dtype probability = pair.second;
+        dtype probability = pair->second;
         cout << format("probability:%1%") % probability << endl;
         if (word_ids_and_probability.empty()) {
             cerr << "empty result" << endl;
