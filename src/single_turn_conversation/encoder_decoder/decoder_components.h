@@ -73,12 +73,15 @@ struct DecoderComponents {
                 {concat_node, decoder_keyword_lookups.at(i)});
         Node *decoder_to_wordvector = n3ldg_plus::linear(graph,
                 *model_params.hidden_to_wordvector_params.ptrs().at(0), *keyword_concated);
-        Node *y = n3ldg_plus::linear(graph, *model_params.hidden_to_wordvector_params.ptrs().at(1),
-                *decoder_to_wordvector);
-        y = n3ldg_plus::relu(graph, *y);
-        decoder_to_wordvector = n3ldg_plus::add(graph, {decoder_to_wordvector, y});
+        for (int i = 0; i < hyper_params.mlp_layer; ++i) {
+            Node *y = n3ldg_plus::linear(graph,
+                    *model_params.hidden_to_wordvector_params.ptrs().at(i + 1),
+                    *decoder_to_wordvector);
+            y = n3ldg_plus::relu(graph, *y);
+            decoder_to_wordvector = n3ldg_plus::add(graph, {decoder_to_wordvector, y});
+        }
         decoder_to_wordvector = n3ldg_plus::linear(graph,
-                *model_params.hidden_to_wordvector_params.ptrs().at(2), *decoder_to_wordvector);
+                *model_params.hidden_to_wordvector_params.ptrs().back(), *decoder_to_wordvector);
 
         return {decoder_to_wordvector, keyword};
     }
