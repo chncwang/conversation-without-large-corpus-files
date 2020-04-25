@@ -226,6 +226,9 @@ HyperParams parseHyperParams(INIReader &ini_reader) {
     int decoder_layer = ini_reader.GetInteger("hyper", "decoder_layer", 1);
     hyper_params.decoder_layer = decoder_layer;
 
+    int mlp_layer = ini_reader.GetInteger("hyper", "mlp_layer", 1);
+    hyper_params.mlp_layer = mlp_layer;
+
     float learning_rate = ini_reader.GetReal("hyper", "learning_rate", 0.001f);
     if (learning_rate <= 0.0f) {
         cerr << "learning_rate wrong" << endl;
@@ -932,8 +935,21 @@ int main(int argc, char *argv[]) {
                 init_decoder_param);
         model_params.decoder_input_linear_params.init(hyper_params.hidden_dim,
                 hyper_params.hidden_dim + 2 * hyper_params.word_dim);
-        model_params.hidden_to_wordvector_params.init(hyper_params.word_dim,
-                2 * hyper_params.hidden_dim + 2 * hyper_params.word_dim, false);
+        function<void(UniParams &, int)> init_param = [&](UniParams &params, int layer) {
+            int in_dim, dim;
+            if (layer == 0) {
+                in_dim = 2 * hyper_params.hidden_dim + 2 * hyper_params.word_dim;
+                dim = hyper_params.hidden_dim;
+            } else if (layer == 1 + hyper_params.mlp_layer) {
+                in_dim = hyper_params.hidden_dim;
+                dim = hyper_params.word_dim;
+            } else {
+                in_dim = hyper_params.hidden_dim;
+                dim = hyper_params.hidden_dim;
+            }
+            params.init(dim, in_dim, false);
+        };
+        model_params.hidden_to_wordvector_params.init(2 + hyper_params.mlp_layer, init_param);
         model_params.hidden_to_keyword_params.init(hyper_params.word_dim,
                 2 * hyper_params.hidden_dim, false);
     };
