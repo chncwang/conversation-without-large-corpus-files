@@ -808,6 +808,7 @@ struct GraphBuilder {
                 last_keywords.clear();
                 cout << "forwardDecoderKeywordByOneStep:" << endl;
                 graph.compute();
+                cout << "forwardDecoderKeywordByOneStep: graph computed" << endl;
 
                 last_answers.clear();
                 most_probable_results = mostProbableResults(beam, most_probable_results, i,

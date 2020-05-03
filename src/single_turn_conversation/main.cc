@@ -549,6 +549,7 @@ void decodeTestPosts(const HyperParams &hyper_params, ModelParams &model_params,
     int loop_i = 0;
     vector <float> greedy_matching_similarities;
     for (const PostAndResponses &post_and_responses : post_and_responses_vector) {
+        ++loop_i;
         cout << "post:" << endl;
         auto post_sentence = post_sentences.at(post_and_responses.post_id);
         print(post_sentence);
