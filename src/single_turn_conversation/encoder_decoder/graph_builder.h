@@ -150,9 +150,13 @@ private:
 };
 
 void printWordIds(const vector<WordIdAndProbability> &word_ids_with_probability_vector,
-        const LookupTable<Param> &lookup_table) {
+        const LookupTable<Param> &lookup_table,
+        bool print_space = false) {
     for (const WordIdAndProbability &ids : word_ids_with_probability_vector) {
         cout << lookup_table.elems.from_id(ids.word_id);
+        if (print_space && &ids != &word_ids_with_probability_vector.back()) {
+            cout << " ";
+        }
     }
     cout << endl;
 }
