@@ -9,12 +9,9 @@
 #include <iterator>
 #include <regex>
 #include <iostream>
-#include <algorithm>
 #include <utility>
 #include <atomic>
 #include <mutex>
-#include "N3LDG.h"
-#include "bleu.h"
 #include "single_turn_conversation/conversation_structure.h"
 #include "single_turn_conversation/def.h"
 #include "single_turn_conversation/default_config.h"
@@ -30,11 +27,9 @@ using boost::format;
 using namespace boost::asio;
 
 std::vector<PostAndResponses> readPostAndResponsesVector(const std::string &filename) {
-    DefaultConfig &default_config = GetDefaultConfig();
     std::vector<PostAndResponses> results;
     std::string line;
     std::ifstream ifs(filename);
-    int i = 0;
     while (std::getline(ifs, line)) {
         std::vector<std::string> strs;
         boost::split(strs, line, boost::is_any_of(":"));
@@ -46,16 +41,14 @@ std::vector<PostAndResponses> readPostAndResponsesVector(const std::string &file
         post_and_responses.post_id = post_id;
         std::vector<std::string> strs2;
         boost::split(strs2, strs.at(1), boost::is_any_of(","));
+        if (strs2.empty()) {
+            cerr << "readPostAndResponsesVector - no response id found!" << line << endl;
+            abort();
+        }
         for (std::string &str : strs2) {
             post_and_responses.response_ids.push_back(stoi(str));
-            if (default_config.one_response) {
-                break;
-            }
         }
         results.push_back(std::move(post_and_responses));
-        if (++i >= default_config.max_sample_count) {
-            break;
-        }
     }
 
     return results;
@@ -151,12 +144,7 @@ std::vector<std::vector<std::string>> readSentences(const std::string &filename)
         }
 
         std::vector<std::string> characters;
-        utf8_string last_word = "";
         for (const utf8_string &word : utf8_words) {
-//            if (includePunctuation(last_word.cpp_str()) && !includePunctuation(word.cpp_str())) {
-//                characters.push_back(SEP_SYMBOL);
-//            }
-
             if (isPureEnglish(word) && !isPureNumber(word)) {
                 string w;
                 for (int i = 0; i < word.length(); ++i) {
@@ -170,8 +158,21 @@ std::vector<std::vector<std::string>> readSentences(const std::string &filename)
             } else {
                 characters.push_back(word.cpp_str());
             }
-
-            last_word = word;
+//            if (isPureEnglish(word) && !isPureNumber(word)) {
+//                string w;
+//                for (int i = 0; i < word.length(); ++i) {
+//                    char c = word.at(i);
+//                    if (c >= 'A' && c <= 'Z') {
+//                        c += 'a' - 'A';
+//                    }
+//                    w += c;
+//                }
+//                characters.push_back(w);
+//            } else {
+//                for (int i = 0; i < word.length(); ++i) {
+//                    characters.push_back(word.substr(i, 1).cpp_str());
+//                }
+//            }
         }
 
         characters.push_back(STOP_SYMBOL);
@@ -189,12 +190,40 @@ std::vector<std::vector<std::string>> readSentences(const std::string &filename)
     return results;
 }
 
+vector<string> reprocessSentence(const vector<string> &sentence,
+        const unordered_map<string, int> &word_counts,
+        int min_occurences) {
+    vector<string> processed_sentence;
+    for (const string &word : sentence) {
+        if (isPureChinese(word)) {
+            auto it = word_counts.find(word);
+            int occurence;
+            if (it == word_counts.end()) {
+                cout << format("word not found:%1%\n") % word;
+                occurence = 0;
+            } else {
+                occurence = it->second;
+            }
+            if (occurence <= min_occurences) {
+                for (int i = 0; i < word.size(); i += 3) {
+                    processed_sentence.push_back(word.substr(i, 3));
+                }
+            } else {
+                processed_sentence.push_back(word);
+            }
+        } else {
+            processed_sentence.push_back(word);
+        }
+    }
+    return processed_sentence;
+}
+
 vector<vector<string>> reprocessSentences(const vector<vector<string>> &sentences,
         const unordered_set<string> &words,
         const unordered_set<int> &ids) {
     cout << boost::format("sentences size:%1%") % sentences.size() << endl;
 
-    boost::asio::thread_pool pool(16);
+    thread_pool pool(16);
     vector<vector<string>> result;
     map<int, vector<string>> result_map;
     mutex result_mutex;
@@ -249,86 +278,26 @@ vector<vector<string>> reprocessSentences(const vector<vector<string>> &sentence
     return result;
 }
 
-struct WordIdfInfo {
-    vector<float> word_idfs;
-    vector<string> keywords_behind;
-
-    WordIdfInfo() noexcept = default;
-    WordIdfInfo(const WordIdfInfo&) = delete;
-    WordIdfInfo(WordIdfInfo&& w) noexcept : word_idfs(move(w.word_idfs)),
-        keywords_behind(move(w.keywords_behind)) {}
-};
-
-WordIdfInfo getWordIdfInfo(const vector<string> &sentence,
-        bool is_in_train_set,
-        const unordered_map<string, float> &word_idfs,
-        const unordered_map<string, int> &word_id_table,
+void reprocessSentences(const vector<PostAndResponses> bundles,
+        vector<vector<string>> &posts,
+        vector<vector<string>> &responses,
         const unordered_map<string, int> &word_counts,
-        int cutoff) {
-    WordIdfInfo word_idf_info;
-    word_idf_info.word_idfs.reserve(sentence.size());
-    word_idf_info.keywords_behind.reserve(sentence.size());
+        int min_occurences) {
+    vector<vector<string>> result;
 
-    for (const string &word : sentence) {
-        float idf;
-        auto it = word_counts.find(word);
-        if (it == word_counts.end()) {
-            idf = 0;
-        } else if (it->second <= cutoff) {
-            idf = 0;
-        } else {
-            auto it = word_idfs.find(word);
-            idf = it->second;
-        }
-        word_idf_info.word_idfs.push_back(idf);
-    }
-
-    auto &word_frequencies = word_idf_info.word_idfs;
-    for (int i = 0; i < word_frequencies.size(); ++i) {
-        int max_id = -1;
-        string word;
-        for (int j = i; j < word_frequencies.size(); ++j) {
-            const auto &it  = word_id_table.find(sentence.at(j));
-            if (is_in_train_set && it == word_id_table.end()) {
-                cerr << sentence.at(j) << " not found" << endl;
-                abort();
-            }
-            if (it->second >= max_id) {
-                word = sentence.at(j);
-                max_id = it->second;
-            }
-            if (includePunctuation(sentence.at(j))) {
-                break;
-            }
-        }
-        if (max_id == -1) {
-            cerr << "getWordIdfInfo - max_id is still -1" << endl;
-            abort();
-        }
-//        cout << "word:" << word <<" id:" << max_id << endl;
-
-        word_idf_info.keywords_behind.push_back(word);
-    }
-
-    return word_idf_info;
-}
-
-vector<WordIdfInfo> readWordIdfInfoList(const vector<vector<string>> &sentences,
-        const vector<bool> &is_in_train_set,
-        const unordered_map<string, float> &word_idfs,
-        const unordered_map<string, int> &word_counts,
-        const unordered_map<string, int> &word_id_table,
-        int cutoff) {
-    std::vector<WordIdfInfo> results;
-
+    cout << "bund count:" << bundles.size() << endl;
     int i = 0;
-    for (const auto &s : sentences) {
-        auto info = getWordIdfInfo(s, is_in_train_set.at(i++), word_idfs, word_id_table,
-                word_counts, cutoff);
-        results.push_back(move(info));
-    }
 
-    return results;
+    for (const PostAndResponses &bundle : bundles) {
+        cout << i++ / (float)bundles.size() << endl;
+        int post_id = bundle.post_id;
+        auto &post = posts.at(post_id);
+        post = reprocessSentence(post, word_counts, min_occurences);
+        for (int response_id : bundle.response_ids) {
+            auto &res = responses.at(response_id);
+            res = reprocessSentence(res, word_counts, min_occurences);
+        }
+    }
 }
 
 std::vector<std::string> readBlackList(const std::string &filename) {
