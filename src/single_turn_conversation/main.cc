@@ -88,6 +88,8 @@ DefaultConfig parseDefaultConfig(INIReader &ini_reader) {
         abort();
     }
 
+    default_config.decoded_file = ini_reader.Get(SECTION, "decoded_file", "");
+
     string program_mode_str = ini_reader.Get(SECTION, "program_mode", "");
     ProgramMode program_mode;
     if (program_mode_str == "interacting") {
@@ -98,7 +100,10 @@ DefaultConfig parseDefaultConfig(INIReader &ini_reader) {
         program_mode = ProgramMode::DECODING;
     } else if (program_mode_str == "metric") {
         program_mode = ProgramMode::METRIC;
-    } else {
+    } else if (program_mode_str == "decoded_ppl") {
+        program_mode = ProgramMode::DECODED_PPL;
+    }
+    else {
         cout << format("program mode is %1%") % program_mode_str << endl;
         abort();
     }
@@ -411,6 +416,49 @@ void computeMeanAndStandardDeviation(const vector<float> &nums, float &mean, flo
         }
         variance /= (nums.size() - 1);
         sd = sqrt(variance);
+    }
+}
+
+void decodedPPL(const HyperParams &hyper_params, ModelParams &model_params,
+        DefaultConfig &default_config,
+        const vector<PostAndResponses> &post_and_responses_vector,
+        const vector<vector<string>> &post_sentences,
+        const vector<vector<string>> &response_sentences) {
+    auto sentences = readDecodedSentences(default_config.decoded_file);
+    if (sentences.size() != post_and_responses_vector.size()) {
+        cerr << boost::format(
+                "decodedPPL - size not equal sentences.size:%1% post_and_responses_vector.size%2%")
+            % sentences.size() % post_and_responses_vector.size() << endl;
+    }
+    float ppl_sum = 0;
+    int len_sum = 0;
+
+    for (int i = 0; i < post_and_responses_vector.size(); ++i) {
+        int post_id = post_and_responses_vector.at(i).post_id;
+        const auto &post = post_sentences.at(post_id);
+        cout << "post:" << endl;
+        print(post);
+        cout << "decoded responses:" << endl;
+        const auto &decoded_sentence = sentences.at(i);
+        print(decoded_sentence);
+
+        Graph graph;
+        GraphBuilder graph_builder;
+        graph_builder.forward(graph, post_sentences.at(post_id),
+                hyper_params, model_params, false);
+        DecoderComponents decoder_components;
+        graph_builder.forwardDecoder(graph, decoder_components,
+                decoded_sentence, hyper_params, model_params, false);
+        graph.compute();
+        vector<Node*> nodes = toNodePointers(decoder_components.wordvector_to_onehots);
+        vector<int> word_ids = transferVector<int, string>(
+                decoded_sentence, [&](const string &w) -> int {
+                return model_params.lookup_table.getElemId(w);
+                });
+        float perplex = computePerplex(nodes, word_ids);
+        ppl_sum += perplex;
+        len_sum += word_ids.size();
+        cout << "ppl:" << perplex << " avg:" << exp(ppl_sum / len_sum)  << endl;
     }
 }
 
@@ -824,6 +872,10 @@ int main(int argc, char *argv[]) {
         hyper_params.beam_size = beam_size;
         decodeTestPosts(hyper_params, model_params, default_config, test_post_and_responses,
                 post_sentences, response_sentences, all_idf, black_list);
+    } else if (default_config.program_mode == ProgramMode::DECODED_PPL) {
+        hyper_params.beam_size = beam_size;
+        decodedPPL(hyper_params, model_params, default_config, test_post_and_responses,
+                post_sentences, response_sentences);
     } else if (default_config.program_mode == ProgramMode::METRIC) {
         path dir_path(default_config.input_model_dir);
         if (!is_directory(dir_path)) {

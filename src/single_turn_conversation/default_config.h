@@ -9,6 +9,7 @@ enum ProgramMode {
     DECODING = 1,
     INTERACTING = 2,
     METRIC = 3,
+    DECODED_PPL = 4
 };
 
 struct NgramPenalty {
@@ -23,6 +24,7 @@ struct DefaultConfig {
     std::string test_pair_file;
     std::string post_file;
     std::string response_file;
+    std::string decoded_file;
     ProgramMode program_mode;
     bool check_grad;
     bool one_response;
@@ -55,6 +57,7 @@ struct DefaultConfig {
         std::cout << "train_pair_file:" << train_pair_file << std::endl
             << "dev_pair_file:" << dev_pair_file << std::endl
             << "test_pair_file:" << test_pair_file << std::endl
+            << "decoded_file:" << decoded_file << std::endl
             << "post_file:" << post_file << std::endl
             << "response_file:" << response_file << std::endl
             << "program_mode:" << program_mode << std::endl
