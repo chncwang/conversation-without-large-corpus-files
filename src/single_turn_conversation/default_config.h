@@ -18,26 +18,25 @@ struct NgramPenalty {
 };
 
 struct DefaultConfig {
-    std::string pair_file;
+    std::string train_pair_file;
+    std::string dev_pair_file;
+    std::string test_pair_file;
     std::string post_file;
     std::string response_file;
-    std::string post_idf_file;
-    std::string response_idf_file;
     ProgramMode program_mode;
     bool check_grad;
     bool one_response;
     bool learn_test;
     bool save_model_per_batch;
     bool split_unknown_words;
-    int max_sample_count;
-    int dev_size;
-    int test_size;
+    int train_sample_count;
+    int dev_sample_count;
+    int test_sample_count;
     int device_id;
     int hold_batch_size;
     int seed;
     int cut_length;
-    float keyword_bound;
-    float keyword_fork_bound;
+    int max_epoch;
     std::string output_model_file_prefix;
     std::string input_model_file;
     std::string input_model_dir;
@@ -53,26 +52,25 @@ struct DefaultConfig {
     }
 
     void print() const {
-        std::cout << "pair_file:" << pair_file << std::endl
+        std::cout << "train_pair_file:" << train_pair_file << std::endl
+            << "dev_pair_file:" << dev_pair_file << std::endl
+            << "test_pair_file:" << test_pair_file << std::endl
             << "post_file:" << post_file << std::endl
             << "response_file:" << response_file << std::endl
-            << "post_idf_file:" << post_idf_file << std::endl
-            << "response_idf_file:" << response_idf_file << std::endl
             << "program_mode:" << program_mode << std::endl
             << "check_grad:" << check_grad << std::endl
             << "one_response:" << one_response << std::endl
             << "learn_test:" << learn_test << std::endl
             << "save_model_per_batch:" << save_model_per_batch << std::endl
             << "split_unknown_words:" << split_unknown_words << std::endl
-            << "max_sample_count:" << max_sample_count << std::endl
-            << "dev_size:" << dev_size << std::endl
-            << "test_size:" << test_size << std::endl
+            << "train_sample_count:" << train_sample_count << std::endl
+            << "dev_sample_count:" << dev_sample_count << std::endl
+            << "test_sample_count:" << test_sample_count << std::endl
             << "device_id:" << device_id << std::endl
             << "hold_batch_size:" << hold_batch_size << std::endl
             << "seed:" << seed << std::endl
             << "cut_length:" << cut_length << std::endl
-            << "keyword_bound:" << keyword_bound << std::endl
-            << "keyword_fork_bound:" << keyword_fork_bound << std::endl
+            << "max_epoch:" << max_epoch << std::endl
             << "output_model_file_prefix" << output_model_file_prefix << std::endl
             << "input_model_file:" << input_model_file << std::endl
             << "input_model_dir:" << input_model_dir << std::endl
