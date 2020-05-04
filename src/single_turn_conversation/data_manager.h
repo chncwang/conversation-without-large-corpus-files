@@ -88,6 +88,20 @@ std::vector<ConversationPair> readConversationPairs(const std::string &filename)
     return results;
 }
 
+std::vector<std::vector<std::string>> readDecodedSentences(const std::string &filename) {
+    using std::string;
+    using std::vector;
+    vector<vector<string>> sentences;
+    string line;
+    std::ifstream ifs(filename);
+    while (std::getline(ifs, line)) {
+        vector<string> words;
+        boost::split(words, line, boost::is_any_of(" "));
+        sentences.push_back(std::move(words));
+    }
+    return sentences;
+}
+
 bool isPureChinese(const string &word) {
     std::regex expression("^[\u4e00-\u9fff]+$");
     return std::regex_search(word, expression);
