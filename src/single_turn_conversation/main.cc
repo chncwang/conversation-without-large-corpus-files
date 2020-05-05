@@ -568,6 +568,9 @@ void decodeTestPosts(const HyperParams &hyper_params, ModelParams &model_params,
         cout << "response:" << endl;
         printWordIdsWithKeywords(word_ids_and_probability, model_params.lookup_table,
                 word_idf_table);
+        cout << "response words:" << endl;
+        printWordIdsWithKeywords(word_ids_and_probability, model_params.lookup_table,
+                word_idf_table, true);
         const auto &flops = graph.getFLOPs();
         if (loop_i == 1) {
             overall_flops = flops;

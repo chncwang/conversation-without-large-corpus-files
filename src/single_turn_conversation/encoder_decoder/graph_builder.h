@@ -155,7 +155,8 @@ void printWordIds(const vector<WordIdAndProbability> &word_ids_with_probability_
 
 void printWordIdsWithKeywords(const vector<WordIdAndProbability> &word_ids_with_probability_vector,
         const LookupTable<Param> &lookup_table,
-        const unordered_map<string, float> &idf_table) {
+        const unordered_map<string, float> &idf_table,
+        bool print_space = false) {
     cout << "keywords:" << endl;
     for (int i = 0; i < word_ids_with_probability_vector.size(); i += 2) {
         cout << lookup_table.elems.from_id(word_ids_with_probability_vector.at(i).word_id);
@@ -165,13 +166,11 @@ void printWordIdsWithKeywords(const vector<WordIdAndProbability> &word_ids_with_
     for (int i = 1; i < word_ids_with_probability_vector.size(); i += 2) {
         int word_id = word_ids_with_probability_vector.at(i).word_id;
         cout << lookup_table.elems.from_id(word_id);
+        if (print_space && i + 2 < word_ids_with_probability_vector.size()) {
+            cout << " ";
+        }
     }
     cout << endl;
-//    for (int i = 1; i < word_ids_with_probability_vector.size(); i += 2) {
-//        int word_id = word_ids_with_probability_vector.at(i).word_id;
-//        cout << idf_table.at(lookup_table.elems.from_id(word_id)) << " ";
-//    }
-//    cout << endl;
 }
 
 int countNgramDuplicate(const vector<int> &ids, int n) {
