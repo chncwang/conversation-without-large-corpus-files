@@ -21,6 +21,40 @@
 
 using namespace std;
 
+set<std::array<int, 3>> triSet(const vector<int> &sentence) {
+    if (sentence.size() < 3) {
+        cerr << "triSet" << endl;
+        abort();
+    }
+    using std::array;
+    set<array<int, 3>> results;
+    for (int i = 0; i < sentence.size() - 2; ++i) {
+        array<int, 3> tri = {sentence.at(i + 0), sentence.at(i + 1), sentence.at(i + 2)};
+        results.insert(tri);
+    }
+
+    if (results.size() != sentence.size() - 2) {
+        cerr << boost::format("triSet - result size is %1%, but sentence len is %2%") %
+            results.size() % sentence.size() << endl;
+        abort();
+    }
+
+    return results;
+}
+
+set<int> repeatedIds(const vector<int> &sentence) {
+    auto tri_set = triSet(sentence);
+    set<int> results;
+    for (const auto &tri : tri_set) {
+        int sentence_len = sentence.size();
+        if (tri.at(0) == sentence.at(sentence_len - 2) &&
+                tri.at(1) == sentence.at(sentence_len - 1)) {
+            results.insert(tri.at(2));
+        }
+    }
+    return results;
+}
+
 struct WordIdAndProbability {
     int word_id;
     dtype probability;
@@ -53,11 +87,7 @@ public:
             }
 
     dtype finalScore() const {
-        set<int> s;
-        for (const auto &it : path_) {
-            s.insert(it.word_id);
-        }
-        return (final_log_probability ) / s.size();
+        return (final_log_probability ) / path_.size();
     }
 
     dtype finalLogProbability() const {
@@ -159,6 +189,7 @@ vector<BeamSearchResult> mostProbableResults(
         const ModelParams &model_params,
         const DefaultConfig &default_config,
         bool is_first,
+        bool check_tri_gram,
         const vector<string> &black_list,
         set<int> &searched_word_ids) {
     vector<Node *> nodes;
@@ -183,8 +214,18 @@ vector<BeamSearchResult> mostProbableResults(
         node.val().initOnMemory(node.getDim());
         node.val().copyFromDeviceToHost();
 #endif
-
+        set<int> repeated_ids;
+        if (check_tri_gram) {
+            vector<int> word_ids;
+            for (const auto &e : last_results.at(i).getPath()) {
+                word_ids.push_back(e.word_id);
+            }
+            repeated_ids = repeatedIds(word_ids);
+        }
         for (int j = 0; j < nodes.at(i)->getDim(); ++j) {
+            if (repeated_ids.find(j) != repeated_ids.end()) {
+                continue;
+            }
             if (is_first) {
                 if (searched_word_ids.find(j) != searched_word_ids.end()) {
                     cout << boost::format("word id searched:%1% word:%2%\n") % j %
@@ -373,7 +414,7 @@ struct GraphBuilder {
                 last_answers.clear();
                 if (i > 0) {
                     most_probable_results = mostProbableResults(beam, most_probable_results, i,
-                            k, model_params, default_config, i == 1, black_list,
+                            k, model_params, default_config, i == 1, i >= 4, black_list,
                             searched_word_ids);
                     cout << boost::format("most_probable_results size:%1%") %
                         most_probable_results.size() << endl;
