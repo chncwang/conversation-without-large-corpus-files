@@ -21,19 +21,22 @@
 
 using namespace std;
 
-set<std::array<int, 3>> triSet(const vector<int> &sentence) {
-    if (sentence.size() < 3) {
+set<std::vector<int>> ngramSet(const vector<int> &sentence, int ngram) {
+    if (sentence.size() < ngram) {
         cerr << "triSet" << endl;
         abort();
     }
     using std::array;
-    set<array<int, 3>> results;
-    for (int i = 0; i < sentence.size() - 2; ++i) {
-        array<int, 3> tri = {sentence.at(i + 0), sentence.at(i + 1), sentence.at(i + 2)};
-        results.insert(tri);
+    set<vector<int>> results;
+    for (int i = 0; i < sentence.size() - ngram + 1; ++i) {
+        vector<int> e;
+        for (int j = 0; j < ngram; ++j) {
+            e.push_back(sentence.at(i + j));
+        }
+        results.insert(e);
     }
 
-    if (results.size() != sentence.size() - 2) {
+    if (results.size() != sentence.size() - ngram + 1) {
         cerr << boost::format("triSet - result size is %1%, but sentence len is %2%") %
             results.size() % sentence.size() << endl;
         abort();
@@ -42,14 +45,21 @@ set<std::array<int, 3>> triSet(const vector<int> &sentence) {
     return results;
 }
 
-set<int> repeatedIds(const vector<int> &sentence) {
-    auto tri_set = triSet(sentence);
+set<int> repeatedIds(const vector<int> &sentence, int ngram) {
+    auto ngram_set = ngramSet(sentence, ngram);
     set<int> results;
-    for (const auto &tri : tri_set) {
+    for (const auto &e : ngram_set) {
         int sentence_len = sentence.size();
-        if (tri.at(0) == sentence.at(sentence_len - 2) &&
-                tri.at(1) == sentence.at(sentence_len - 1)) {
-            results.insert(tri.at(2));
+        bool to_insert = true;
+        for (int i = 0; i < ngram - 1; ++i) {
+            if (e.at(i) != sentence.at(sentence_len - ngram + 1 + i)) {
+                to_insert = false;
+                break;
+            }
+        }
+
+        if (to_insert) {
+            results.insert(e.back());
         }
     }
     return results;
@@ -220,7 +230,7 @@ vector<BeamSearchResult> mostProbableResults(
             for (const auto &e : last_results.at(i).getPath()) {
                 word_ids.push_back(e.word_id);
             }
-            repeated_ids = repeatedIds(word_ids);
+            repeated_ids = repeatedIds(word_ids, default_config.beam_block_gram);
         }
         for (int j = 0; j < nodes.at(i)->getDim(); ++j) {
             if (repeated_ids.find(j) != repeated_ids.end()) {
@@ -414,7 +424,8 @@ struct GraphBuilder {
                 last_answers.clear();
                 if (i > 0) {
                     most_probable_results = mostProbableResults(beam, most_probable_results, i,
-                            k, model_params, default_config, i == 1, i >= 4, black_list,
+                            k, model_params, default_config, i == 1,
+                            i >= default_config.beam_block_gram + 1, black_list,
                             searched_word_ids);
                     cout << boost::format("most_probable_results size:%1%") %
                         most_probable_results.size() << endl;

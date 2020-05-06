@@ -123,6 +123,7 @@ DefaultConfig parseDefaultConfig(INIReader &ini_reader) {
     default_config.seed = ini_reader.GetInteger(SECTION, "seed", 0);
     default_config.cut_length = ini_reader.GetInteger(SECTION, "cut_length", 30);
     default_config.max_epoch = ini_reader.GetInteger(SECTION, "max_epoch", 100);
+    default_config.beam_block_gram = ini_reader.GetInteger(SECTION, "beam_block_gram", 3);
     default_config.output_model_file_prefix = ini_reader.Get(SECTION, "output_model_file_prefix",
             "");
     default_config.input_model_file = ini_reader.Get(SECTION, "input_model_file", "");

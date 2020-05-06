@@ -423,7 +423,8 @@ vector<string> getMostRelatedKeyword(const vector<string> &post,
             for (const auto &inner_it : it->second) {
                 auto scores_it = scores.find(inner_it.first);
                 if (scores_it == scores.end()) {
-                    scores.insert(make_pair(inner_it.first, 0.0f));
+                    float initial_value = &post_word == &post.front() ? 0.0f : -1e9f;
+                    scores.insert(make_pair(inner_it.first, initial_value));
                     scores_it = scores.find(inner_it.first);
                 }
                 scores_it->second += inner_it.second;
@@ -443,8 +444,11 @@ vector<string> getMostRelatedKeyword(const vector<string> &post,
         };
     std::sort(word_and_pmi_vec.begin(), word_and_pmi_vec.end(), cmp);
     vector<string> result;
+    int i = 0;
     for (const auto &it : word_and_pmi_vec) {
-        cout << "keyword:" << it.first << " value:" << it.second << endl;
+//        if (i++ < 10) {
+            cout << "keyword:" << it.first << " value:" << it.second << endl;
+//        }
         result.push_back(it.first);
     }
     return result;

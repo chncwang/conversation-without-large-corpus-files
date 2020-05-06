@@ -37,6 +37,7 @@ struct DefaultConfig {
     int seed;
     int cut_length;
     int max_epoch;
+    int beam_block_gram;
     std::string output_model_file_prefix;
     std::string input_model_file;
     std::string input_model_dir;
@@ -71,6 +72,7 @@ struct DefaultConfig {
             << "seed:" << seed << std::endl
             << "cut_length:" << cut_length << std::endl
             << "max_epoch:" << max_epoch << std::endl
+            << "beam_block_gram:" << beam_block_gram << std::endl
             << "output_model_file_prefix" << output_model_file_prefix << std::endl
             << "input_model_file:" << input_model_file << std::endl
             << "input_model_dir:" << input_model_dir << std::endl
