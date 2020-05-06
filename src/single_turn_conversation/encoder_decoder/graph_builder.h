@@ -24,6 +24,40 @@
 using namespace std;
 using namespace n3ldg_plus;
 
+set<std::array<int, 3>> triSet(const vector<int> &sentence) {
+    if (sentence.size() < 3) {
+        cerr << "triSet" << endl;
+        abort();
+    }
+    using std::array;
+    set<array<int, 3>> results;
+    for (int i = 0; i < sentence.size() - 2; ++i) {
+        array<int, 3> tri = {sentence.at(i + 0), sentence.at(i + 1), sentence.at(i + 2)};
+        results.insert(tri);
+    }
+
+    if (results.size() != sentence.size() - 2) {
+        cerr << boost::format("triSet - result size is %1%, but sentence len is %2%") %
+            results.size() % sentence.size() << endl;
+        abort();
+    }
+
+    return results;
+}
+
+set<int> repeatedIds(const vector<int> &sentence) {
+    auto tri_set = triSet(sentence);
+    set<int> results;
+    for (const auto &tri : tri_set) {
+        int sentence_len = sentence.size();
+        if (tri.at(0) == sentence.at(sentence_len - 2) &&
+                tri.at(1) == sentence.at(sentence_len - 1)) {
+            results.insert(tri.at(2));
+        }
+    }
+    return results;
+}
+
 struct WordIdAndProbability {
     int dim;
     int word_id;
@@ -60,40 +94,11 @@ public:
             }
 
     dtype finalScore() const {
-//        if (path_.size() % 2 == 0) {
-//            for (int n = 2; n < 10; ++n) {
-//                if (path_.size() >= n * 4) {
-//                    for (int i = path_.size() - n * 4 + 1; i>=0;--i) {
-//                        bool ngram_hit = true;
-//                        for (int j = 0; j < n; ++j) {
-//                            if (path_.at(i + 2 * j).word_id != path_.at(path_.size() - n * 2 + j * 2).word_id) {
-//                                ngram_hit = false;
-//                                break;
-//                            }
-//                        }
-//                        if (ngram_hit) {
-//                            return -1e10;
-//                        }
-//                    }
-//                }
-//            }
-//        }
-        set<int> all_words, normal_words;
+        set<int> all_words;
         for (int i = 0; i < path_.size(); ++i) {
             all_words.insert(path_.at(i).word_id);
-            if (i % 2 == 1) {
-                normal_words.insert(path_.at(i).word_id);
-            }
         }
         return final_log_probability / all_words.size();
-//        set<int> keys;
-//        for (int i = 0; i < path_.size(); i +=2) {
-//            keys.insert(path_.at(i).word_id);
-//        }
-//        return final_log_probability / path_.size();
-//        int len = (path_.size() % 2 == 1 ? all_words.size() : normal_words.size());
-//        return final_log_probability / pow(len, 1);
-//        return final_log_probability / (normal_words.size() + 1e-10);
     }
 
     dtype finalLogProbability() const {
@@ -223,6 +228,7 @@ vector<BeamSearchResult> mostProbableResults(
         const ModelParams &model_params,
         const DefaultConfig &default_config,
         bool is_first,
+        bool check_tri_gram,
         const vector<string> &black_list,
         const unordered_map<string, float> &idf_table,
         Graph &graph) {
@@ -255,7 +261,22 @@ vector<BeamSearchResult> mostProbableResults(
         const Node &node = *nodes.at(i);
 
         BeamSearchResult beam_search_result;
+        set<int> repeated_ids;
+        if (check_tri_gram) {
+            vector<int> word_ids;
+            int m = 0;
+            for (const auto &e : last_results.at(i).getPath()) {
+                if (m++ % 2 == 0) {
+                    continue;
+                }
+                word_ids.push_back(e.word_id);
+            }
+            repeated_ids = repeatedIds(word_ids);
+        }
         for (int j = 0; j < nodes.at(i)->getDim(); ++j) {
+            if (repeated_ids.find(j) != repeated_ids.end()) {
+                continue;
+            }
             if (j == model_params.lookup_table.getElemId(::unknownkey)) {
                 continue;
             }
@@ -794,8 +815,9 @@ struct GraphBuilder {
                 graph.compute();
 
                 last_answers.clear();
-                most_probable_results = mostProbableResults(beam, most_probable_results, i, k,
-                        model_params, default_config, i == 0, black_list, word_idf_table, graph);
+                most_probable_results = mostProbableResults(beam, most_probable_results, i,
+                        k, model_params, default_config, i == 0, i>=3, black_list, word_idf_table,
+                        graph);
                 cout << boost::format("most_probable_results size:%1%") %
                     most_probable_results.size() << endl;
                 beam.clear();
