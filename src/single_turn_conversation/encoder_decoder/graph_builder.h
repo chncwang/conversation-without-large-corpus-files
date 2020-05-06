@@ -159,7 +159,7 @@ void printWordIdsWithKeywords(const vector<WordIdAndProbability> &word_ids_with_
     cout << "words:" << endl;
     for (int i = 1; i < word_ids_with_probability_vector.size(); i += 2) {
         int word_id = word_ids_with_probability_vector.at(i).word_id;
-        cout << lookup_table.elems.from_id(word_id) << " ";
+        cout << lookup_table.elems.from_id(word_id);
     }
     cout << endl;
 }
