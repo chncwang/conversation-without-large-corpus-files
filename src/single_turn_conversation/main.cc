@@ -95,7 +95,8 @@ unordered_map<string, float> calculateIdf(const vector<vector<string>> &sentence
 
     unordered_map<string, float> result;
     for (const auto &it : doc_counts) {
-        float idf = log(sentences.size() / static_cast<float>(it.second));
+        float idf = it.first == unknownkey ? 1e-3 :
+            log(sentences.size() / static_cast<float>(it.second));
         if (idf < 0.0) {
             cerr << "idf:" << idf << endl;
             abort();
@@ -252,6 +253,9 @@ HyperParams parseHyperParams(INIReader &ini_reader) {
 
     int decoder_layer = ini_reader.GetInteger("hyper", "decoder_layer", 1);
     hyper_params.decoder_layer = decoder_layer;
+
+    int mlp_layer = ini_reader.GetInteger("hyper", "mlp_layer", 1);
+    hyper_params.mlp_layer = mlp_layer;
 
     float learning_rate = ini_reader.GetReal("hyper", "learning_rate", 0.001f);
     if (learning_rate <= 0.0f) {
@@ -542,6 +546,25 @@ float metricTestPosts(const HyperParams &hyper_params, ModelParams &model_params
     return rep_perplex;
 }
 
+void computeMeanAndStandardDeviation(const vector<float> &nums, float &mean, float &sd) {
+    float sum = 0;
+    for (float num : nums) {
+        sum += num;
+    }
+    mean = sum / nums.size();
+    if (nums.size() == 1) {
+        sd = 0;
+    } else {
+        float variance = 0;
+        for (float num : nums) {
+            float x = num - mean;
+            variance += x * x;
+        }
+        variance /= (nums.size() - 1);
+        sd = sqrt(variance);
+    }
+}
+
 void decodeTestPosts(const HyperParams &hyper_params, ModelParams &model_params,
         DefaultConfig &default_config,
         const unordered_map<string, float> & word_idf_table,
@@ -558,6 +581,7 @@ void decodeTestPosts(const HyperParams &hyper_params, ModelParams &model_params,
     vector<CandidateAndReferences> candidate_and_references_vector;
     map<string, int64_t> overall_flops;
     int loop_i = 0;
+    vector <float> greedy_matching_similarities;
     for (const PostAndResponses &post_and_responses : post_and_responses_vector) {
         ++loop_i;
         cout << "post:" << endl;
@@ -636,13 +660,28 @@ void decodeTestPosts(const HyperParams &hyper_params, ModelParams &model_params,
         for (int ngram = 1; ngram <=4; ++ngram) {
             float bleu_value = computeMtevalBleu(candidate_and_references_vector, ngram);
             cout << "bleu_" << ngram << ":" << bleu_value << endl;
+            float bleu_mean, bleu_deviation;
+            computeMtevalBleuForEachResponse(candidate_and_references_vector, ngram, bleu_mean,
+                    bleu_deviation);
+            cout << boost::format("bleu_%1% mean:%2% deviation:%3%") % ngram % bleu_mean %
+                bleu_deviation << endl;
             float nist_value = computeNist(candidate_and_references_vector, ngram);
             cout << "nist_" << ngram << ":" << nist_value << endl;
-            float idf_value = computeEntropy(candidate_and_references_vector, word_idf_table);
-            cout << "idf:" << idf_value << endl;
             float dist_value = computeDist(candidate_and_references_vector, ngram);
             cout << "dist_" << ngram << ":" << dist_value << endl;
         }
+        float idf_value = computeEntropy(candidate_and_references_vector, word_idf_table);
+        cout << "idf:" << idf_value << endl;
+        float matched_idf = computeMatchedEntropy(candidate_and_references_vector, word_idf_table);
+        cout << "matched idf:" << matched_idf << endl;
+        float greedy_matching_sim = computeGreedyMatching(candidate_and_references,
+                model_params.lookup_table);
+        greedy_matching_similarities.push_back(greedy_matching_sim);
+        float greedy_matching_sim_mean, greedy_matching_sim_sd;
+        computeMeanAndStandardDeviation(greedy_matching_similarities, greedy_matching_sim_mean,
+                greedy_matching_sim_sd);
+        cout << boost::format("greedy matching mean:%1% standard_deviation:%2%") %
+            greedy_matching_sim_mean % greedy_matching_sim_sd << endl;
     }
 }
 
@@ -925,8 +964,21 @@ int main(int argc, char *argv[]) {
                 init_decoder_param);
         model_params.decoder_input_linear_params.init(hyper_params.hidden_dim,
                 hyper_params.hidden_dim + 2 * hyper_params.word_dim);
-        model_params.hidden_to_wordvector_params.init(hyper_params.word_dim,
-                2 * hyper_params.hidden_dim + 2 * hyper_params.word_dim, false);
+        function<void(UniParams &, int)> init_param = [&](UniParams &params, int layer) {
+            int in_dim, dim;
+            if (layer == 0) {
+                in_dim = 2 * hyper_params.hidden_dim + 2 * hyper_params.word_dim;
+                dim = hyper_params.hidden_dim;
+            } else if (layer == 1 + hyper_params.mlp_layer) {
+                in_dim = hyper_params.hidden_dim;
+                dim = hyper_params.word_dim;
+            } else {
+                in_dim = hyper_params.hidden_dim;
+                dim = hyper_params.hidden_dim;
+            }
+            params.init(dim, in_dim, false);
+        };
+        model_params.hidden_to_wordvector_params.init(2 + hyper_params.mlp_layer, init_param);
         model_params.hidden_to_keyword_params.init(hyper_params.word_dim,
                 2 * hyper_params.hidden_dim, false);
     };

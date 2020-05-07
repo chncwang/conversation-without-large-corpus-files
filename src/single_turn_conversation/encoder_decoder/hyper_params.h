@@ -29,6 +29,7 @@ struct HyperParams : public N3LDGSerializable {
     float warm_up_learning_rate;
     int warm_up_iterations;
     int word_cutoff;
+    int mlp_layer;
     string word_file;
     bool word_finetune;
     float l2_reg;
@@ -47,6 +48,7 @@ struct HyperParams : public N3LDGSerializable {
         json["min_learning_rate"] = min_learning_rate;
         json["warm_up_learning_rate"] = warm_up_learning_rate;
         json["word_cutoff"] = word_cutoff;
+        json["mlp_layer"] = mlp_layer;
         json["word_file"] = word_file;
         json["word_finetune"] = word_finetune;
         json["l2_reg"] = l2_reg;
@@ -66,6 +68,7 @@ struct HyperParams : public N3LDGSerializable {
         warm_up_learning_rate = json["warm_up_learning_rate"].asFloat();
         warm_up_iterations = json["warm_up_iterations"].asInt();
         word_cutoff = json["word_cutoff"].asInt();
+        mlp_layer = json["mlp_layer"].asInt();
         word_file = json["word_file"].asString();
         word_finetune = json["word_finetune"].asBool();
         l2_reg = json["l2_reg"].asFloat();
@@ -79,6 +82,7 @@ struct HyperParams : public N3LDGSerializable {
             << "batch_size:" << batch_size << std::endl
             << "beam_size:" << beam_size << std::endl
             << "decoder_layer:" << decoder_layer << std::endl
+            << "mlp_layer:" << mlp_layer << std::endl
             << "learning_rate:" << learning_rate << std::endl
             << "learning_rate_decay:" << learning_rate_decay << std::endl
             << "warm_up_learning_rate:" << warm_up_learning_rate << std::endl
