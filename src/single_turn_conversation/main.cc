@@ -553,7 +553,7 @@ void decodeTestPosts(const HyperParams &hyper_params, ModelParams &model_params,
         cout << "post:" << endl;
         auto post_sentence = post_sentences.at(post_and_responses.post_id);
         print(post_sentence);
-        Graph graph;
+        Graph graph(false, true);
         GraphBuilder graph_builder;
         graph_builder.forward(graph, post_sentences.at(post_and_responses.post_id),
                 hyper_params, model_params, false);
@@ -588,7 +588,7 @@ void decodeTestPosts(const HyperParams &hyper_params, ModelParams &model_params,
             cout << it.first << ":" << it.second / flops_sum << endl;
         }
 
-        cout << boost::format("flops:%1% overall:%2% avg:%3%") % 0 % flops_sum %
+        cout << boost::format("flops overall:%1% avg:%2%") % flops_sum %
             (static_cast<float>(flops_sum) / loop_i) << endl;
 
         dtype probability = pair.second;
