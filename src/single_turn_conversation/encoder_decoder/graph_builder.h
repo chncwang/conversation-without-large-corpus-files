@@ -361,7 +361,8 @@ struct GraphBuilder {
             ModelParams &model_params,
             ModelParams &mmi_model_params,
             const DefaultConfig &default_config,
-            const vector<string> &black_list) {
+            const vector<string> &black_list,
+            float &mmi_flops) {
         vector<pair<vector<WordIdAndProbability>, dtype>> word_ids_result;
         vector<BeamSearchResult> most_probable_results;
         vector<string> last_answers;
@@ -449,12 +450,13 @@ struct GraphBuilder {
             printWordIds(ids, model_params.lookup_table);
         }
 
+        mmi_flops = 0;
         for (auto &e : word_ids_result) {
             vector<string> words;
             for (const auto &ee : e.first) {
                 words.push_back(model_params.lookup_table.elems.from_id(ee.word_id));
             }
-            Graph mmi_graph(false, false);
+            Graph mmi_graph(false, true);
             GraphBuilder mmi_graph_builder;
             DecoderComponents components;
             mmi_graph_builder.forward(mmi_graph, words, hyper_params, mmi_model_params, false);
@@ -474,6 +476,10 @@ struct GraphBuilder {
             e.second = log_prob / nodes.size();
             printWordIds(e.first, model_params.lookup_table);
             cout << "reversal log prob:" << e.second << endl;
+            const auto &flops_map = mmi_graph.getFLOPs();
+            for (const auto &it : flops_map) {
+                mmi_flops += it.second;
+            }
         }
 
         auto compair = [](const pair<vector<WordIdAndProbability>, dtype> &a,

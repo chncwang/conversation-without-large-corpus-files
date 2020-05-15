@@ -421,6 +421,7 @@ void decodeTestPosts(const HyperParams &hyper_params, ModelParams &model_params,
 
     vector<CandidateAndReferences> candidate_and_references_vector;
     map<string, int64_t> overall_flops;
+    float mmi_flops_sum = 0;
     int loop_i = 0;
     for (const PostAndResponses &post_and_responses : post_and_responses_vector) {
         ++loop_i;
@@ -432,9 +433,11 @@ void decodeTestPosts(const HyperParams &hyper_params, ModelParams &model_params,
                 model_params, false);
         vector<DecoderComponents> decoder_components_vector;
         decoder_components_vector.resize(hyper_params.beam_size);
+        float mmi_flops;
         auto pair = graph_builder.forwardDecoderUsingBeamSearch(graph, decoder_components_vector,
                 post_sentences.at(post_and_responses.post_id), hyper_params.beam_size,
-                hyper_params, model_params, mmi_model_params, default_config, black_list);
+                hyper_params, model_params, mmi_model_params, default_config, black_list,
+                mmi_flops);
         const vector<WordIdAndProbability> &word_ids_and_probability = pair.first;
         cout << "post:" << endl;
         print(post_sentences.at(post_and_responses.post_id));
@@ -456,8 +459,11 @@ void decodeTestPosts(const HyperParams &hyper_params, ModelParams &model_params,
         for (const auto &it : overall_flops) {
             cout << it.first << ":" << it.second / flops_sum << endl;
         }
+        cout << "mmi_flops:" << mmi_flops << endl;
+        mmi_flops_sum += mmi_flops;
+        flops_sum += mmi_flops_sum;
 
-        cout << boost::format("flops:%1% overall:%2% avg:%3%") % 0 % flops_sum %
+        cout << boost::format("flops overall:%1% avg:%2%") % flops_sum %
             (static_cast<float>(flops_sum) / loop_i) << endl;
 
         dtype probability = pair.second;
