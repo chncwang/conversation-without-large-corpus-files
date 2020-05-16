@@ -435,10 +435,11 @@ void decodeTestPosts(const HyperParams &hyper_params, ModelParams &model_params,
         vector<DecoderComponents> decoder_components_vector;
         decoder_components_vector.resize(hyper_params.beam_size);
         float mmi_flops;
+        int64_t activations;
         auto pair = graph_builder.forwardDecoderUsingBeamSearch(graph, decoder_components_vector,
                 post_sentences.at(post_and_responses.post_id), hyper_params.beam_size,
                 hyper_params, model_params, mmi_model_params, default_config, black_list,
-                mmi_flops);
+                mmi_flops, activations);
         const vector<WordIdAndProbability> &word_ids_and_probability = pair.first;
         cout << "post:" << endl;
         print(post_sentences.at(post_and_responses.post_id));
@@ -463,6 +464,8 @@ void decodeTestPosts(const HyperParams &hyper_params, ModelParams &model_params,
         cout << "mmi_flops:" << mmi_flops << endl;
         mmi_flops_sum += mmi_flops;
         flops_sum += mmi_flops_sum;
+
+        activations_sum += activations;
 
         cout << boost::format("flops overall:%1% avg:%2%") % flops_sum %
             (static_cast<float>(flops_sum) / loop_i) << endl;

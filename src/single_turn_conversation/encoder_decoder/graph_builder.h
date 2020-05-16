@@ -362,7 +362,8 @@ struct GraphBuilder {
             ModelParams &mmi_model_params,
             const DefaultConfig &default_config,
             const vector<string> &black_list,
-            float &mmi_flops) {
+            float &mmi_flops,
+            int64_t &activations) {
         vector<pair<vector<WordIdAndProbability>, dtype>> word_ids_result;
         vector<BeamSearchResult> most_probable_results;
         vector<string> last_answers;
@@ -451,12 +452,13 @@ struct GraphBuilder {
         }
 
         mmi_flops = 0;
+        activations = 0;
         for (auto &e : word_ids_result) {
             vector<string> words;
             for (const auto &ee : e.first) {
                 words.push_back(model_params.lookup_table.elems.from_id(ee.word_id));
             }
-            Graph mmi_graph(false, true);
+            Graph mmi_graph(false, true, true);
             GraphBuilder mmi_graph_builder;
             DecoderComponents components;
             mmi_graph_builder.forward(mmi_graph, words, hyper_params, mmi_model_params, false);
@@ -480,6 +482,7 @@ struct GraphBuilder {
             for (const auto &it : flops_map) {
                 mmi_flops += it.second;
             }
+            activations += mmi_graph.getActivations();
         }
 
         auto compair = [](const pair<vector<WordIdAndProbability>, dtype> &a,
