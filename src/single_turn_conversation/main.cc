@@ -546,6 +546,7 @@ void decodeTestPosts(const HyperParams &hyper_params, ModelParams &model_params,
     hyper_params.print();
     vector<CandidateAndReferences> candidate_and_references_vector;
     map<string, int64_t> overall_flops;
+    int64_t activations_sum = 0;
     int loop_i = 0;
     vector <float> greedy_matching_similarities;
     for (const PostAndResponses &post_and_responses : post_and_responses_vector) {
@@ -553,7 +554,7 @@ void decodeTestPosts(const HyperParams &hyper_params, ModelParams &model_params,
         cout << "post:" << endl;
         auto post_sentence = post_sentences.at(post_and_responses.post_id);
         print(post_sentence);
-        Graph graph(false, true);
+        Graph graph(false, true, true);
         GraphBuilder graph_builder;
         graph_builder.forward(graph, post_sentences.at(post_and_responses.post_id),
                 hyper_params, model_params, false);
@@ -590,6 +591,10 @@ void decodeTestPosts(const HyperParams &hyper_params, ModelParams &model_params,
 
         cout << boost::format("flops overall:%1% avg:%2%") % flops_sum %
             (static_cast<float>(flops_sum) / loop_i) << endl;
+
+        activations_sum += graph.getActivations();
+        cout << boost::format("activations:%1% avg:%2%") % activations_sum %
+            (static_cast<float>(activations_sum) / loop_i) << endl;
 
         dtype probability = pair.second;
         cout << format("probability:%1%") % probability << endl;
