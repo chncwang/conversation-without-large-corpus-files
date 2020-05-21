@@ -446,10 +446,12 @@ vector<string> getMostRelatedKeyword(const vector<string> &post,
     vector<string> result;
     int i = 0;
     for (const auto &it : word_and_pmi_vec) {
-//        if (i++ < 10) {
-            cout << "keyword:" << it.first << " value:" << it.second << endl;
-//        }
-        result.push_back(it.first);
+        if (i++ < 100) {
+            cout << "keyword:" << it.first << " idf:" << idf_map.at(it.first) << " pmi:" << it.second << endl;
+        }
+        if (idf_map.at(it.first) < 10) {
+            result.push_back(it.first);
+        }
     }
     return result;
 }
