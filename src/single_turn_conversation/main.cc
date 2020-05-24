@@ -535,31 +535,31 @@ void decodeTestPosts(const HyperParams &hyper_params, ModelParams &model_params,
         //        decoded_word_ids.pop_back();
         const vector<int> &response_ids = post_and_responses.response_ids;
         if (response_ids.size() < 4) continue;
-        cout << post_and_responses.post_id << ":";
+//        cout << post_and_responses.post_id << ":";
         for (int i = 0; i < 4; ++i) {
-            cout << post_and_responses.response_ids.at(i);
+//            cout << post_and_responses.response_ids.at(i);
             if (i < 4) cout << ",";
         }
         cout << endl;
-        //        vector<vector<string>> str_references =
-        //            transferVector<vector<string>, int>(response_ids,
-        //                    [&](int response_id) -> vector<string> {
-        //                    return response_sentences.at(response_id);
-        //                    });
-        //        if (str_references.size() < 4) {
-        //            continue;
-        //        }
-        //        vector<vector<string>> id_references;
-        //        int i = 0;
-        //        for (const vector<string> &strs : str_references) {
-        //            if (i++ >= 4) {
-        //                break;
-        //            }
-        //            auto stop_removed = strs;
-        //            stop_removed.pop_back();
-        //            id_references.push_back(stop_removed);
-        //            print(stop_removed);
-        //    }
+        vector<vector<string>> str_references =
+            transferVector<vector<string>, int>(response_ids,
+                    [&](int response_id) -> vector<string> {
+                    return response_sentences.at(response_id);
+                    });
+        if (str_references.size() < 4) {
+            continue;
+        }
+        vector<vector<string>> id_references;
+        int i = 0;
+        for (const vector<string> &strs : str_references) {
+            if (i++ >= 4) {
+                break;
+            }
+            auto stop_removed = strs;
+            stop_removed.pop_back();
+            id_references.push_back(stop_removed);
+            print(stop_removed);
+        }
 
     //        CandidateAndReferences candidate_and_references(decoded_word_ids, id_references);
     //        candidate_and_references_vector.push_back(candidate_and_references);
@@ -753,7 +753,7 @@ int main(int argc, char *argv[]) {
         << endl;
     vector<PostAndResponses> test_post_and_responses = readPostAndResponsesVector(
             default_config.test_pair_file);
-    preserveVector(test_post_and_responses, default_config.test_sample_count, default_config.seed);
+//    preserveVector(test_post_and_responses, default_config.test_sample_count, default_config.seed);
     cout << "test_post_and_responses_vector size:" << test_post_and_responses.size()
         << endl;
     vector<ConversationPair> train_conversation_pairs;
