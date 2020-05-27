@@ -491,12 +491,12 @@ void decodeTestPosts(const HyperParams &hyper_params, ModelParams &model_params,
             continue;
         }
         typedef vector<string> str_vec;
-        function<bool(const str_vec&, const str_vec&)> cmp =
-            [](const str_vec &a, const str_vec &b) ->bool {
-            return chineseSize(a) > chineseSize(b);
+        function<bool(int, int)> cmp =
+            [&](int a, int b) ->bool {
+            return chineseSize(response_sentences.at(a)) > chineseSize(response_sentences.at(b));
         };
-        priority_queue<str_vec, vector<str_vec>, decltype(cmp)> queue(cmp);
-        for (const vector<string> &strs : str_references) {
+        priority_queue<int, vector<int>, decltype(cmp)> queue(cmp);
+        for (const int id : post_and_responses.response_ids) {
             if (queue.size() < 4 || queue.top().size() < strs.size()) {
                 if (queue.size() >=4 ) {
                     queue.pop();
