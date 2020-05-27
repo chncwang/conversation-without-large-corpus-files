@@ -82,27 +82,28 @@ string getSentence(const vector<int> &word_ids_vector, const ModelParams &model_
 
 class BeamSearchResult {
 public:
-    BeamSearchResult() {
-        ngram_counts_ = {0, 0, 0};
-    }
+    BeamSearchResult()=default;
     BeamSearchResult(const BeamSearchResult &beam_search_result) = default;
     BeamSearchResult(const DecoderComponents &decoder_components,
             const vector<WordIdAndProbability> &pathh,
-            dtype log_probability) : decoder_components_(decoder_components), path_(pathh),
-            final_log_probability(log_probability) {
-                ngram_counts_ = {0, 0, 0};
-            }
+            dtype log_probability,
+            dtype anti_log_probability) : decoder_components_(decoder_components), path_(pathh),
+            final_log_probability_(log_probability), anti_log_probability_(anti_log_probability) {}
 
     dtype finalScore() const {
         set<int> unique_words;
         for (const auto &e : path_) {
             unique_words.insert(e.word_id);
         }
-        return final_log_probability / unique_words.size();
+        return final_log_probability_ / unique_words.size() - anti_log_probability_;
     }
 
     dtype finalLogProbability() const {
-        return final_log_probability;
+        return final_log_probability_;
+    }
+
+    float getAntiLogProbability() const {
+        return anti_log_probability_;
     }
 
     vector<WordIdAndProbability> getPath() const {
@@ -121,20 +122,12 @@ public:
         return extra_score_;
     }
 
-    const std::array<int, 3> &ngramCounts() const {
-        return ngram_counts_;
-    }
-
-    void setNgramCounts(const std::array<int, 3> &counts) {
-        ngram_counts_ = counts;
-    }
-
 private:
     DecoderComponents decoder_components_;
     vector<WordIdAndProbability> path_;
-    dtype final_log_probability;
+    dtype final_log_probability_;
+    dtype anti_log_probability_;
     dtype extra_score_;
-    std::array<int, 3> ngram_counts_ = {};
 };
 
 string toSentenceStringWithSpace(const vector<string> &sentence) {
@@ -215,10 +208,6 @@ void updateBeamSearchResultScore(BeamSearchResult &beam_search_result,
         extra_score -= penalties.at(i - 1) * duplicate_count;
     }
     beam_search_result.setExtraScore(beam_search_result.getExtraScore() + extra_score);
-    std::array<int, 3> original_counts = beam_search_result.ngramCounts();
-    std::array<int, 3> new_counts = {original_counts.at(0) + counts.at(0),
-        original_counts.at(1) = counts.at(1), original_counts.at(2) + counts.at(2)};
-    beam_search_result.setNgramCounts(new_counts);
 }
 
 //bool beamSearchResultCmp(const BeamSearchResult &a, const BeamSearchResult &b) {
@@ -257,6 +246,7 @@ vector<BeamSearchResult> mostProbableResults(
     }
 
     auto cmp = [&](const BeamSearchResult &a, const BeamSearchResult &b) {
+        graph.addFLOPs(2, BEAM_SEARCH_KEY);
         graph.addFLOPs(1, BEAM_SEARCH_KEY);
         return a.finalScore() > b.finalScore();
     };
@@ -302,7 +292,8 @@ vector<BeamSearchResult> mostProbableResults(
                 word_ids = last_results.at(i).getPath();
             }
             word_ids.push_back(WordIdAndProbability(node.getDim(), j, word_probability));
-            beam_search_result =  BeamSearchResult(beam.at(i), word_ids, log_probability);
+            beam_search_result =  BeamSearchResult(beam.at(i), word_ids, log_probability,
+                    last_results.at(i).getAntiLogProbability());
             graph.addFLOPs(1, BEAM_SEARCH_KEY);
             int local_size = k;
             if (queue.size() < local_size) {
@@ -354,6 +345,7 @@ vector<BeamSearchResult> mostProbableKeywords(
         vector<DecoderComponents> &beam,
         const vector<BeamSearchResult> &last_results,
         const unordered_map<string ,float> word_idf_table,
+        const unordered_map<string, float> &keyword_prob_table,
         int word_pos,
         int k,
         Graph &graph,
@@ -433,7 +425,8 @@ vector<BeamSearchResult> mostProbableKeywords(
                 last_norm.probability};
             new_id_and_probs.push_back(w);
             BeamSearchResult beam_search_result(beam.at(i), new_id_and_probs,
-                    last_results.at(i).finalLogProbability());
+                    last_results.at(i).finalLogProbability(),
+                    last_results.at(i).getAntiLogProbability());
             graph.addFLOPs(1, BEAM_SEARCH_KEY);
             if (queue.size() < k) {
                 queue.push(beam_search_result);
@@ -477,12 +470,24 @@ vector<BeamSearchResult> mostProbableKeywords(
                 }
                 dtype value = node.getVal().v[j];
                 dtype log_probability = log(value);
+                graph.addFLOPs(1, BEAM_SEARCH_KEY);
                 dtype word_probability = value;
                 vector<WordIdAndProbability> word_ids;
+                dtype anti;
                 if (!last_results.empty()) {
                     log_probability += last_results.at(i).finalLogProbability();
                     graph.addFLOPs(1, BEAM_SEARCH_KEY);
                     word_ids = last_results.at(i).getPath();
+                    anti = last_results.at(i).getAntiLogProbability();
+                } else {
+                    if (!is_first) {
+                        cerr << "mostProbableKeywords - is not first but last results are empty" <<
+                            endl;
+                        abort();
+                    }
+                    const string &keyword = model_params.lookup_table.elems.from_id(j);
+                    anti = log(keyword_prob_table.at(keyword)) * default_config.anti_lm_factor;
+                    graph.addFLOPs(1, BEAM_SEARCH_KEY);
                 }
                 if (log_probability != log_probability) {
                     cerr << node.getVal().vec() << endl;
@@ -497,7 +502,8 @@ vector<BeamSearchResult> mostProbableKeywords(
                 }
                 word_ids.push_back(WordIdAndProbability(node.getDim(), j, word_probability));
 
-                BeamSearchResult local = BeamSearchResult(beam.at(i), word_ids, log_probability);
+                BeamSearchResult local = BeamSearchResult(beam.at(i), word_ids, log_probability,
+                        anti);
                 graph.addFLOPs(1, BEAM_SEARCH_KEY);
                 if (queue.size() < k) {
                     queue.push(local);
@@ -750,6 +756,7 @@ struct GraphBuilder {
     pair<vector<WordIdAndProbability>, dtype> forwardDecoderUsingBeamSearch(Graph &graph,
             const vector<DecoderComponents> &decoder_components_beam,
             const unordered_map<string, float> &word_idf_table,
+            const unordered_map<string, float> &keyword_prob_table,
             int k,
             const HyperParams &hyper_params,
             ModelParams &model_params,
@@ -794,8 +801,8 @@ struct GraphBuilder {
                 graph.compute();
 
                 most_probable_results = mostProbableKeywords(beam, most_probable_results,
-                        word_idf_table, i, k, graph, model_params, hyper_params,
-                        default_config, i == 0, searched_ids, black_list);
+                        word_idf_table, keyword_prob_table, i, k, graph, model_params,
+                        hyper_params, default_config, i == 0, searched_ids, black_list);
                 for (int beam_i = 0; beam_i < beam.size(); ++beam_i) {
                     DecoderComponents &decoder_components = beam.at(beam_i);
                     int keyword_id = most_probable_results.at(beam_i).getPath().back().word_id;
