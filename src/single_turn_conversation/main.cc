@@ -538,7 +538,7 @@ void decodeTestPosts(const HyperParams &hyper_params, ModelParams &model_params,
 //        cout << post_and_responses.post_id << ":";
         for (int i = 0; i < 4; ++i) {
 //            cout << post_and_responses.response_ids.at(i);
-            if (i < 4) cout << ",";
+//            if (i < 4) cout << ",";
         }
         cout << endl;
         vector<vector<string>> str_references =
