@@ -51,6 +51,7 @@ struct DefaultConfig {
     float ngram_penalty_3;
     float result_count_factor;
     float anti_lm_factor;
+    int anti_len;
 
     NgramPenalty toNgramPenalty() const {
         return {ngram_penalty_1, ngram_penalty_2, ngram_penalty_3};
@@ -89,6 +90,7 @@ struct DefaultConfig {
             << "ngram_penalty_2:" << ngram_penalty_2 << std::endl
             << "ngram_penalty_3:" << ngram_penalty_3 << std::endl
             << "result_count_factor:" << result_count_factor << std::endl
+            << "anti_len:" << anti_len << std::endl
             << "anti_lm_factor:" << anti_lm_factor << std::endl;
     }
 };
