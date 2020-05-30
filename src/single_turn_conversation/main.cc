@@ -8,6 +8,7 @@
 #include <unordered_set>
 #include <memory>
 #include <iomanip>
+#include <array>
 #include <ctime>
 #include <sstream>
 #include <fstream>
@@ -469,10 +470,30 @@ void decodeTestPosts(const HyperParams &hyper_params, ModelParams &model_params,
         const vector<vector<string>> &response_sentences,
         const unordered_map<string, float> &all_idf,
         const vector<string> &black_list) {
+    vector<vector<vector<string>>> ref_sentences;
+    for (const PostAndResponses &post_and_responses : post_and_responses_vector) {
+        vector<vector<string>> pair;
+        for (const int id : post_and_responses.response_ids) {
+            auto s = response_sentences.at(id);
+            s.pop_back();
+            pair.push_back(s);
+        }
+        ref_sentences.push_back(pair);
+    }
+    using std::array;
+    array<unordered_map<string, float>, 4> ngram_idf_tables;
+    for (int i = 1; i <= 4; ++i) {
+        ngram_idf_tables.at(i - 1) = computeNgramIdf(ref_sentences, i);
+        for (const auto &it : ngram_idf_tables.at(i - 1)) {
+            cout << it.first << ":" << it.second << endl;
+        }
+    }
+
     cout << "decodeTestPosts begin" << endl;
     hyper_params.print();
     vector<CandidateAndReferences> candidate_and_references_vector;
     map<string, int64_t> overall_flops;
+    array<float, 4> cider_sums = {0, 0, 0, 0};
     int64_t activations_sum = 0;
     int loop_i = 0;
     vector <float> greedy_matching_similarities;
@@ -561,6 +582,10 @@ void decodeTestPosts(const HyperParams &hyper_params, ModelParams &model_params,
             cout << "nist_" << ngram << ":" << nist_value << endl;
             float dist_value = computeDist(candidate_and_references_vector, ngram);
             cout << "dist_" << ngram << ":" << dist_value << endl;
+            float cider = computeCIDEr(candidate_and_references, ngram_idf_tables.at(ngram - 1),
+                    ngram);
+            cider_sums.at(ngram - 1) += cider;
+            cout << "cider_" << ngram << ":" << cider_sums.at(ngram - 1) / loop_i << endl;
         }
         float idf_value = computeEntropy(candidate_and_references_vector, all_idf);
         cout << "idf:" << idf_value << endl;
@@ -738,7 +763,7 @@ int main(int argc, char *argv[]) {
         << endl;
     vector<PostAndResponses> test_post_and_responses = readPostAndResponsesVector(
             default_config.test_pair_file);
-//    preserveVector(test_post_and_responses, default_config.test_sample_count, default_config.seed);
+    preserveVector(test_post_and_responses, default_config.test_sample_count, default_config.seed);
     cout << "test_post_and_responses_vector size:" << test_post_and_responses.size()
         << endl;
     vector<ConversationPair> train_conversation_pairs;
