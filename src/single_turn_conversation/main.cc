@@ -209,6 +209,7 @@ DefaultConfig parseDefaultConfig(INIReader &ini_reader) {
     default_config.ngram_penalty_3 = ini_reader.GetReal(SECTION, "ngram_penalty_3", 0.0f);
     default_config.result_count_factor = ini_reader.GetReal(SECTION, "result_count_factor", 1.0f);
     default_config.anti_lm_factor = ini_reader.GetReal(SECTION, "anti_lm_factor", 1.0f);
+    default_config.anti_len = ini_reader.GetInteger(SECTION, "anti_len", 3);
 
     return default_config;
 }

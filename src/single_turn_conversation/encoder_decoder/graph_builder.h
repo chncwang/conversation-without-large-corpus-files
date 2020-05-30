@@ -303,8 +303,9 @@ vector<BeamSearchResult> mostProbableResults(
                 word_ids = last_results.at(i).getPath();
             }
             word_ids.push_back(WordIdAndProbability(node.getDim(), j, word_probability));
-            beam_search_result =  BeamSearchResult(beam.at(i), word_ids, log_probability,
-                    last_results.at(i).getAntiLogProbability());
+            float anti = current_word < default_config.anti_len * 2 + 1 ?
+                last_results.at(i).getAntiLogProbability() : 0.0f;
+            beam_search_result =  BeamSearchResult(beam.at(i), word_ids, log_probability, anti);
             graph.addFLOPs(1, BEAM_SEARCH_KEY);
             int local_size = k;
             if (queue.size() < local_size) {
@@ -491,6 +492,9 @@ vector<BeamSearchResult> mostProbableKeywords(
                     const string &keyword = model_params.lookup_table.elems.from_id(j);
                     anti = log(keyword_prob_table.at(keyword)) * default_config.anti_lm_factor;
                     graph.addFLOPs(1, BEAM_SEARCH_KEY);
+                }
+                if (word_pos * 2 >= default_config.anti_len) {
+                    anti = 0;
                 }
                 if (log_probability != log_probability) {
                     cerr << node.getVal().vec() << endl;
