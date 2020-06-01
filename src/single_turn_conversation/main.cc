@@ -957,19 +957,10 @@ int main(int argc, char *argv[]) {
             grad_checker.init(model_params.tunableParams());
         }
 
-        dtype last_loss_sum = 1e10f;
-        dtype loss_sum = 0.0f;
-
-        n3ldg_cuda::Profiler &profiler = n3ldg_cuda::Profiler::Ins();
-        profiler.SetEnabled(false);
-        profiler.BeginEvent("total");
-
         int iteration = 0;
         string last_saved_model;
 
-        for (int epoch = 0; epoch < default_config.max_epoch; ++epoch) {
-            cout << "epoch:" << epoch << endl;
-
+        for (int epoch = 0; epoch < 1; ++epoch) {
             model_params.lookup_table.E.is_fixed = false;
 
             auto cmp = [&] (const ConversationPair &a, const ConversationPair &b)->bool {
@@ -983,8 +974,6 @@ int main(int argc, char *argv[]) {
             int valid_len = train_conversation_pairs.size() / hyper_params.batch_size *
                 hyper_params.batch_size;
             int batch_count = valid_len / hyper_params.batch_size;
-            cout << boost::format("valid_len:%1% batch_count:%2%") % valid_len % batch_count <<
-                endl;
             default_random_engine engine(default_config.seed);
             for (int i = 0; i < hyper_params.batch_size; ++i) {
                 auto begin_pos = begin(train_conversation_pairs) + i * batch_count;
@@ -998,18 +987,13 @@ int main(int argc, char *argv[]) {
 
             unique_ptr<Metric> metric = unique_ptr<Metric>(new Metric);
             using namespace std::chrono;
-            int duration_count = 1e3;
 
             for (int batch_i = 0; batch_i < batch_count +
                     (train_conversation_pairs.size() > hyper_params.batch_size * batch_count);
                     ++batch_i) {
-                auto start = high_resolution_clock::now();
-                cout << format("batch_i:%1% iteration:%2%") % batch_i % iteration << endl;
                 int batch_size = batch_i == batch_count ?
                     train_conversation_pairs.size() % hyper_params.batch_size :
                     hyper_params.batch_size;
-                profiler.BeginEvent("build braph");
-                Graph graph;
                 vector<shared_ptr<GraphBuilder>> graph_builders;
                 vector<DecoderComponents> decoder_components_vector;
                 vector<ConversationPair> conversation_pair_in_batch;
@@ -1017,137 +1001,21 @@ int main(int argc, char *argv[]) {
                     return i * batch_count + batch_i;
                 };
                 for (int i = 0; i < batch_size; ++i) {
-                    shared_ptr<GraphBuilder> graph_builder(new GraphBuilder);
-                    graph_builders.push_back(graph_builder);
                     int instance_index = getSentenceIndex(i);
                     int post_id = train_conversation_pairs.at(instance_index).post_id;
                     conversation_pair_in_batch.push_back(train_conversation_pairs.at(
                                 instance_index));
-                    graph_builder->forward(graph, post_sentences.at(post_id), hyper_params,
-                            model_params, true);
                     int response_id = train_conversation_pairs.at(instance_index).response_id;
                     DecoderComponents decoder_components;
-                    graph_builder->forwardDecoder(graph, decoder_components,
-                            response_sentences.at(response_id), hyper_params, model_params, true);
                     decoder_components_vector.push_back(decoder_components);
-                }
-                profiler.EndCudaEvent();
-
-                graph.compute();
-
-                for (int i = 0; i < batch_size; ++i) {
-                    int instance_index = getSentenceIndex(i);
-                    int response_id = train_conversation_pairs.at(instance_index).response_id;
-                    vector<int> word_ids = toIds(response_sentences.at(response_id),
-                            model_params.lookup_table);
-                    vector<Node*> result_nodes =
-                        toNodePointers(decoder_components_vector.at(i).wordvector_to_onehots);
-                    auto result = maxLogProbabilityLoss(result_nodes, word_ids,
-                            1.0 / batch_size / word_ids.size());
-                    loss_sum += result.first;
-
-                    analyze(result.second, word_ids, *metric);
-                    unique_ptr<Metric> local_metric(unique_ptr<Metric>(new Metric));
-                    analyze(result.second, word_ids, *local_metric);
-
-                    if (local_metric->getAccuracy() < 1.0f) {
-                        static int count_for_print;
-                        if (++count_for_print % 100 == 0) {
-                            count_for_print = 0;
-                            int post_id = train_conversation_pairs.at(instance_index).post_id;
-                            cout << "post:" << post_id << endl;
-                            print(post_sentences.at(post_id));
-                            cout << "golden answer:" << endl;
-                            printWordIds(word_ids, model_params.lookup_table);
-                            cout << "output:" << endl;
-                            printWordIds(result.second, model_params.lookup_table);
-                        }
-                    }
-                }
-                cout << "loss:" << loss_sum << endl;
-                metric->print();
-
-                graph.backward();
-
-                if (default_config.check_grad) {
-                    auto loss_function = [&](const ConversationPair &conversation_pair) -> dtype {
-                        GraphBuilder graph_builder;
-                        Graph graph(false);
-
-                        graph_builder.forward(graph, post_sentences.at(conversation_pair.post_id),
-                                hyper_params, model_params, true);
-
-                        DecoderComponents decoder_components;
-                        graph_builder.forwardDecoder(graph, decoder_components,
-                                response_sentences.at(conversation_pair.response_id),
-                                hyper_params, model_params, true);
-
-                        graph.compute();
-
-                        vector<int> word_ids = toIds(response_sentences.at(
-                                    conversation_pair.response_id), model_params.lookup_table);
-                        vector<Node*> result_nodes = toNodePointers(
-                                decoder_components.wordvector_to_onehots);
-                        return maxLogProbabilityLoss(result_nodes, word_ids, 1.0 /
-                                word_ids.size()).first;
-                    };
-                    cout << format("checking grad - conversation_pair size:%1%") %
-                        conversation_pair_in_batch.size() << endl;
-                    grad_checker.check<ConversationPair>(loss_function, conversation_pair_in_batch,
-                            "");
-                }
-
-                if (hyper_params.optimizer == Optimizer::ADAM) {
-                    model_update.updateAdam(10.0f);
-                } else if (hyper_params.optimizer == Optimizer::ADAGRAD) {
-                    model_update.update(10.0f);
-                } else if (hyper_params.optimizer == Optimizer::ADAMW) {
-                    model_update.updateAdamW(10.0f);
-                } else {
-                    cerr << "no optimzer set" << endl;
-                    abort();
-                }
-                auto stop = high_resolution_clock::now();
-                auto duration = duration_cast<milliseconds>(stop - start);
-                duration_count = 0.99 * duration_count + 0.01 * duration.count();
-                cout << "duration:" << duration_count << endl;
-
-                if (default_config.save_model_per_batch) {
-                    saveModel(hyper_params, model_params, default_config.output_model_file_prefix,
-                            epoch);
+                    cout << "post:";
+                    print(post_sentences.at(post_id));
+                    cout << "response:";
+                    print(response_sentences.at(response_id));
                 }
 
                 ++iteration;
             }
-
-            cout << "loss_sum:" << loss_sum << " last_loss_sum:" << endl;
-            if (loss_sum > last_loss_sum) {
-                if (epoch == 0) {
-                    cerr << "loss is larger than last epoch but epoch is 0" << endl;
-                    abort();
-                }
-                model_update._alpha *= 0.1f;
-                hyper_params.learning_rate = model_update._alpha;
-                cout << "learning_rate decay:" << model_update._alpha << endl;
-                std::shared_ptr<Json::Value> root = loadModel(last_saved_model);
-                model_params.fromJson((*root)["model_params"]);
-#if USE_GPU
-                model_params.copyFromHostToDevice();
-#endif
-            } else {
-                model_update._alpha = (model_update._alpha - hyper_params.min_learning_rate) *
-                    hyper_params.learning_rate_decay + hyper_params.min_learning_rate;
-                hyper_params.learning_rate = model_update._alpha;
-                cout << "learning_rate now:" << hyper_params.learning_rate << endl;
-                last_saved_model = saveModel(hyper_params, model_params,
-                        default_config.output_model_file_prefix, epoch);
-            }
-
-            last_loss_sum = loss_sum;
-            loss_sum = 0;
-            profiler.EndCudaEvent();
-            profiler.Print();
-            profiler.SetEnabled(false);
         }
     } else {
         abort();
