@@ -352,10 +352,10 @@ float metricTestPosts(const HyperParams &hyper_params, ModelParams &model_params
         const vector<vector<string>> &response_sentences) {
     cout << "metricTestPosts begin" << endl;
     hyper_params.print();
-    float rep_perplex(0.0f);
+    float perplex(0.0f), corpus_index_sum(0);
     int size_sum = 0;
     thread_pool pool(16);
-    mutex rep_perplex_mutex;
+    mutex perplex_mutex;
 
     for (const PostAndResponses &post_and_responses : post_and_responses_vector) {
         auto f = [&]() {
@@ -364,6 +364,7 @@ float metricTestPosts(const HyperParams &hyper_params, ModelParams &model_params
 
             const vector<int> &response_ids = post_and_responses.response_ids;
             float sum = 0.0f;
+            float index_sum = 0;
             int word_sum = 0;
             cout << "response size:" << response_ids.size() << endl;
             for (int response_id : response_ids) {
@@ -382,23 +383,28 @@ float metricTestPosts(const HyperParams &hyper_params, ModelParams &model_params
                         response_sentences.at(response_id), [&](const string &w) -> int {
                         return model_params.lookup_table.getElemId(w);
                         });
-                float perplex = computePerplex(nodes, word_ids);
+                float index;
+                float perplex = computePerplex(nodes, word_ids, index);
                 sum += perplex;
+                index_sum += index;
                 word_sum += word_ids.size();
             }
             cout << "avg_perplex:" << exp(sum/word_sum) << endl;
-            rep_perplex_mutex.lock();
-            rep_perplex += sum;
+            cout << "avg_index:" << exp(index_sum / word_sum) << endl;
+            perplex_mutex.lock();
+            perplex += sum;
+            corpus_index_sum += index_sum;
             size_sum += word_sum;
-            rep_perplex_mutex.unlock();
+            perplex_mutex.unlock();
         };
         post(pool, f);
     }
     pool.join();
 
-    rep_perplex = exp(rep_perplex / size_sum);
-    cout << "total avg perplex:" << rep_perplex << endl;
-    return rep_perplex;
+    perplex = exp(perplex / size_sum);
+    cout << "total avg perplex:" << perplex << endl;
+    cout << "corpus index:" << exp(corpus_index_sum / size_sum) << endl;
+    return perplex;
 }
 
 void computeMeanAndStandardDeviation(const vector<float> &nums, float &mean, float &sd) {
@@ -456,7 +462,8 @@ void decodedPPL(const HyperParams &hyper_params, ModelParams &model_params,
                 decoded_sentence, [&](const string &w) -> int {
                 return model_params.lookup_table.getElemId(w);
                 });
-        float perplex = computePerplex(nodes, word_ids);
+        float index;
+        float perplex = computePerplex(nodes, word_ids, index);
         ppl_sum += perplex;
         len_sum += word_ids.size();
         cout << "ppl:" << perplex << " avg:" << exp(ppl_sum / len_sum)  << endl;
@@ -930,20 +937,20 @@ int main(int argc, char *argv[]) {
                 return last_write_time(a) < last_write_time(b);
                 });
 
-        float max_rep_perplex = 0.0f;
+        float min_perplex = 0.0f;
         for(const string &model_file_path : ordered_file_paths) {
             cout << format("model_file_path:%1%") % model_file_path << endl;
             ModelParams model_params;
             shared_ptr<Json::Value> root_ptr = loadModel(model_file_path);
             loadModel(default_config, hyper_params, model_params, root_ptr.get(),
                     allocate_model_params);
-            float rep_perplex = metricTestPosts(hyper_params, model_params,
+            float perplex = metricTestPosts(hyper_params, model_params,
                     dev_post_and_responses, post_sentences, response_sentences);
-            cout << format("model %1% rep_perplex is %2%") % model_file_path % rep_perplex << endl;
-            if (max_rep_perplex < rep_perplex) {
-                max_rep_perplex = rep_perplex;
-                cout << format("best model now is %1%, and rep_perplex is %2%") % model_file_path %
-                    rep_perplex << endl;
+            cout << format("model %1% perplex is %2%") % model_file_path % perplex << endl;
+            if (min_perplex > perplex) {
+                min_perplex = perplex;
+                cout << format("best model now is %1%, and perplex is %2%") % model_file_path %
+                    perplex << endl;
             }
         }
     } else if (default_config.program_mode == ProgramMode::TRAINING) {

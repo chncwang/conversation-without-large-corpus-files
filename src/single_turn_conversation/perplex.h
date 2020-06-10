@@ -11,8 +11,10 @@
 
 #include "N3LDG.h"
 
-dtype computePerplex(const std::vector<Node *> &nodes, const std::vector<int> &answers) {
-    dtype log_sum = 0.0f;
+float computePerplex(const std::vector<Node *> &nodes, const std::vector<int> &answers,
+        float &index_sum) {
+    float log_sum = 0.0f;
+    float count_sum = 0;
 
     for (int i = 0; i < nodes.size(); ++i) {
         Node &node = *nodes.at(i);
@@ -21,10 +23,19 @@ dtype computePerplex(const std::vector<Node *> &nodes, const std::vector<int> &a
             cerr << boost::format("answer:%1% dim:%2%") << answer << node.getDim() << endl;
             abort();
         }
-        dtype reciprocal_answer_prob = 1 / node.getVal()[answer];
+        float reciprocal_answer_prob = 1 / node.getVal()[answer];
         log_sum += log(reciprocal_answer_prob);
+
+        int count = 0;
+        for (int j = 0; j < node.getDim(); ++j) {
+            if (node.getVal()[j] >= node.getVal()[answer]) {
+                ++count;
+            }
+        }
+        count_sum += log(count);
     }
 
+    index_sum = count_sum;
     return log_sum;
 }
 
