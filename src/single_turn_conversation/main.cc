@@ -345,7 +345,7 @@ float metricTestPosts(const HyperParams &hyper_params, ModelParams &model_params
         const vector<PostAndResponses> &post_and_responses_vector,
         const vector<vector<string>> &post_sentences,
         const vector<vector<string>> &response_sentences,
-        const unordered_map<string, unordered_map<string, float>> &pmi_map) {
+        const map<string, map<string, float>> &pmi_map) {
     cout << "metricTestPosts begin" << endl;
     hyper_params.print();
     float rep_perplex(0.0f);
@@ -403,9 +403,11 @@ void decodeTestPosts(const HyperParams &hyper_params, ModelParams &model_params,
         const vector<PostAndResponses> &post_and_responses_vector,
         const vector<vector<string>> &post_sentences,
         const vector<vector<string>> &response_sentences,
-        const unordered_map<string, unordered_map<string, float>> &pmi_map,
+        const map<string, map<string, float>> &pmi_map,
         const vector<string> &black_list,
-        const unordered_map<string, float> &idf_table) {
+        const unordered_map<string, float> &idf_table,
+        const map<string, float> &post_idf_map,
+        const unordered_map<string, int> response_occurence_map) {
     cout << "decodeTestPosts begin" << endl;
     hyper_params.print();
     vector<CandidateAndReferences> candidate_and_references_vector;
@@ -418,7 +420,7 @@ void decodeTestPosts(const HyperParams &hyper_params, ModelParams &model_params,
         print(post_sentences.at(post_and_responses.post_id));
         vector<string> keywords =
             getMostRelatedKeyword(post_sentences.at(post_and_responses.post_id), pmi_map,
-                    idf_table);
+                    idf_table, response_occurence_map, post_idf_map);
         int keyword_i = 0;
         cout << "keyword:" << keywords.at(keyword_i) << endl;
         Graph graph(false, true, true);
@@ -663,7 +665,7 @@ int main(int argc, char *argv[]) {
         << endl;
     vector<PostAndResponses> test_post_and_responses = readPostAndResponsesVector(
             default_config.test_pair_file);
-//    preserveVector(test_post_and_responses, default_config.test_sample_count, default_config.seed);
+    preserveVector(test_post_and_responses, default_config.test_sample_count, default_config.seed);
     cout << "test_post_and_responses_vector size:" << test_post_and_responses.size()
         << endl;
     vector<ConversationPair> train_conversation_pairs;
@@ -747,8 +749,10 @@ int main(int argc, char *argv[]) {
                 post_ids_and_response_ids.second);
     }
 
-    unordered_map<string, unordered_map<string, float>> pmi_map = calPMI(post_sentences,
-            response_sentences, train_conversation_pairs);
+    map<string, float> post_idf_map;
+    unordered_map<string, int> response_occurence_map;
+    map<string, map<string, float>> pmi_map = calPMI(post_sentences,
+            response_sentences, train_conversation_pairs, post_idf_map,response_occurence_map);
 
     ModelParams model_params;
     int beam_size = hyper_params.beam_size;
@@ -804,7 +808,8 @@ int main(int argc, char *argv[]) {
     } else if (default_config.program_mode == ProgramMode::DECODING) {
         hyper_params.beam_size = beam_size;
         decodeTestPosts(hyper_params, model_params, default_config, test_post_and_responses,
-                post_sentences, response_sentences, pmi_map, black_list, all_idf);
+                post_sentences, response_sentences, pmi_map, black_list, all_idf, post_idf_map,
+                response_occurence_map);
     } else if (default_config.program_mode == ProgramMode::METRIC) {
         path dir_path(default_config.input_model_dir);
         if (!is_directory(dir_path)) {

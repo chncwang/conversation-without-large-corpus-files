@@ -340,9 +340,9 @@ unordered_map<string, int> toOccurenceMap(const vector<unordered_set<string>> &w
     return word_frequencies;
 }
 
-unordered_map<string, float> toIdfMap(const unordered_map<string, int> &word_frequencies,
+map<string, float> toIdfMap(const unordered_map<string, int> &word_frequencies,
         int size) {
-    unordered_map<string, float> result;
+    map<string, float> result;
     for (const auto &it : word_frequencies) {
         float idf = log((float)size / it.second);
         result.insert(make_pair(it.first, idf));
@@ -350,10 +350,14 @@ unordered_map<string, float> toIdfMap(const unordered_map<string, int> &word_fre
     return result;
 }
 
-unordered_map<string, unordered_map<string, float>> calPMI(
+constexpr float PMI_OFFSET = 0;
+
+map<string, map<string, float>> calPMI(
         const vector<vector<string>> &post_sentences,
         const vector<vector<string>> &response_sentences,
-        const vector<ConversationPair> &pairs) {
+        const vector<ConversationPair> &pairs,
+        map<string, float>& post_idf_map,
+        unordered_map<string, int>& response_occurence_map) {
     cout << "calculating post word sets..." << endl;
     vector<unordered_set<string>> post_word_sets = toWordSets(post_sentences);
     cout << "calculating response word sets..." << endl;
@@ -361,10 +365,10 @@ unordered_map<string, unordered_map<string, float>> calPMI(
     cout << "calculating post occurence map..." << endl;
     unordered_map<string, int> occurence_map = toOccurenceMap(post_word_sets);
     cout << "calculating response occurence map..." << endl;
-    unordered_map<string, int> response_occurence_map = toOccurenceMap(response_word_sets);
+    response_occurence_map = toOccurenceMap(response_word_sets);
     cout << "calculating post idf map..." << endl;
-    unordered_map<string, float> post_idf_map = toIdfMap(occurence_map, post_word_sets.size());
-    unordered_map<string, unordered_map<string, int>> conditional_post_occurence_map;
+    post_idf_map = toIdfMap(occurence_map, post_word_sets.size());
+    map<string, unordered_map<string, int>> conditional_post_occurence_map;
     for (const ConversationPair &conv_pair : pairs) {
         const unordered_set<string> &post_word_set = post_word_sets.at(conv_pair.post_id);
         for (const string &post_word : post_word_set) {
@@ -390,19 +394,13 @@ unordered_map<string, unordered_map<string, float>> calPMI(
         }
     }
 
-    unordered_map<string, unordered_map<string, float>> pmi_map;
+    map<string, map<string, float>> pmi_map;
     for (const auto &outter_it : conditional_post_occurence_map) {
-        unordered_map<string, float> m;
+        map<string, float> m;
         for (const auto &inner_it : outter_it.second) {
             float pmi;
-            if (outter_it.first == STOP_SYMBOL || inner_it.first == STOP_SYMBOL) {
-                pmi = 0;
-            } else {
-                pmi = log((float)inner_it.second / response_occurence_map.at(inner_it.first)) +
-                    post_idf_map.at(outter_it.first);
-//                if (pmi > 0)
-//                    cout << "post:" << outter_it.first << " response:" << inner_it.first << pmi << endl;
-            }
+            pmi = log(((float)inner_it.second + PMI_OFFSET) / response_occurence_map.at(inner_it.first)) +
+                post_idf_map.at(outter_it.first);
             m.insert(make_pair(inner_it.first, pmi));
         }
         pmi_map.insert(make_pair(outter_it.first, move(m)));
@@ -412,22 +410,33 @@ unordered_map<string, unordered_map<string, float>> calPMI(
 }
 
 vector<string> getMostRelatedKeyword(const vector<string> &post,
-        const unordered_map<string, unordered_map<string, float>> &pmi_map,
-        const unordered_map<string, float> &idf_map) {
+        const map<string, map<string, float>> &pmi_map,
+        const unordered_map<string, float> &idf_map,
+        const unordered_map<string, int> &response_occurence_map,
+        const map<string, float> &post_idf_map) {
+    vector<string> result;
     unordered_map<string, float> scores;
     for (const string &post_word : post) {
         const auto &it = pmi_map.find(post_word);
         if (it == pmi_map.end()) {
+            continue;
             cout << "warning: post word " << post_word << " not found" << endl;
         } else {
-            for (const auto &inner_it : it->second) {
-                auto scores_it = scores.find(inner_it.first);
-                if (scores_it == scores.end()) {
-                    float initial_value = &post_word == &post.front() ? 0.0f : -1e9f;
-                    scores.insert(make_pair(inner_it.first, initial_value));
-                    scores_it = scores.find(inner_it.first);
+            for (const auto &inner_it :response_occurence_map) {
+                const auto &pmi_it = it->second.find(inner_it.first);
+                float pmi;
+                if (pmi_it == it->second.end()) {
+                    pmi = 0;
+                } else {
+                    pmi = pmi_it->second;
                 }
-                scores_it->second += inner_it.second;
+
+                const auto &score_it = scores.find(inner_it.first);
+                if (score_it == scores.end()) {
+                    scores.insert(make_pair(inner_it.first, pmi));
+                } else {
+                    score_it->second += pmi;
+                }
             }
         }
     }
@@ -435,7 +444,7 @@ vector<string> getMostRelatedKeyword(const vector<string> &post,
     for (const auto &it : scores) {
         const auto &inner_it = idf_map.find(it.first);
         if (inner_it != idf_map.end() && isPureChinese(it.first)) {
-            word_and_pmi_vec.push_back(it);
+            word_and_pmi_vec.push_back(make_pair(it.first, it.second));
         }
     }
     function<bool(const pair<string, float> &a, const pair<string, float> &b)> cmp =
@@ -443,21 +452,22 @@ vector<string> getMostRelatedKeyword(const vector<string> &post,
             return a.second > b.second;
         };
     std::sort(word_and_pmi_vec.begin(), word_and_pmi_vec.end(), cmp);
-    vector<string> result;
     int i = 0;
+    cout << "word_and_pmi_vec size:" << word_and_pmi_vec.size() << endl;
     for (const auto &it : word_and_pmi_vec) {
+        if (idf_map.at(it.first) > 9) {
+            continue;
+        }
         if (i++ < 100) {
             cout << "keyword:" << it.first << " idf:" << idf_map.at(it.first) << " pmi:" << it.second << endl;
         }
-        if (idf_map.at(it.first) < 10) {
-            result.push_back(it.first);
-        }
+        result.push_back(it.first);
     }
     return result;
 }
 
 string getKeyword(const vector<string> &post, const vector<string> &response,
-        const unordered_map<string, unordered_map<string, float>> &pmi_map) {
+        const map<string, map<string, float>> &pmi_map) {
     vector<float> word_pmis;
     for (const auto &w : response) {
         float sum = 0.0f;
