@@ -352,7 +352,7 @@ float metricTestPosts(const HyperParams &hyper_params, ModelParams &model_params
         const vector<vector<string>> &response_sentences) {
     cout << "metricTestPosts begin" << endl;
     hyper_params.print();
-    float perplex(0.0f), corpus_index_sum(0);
+    float perplex(0.0f), corpus_hit_sum(0);
     int size_sum = 0;
     thread_pool pool(16);
     mutex perplex_mutex;
@@ -364,7 +364,7 @@ float metricTestPosts(const HyperParams &hyper_params, ModelParams &model_params
 
             const vector<int> &response_ids = post_and_responses.response_ids;
             float sum = 0.0f;
-            float index_sum = 0;
+            int hit_sum = 0;
             int word_sum = 0;
             cout << "response size:" << response_ids.size() << endl;
             for (int response_id : response_ids) {
@@ -383,17 +383,17 @@ float metricTestPosts(const HyperParams &hyper_params, ModelParams &model_params
                         response_sentences.at(response_id), [&](const string &w) -> int {
                         return model_params.lookup_table.getElemId(w);
                         });
-                float index;
-                float perplex = computePerplex(nodes, word_ids, index);
+                int hit_count;
+                float perplex = computePerplex(nodes, word_ids, hit_count);
                 sum += perplex;
-                index_sum += index;
+                hit_sum += hit_count;
                 word_sum += word_ids.size();
             }
             cout << "avg_perplex:" << exp(sum/word_sum) << endl;
-            cout << "avg_index:" << exp(index_sum / word_sum) << endl;
+            cout << "avg_hit:" << static_cast<float>(hit_sum) / word_sum << endl;
             perplex_mutex.lock();
             perplex += sum;
-            corpus_index_sum += index_sum;
+            corpus_hit_sum += hit_sum;
             size_sum += word_sum;
             perplex_mutex.unlock();
         };
@@ -403,7 +403,7 @@ float metricTestPosts(const HyperParams &hyper_params, ModelParams &model_params
 
     perplex = exp(perplex / size_sum);
     cout << "total avg perplex:" << perplex << endl;
-    cout << "corpus index:" << exp(corpus_index_sum / size_sum) << endl;
+    cout << "corpus hit rate:" << static_cast<float>(corpus_hit_sum) / size_sum << endl;
     return perplex;
 }
 
@@ -462,8 +462,8 @@ void decodedPPL(const HyperParams &hyper_params, ModelParams &model_params,
                 decoded_sentence, [&](const string &w) -> int {
                 return model_params.lookup_table.getElemId(w);
                 });
-        float index;
-        float perplex = computePerplex(nodes, word_ids, index);
+        int hit_count;
+        float perplex = computePerplex(nodes, word_ids, hit_count);
         ppl_sum += perplex;
         len_sum += word_ids.size();
         cout << "ppl:" << perplex << " avg:" << exp(ppl_sum / len_sum)  << endl;

@@ -12,7 +12,7 @@
 #include "N3LDG.h"
 
 float computePerplex(const std::vector<Node *> &nodes, const std::vector<int> &answers,
-        float &index_sum) {
+        int &hit_count) {
     float log_sum = 0.0f;
     float count_sum = 0;
 
@@ -26,16 +26,19 @@ float computePerplex(const std::vector<Node *> &nodes, const std::vector<int> &a
         float reciprocal_answer_prob = 1 / node.getVal()[answer];
         log_sum += log(reciprocal_answer_prob);
 
-        int count = 0;
+        bool hit = true;
         for (int j = 0; j < node.getDim(); ++j) {
-            if (node.getVal()[j] >= node.getVal()[answer]) {
-                ++count;
+            if (node.getVal()[j] > node.getVal()[answer]) {
+                hit = false;
+                break;
             }
         }
-        count_sum += log(count);
+        if (hit) {
+            ++count_sum;
+        }
     }
 
-    index_sum = count_sum;
+    hit_count = count_sum;
     return log_sum;
 }
 
