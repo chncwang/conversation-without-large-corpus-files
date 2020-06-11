@@ -447,6 +447,7 @@ float metricTestPosts(const HyperParams &hyper_params, ModelParams &model_params
     cout << "metricTestPosts begin" << endl;
     hyper_params.print();
     float rep_perplex(0.0f);
+    float corpus_hypo_ppl_log_sum = 0;
     thread_pool pool(16);
     mutex rep_perplex_mutex;
     int size_sum = 0;
@@ -459,6 +460,7 @@ float metricTestPosts(const HyperParams &hyper_params, ModelParams &model_params
 
             const vector<int> &response_ids = post_and_responses.response_ids;
             float avg_perplex = 0.0f;
+            float sentence_hypo_ppl_log_sum = 0;
             int sum = 0;
             cout << "response size:" << response_ids.size() << endl;
             for (int response_id : response_ids) {
@@ -499,14 +501,18 @@ float metricTestPosts(const HyperParams &hyper_params, ModelParams &model_params
                     word_ids.push_back(keyword_nodes_and_ids.second.at(i));
                 }
 
-                float perplex = computePerplex(nodes, word_ids, sentence_len);
+                float hypo_ppl_log;
+                float perplex = computePerplex(nodes, word_ids, sentence_len, hypo_ppl_log);
+                sentence_hypo_ppl_log_sum += hypo_ppl_log;
                 avg_perplex += perplex;
                 sum += word_ids_size;
             }
             cout << "size:" << response_ids.size() << endl;
             cout << "avg_perplex:" << exp(avg_perplex/sum) << endl;
+            cout << "hypo:" << exp(sentence_hypo_ppl_log_sum / sum) << endl;
             rep_perplex_mutex.lock();
             rep_perplex += avg_perplex;
+            corpus_hypo_ppl_log_sum += sentence_hypo_ppl_log_sum;
             size_sum += sum;
             rep_perplex_mutex.unlock();
         };
@@ -516,6 +522,7 @@ float metricTestPosts(const HyperParams &hyper_params, ModelParams &model_params
     rep_perplex = exp(rep_perplex / size_sum);
 
     cout << "total avg perplex:" << rep_perplex << endl;
+    cout << "corpus hypo ppl:" << exp(corpus_hypo_ppl_log_sum / size_sum) << endl;
     return rep_perplex;
 }
 
