@@ -353,6 +353,7 @@ float metricTestPosts(const HyperParams &hyper_params, ModelParams &model_params
     cout << "metricTestPosts begin" << endl;
     hyper_params.print();
     float perplex(0.0f), corpus_hit_sum(0);
+    vector<int> corpus_pos_hit_amount, corpus_pos_amount;
     int size_sum = 0;
     thread_pool pool(16);
     mutex perplex_mutex;
@@ -366,6 +367,7 @@ float metricTestPosts(const HyperParams &hyper_params, ModelParams &model_params
             float sum = 0.0f;
             int hit_sum = 0;
             int word_sum = 0;
+            vector<int> post_hit_counts, post_pos_amounts;
             cout << "response size:" << response_ids.size() << endl;
             for (int response_id : response_ids) {
                 //            cout << "response:" << endl;
@@ -384,17 +386,45 @@ float metricTestPosts(const HyperParams &hyper_params, ModelParams &model_params
                         return model_params.lookup_table.getElemId(w);
                         });
                 int hit_count;
-                float perplex = computePerplex(nodes, word_ids, hit_count);
+                vector<int> hit_flags;
+                float perplex = computePerplex(nodes, word_ids, hit_count, hit_flags);
                 sum += perplex;
                 hit_sum += hit_count;
                 word_sum += word_ids.size();
+                for (int i = 0; i < hit_flags.size(); ++i) {
+                    if (post_hit_counts.size() <= i) {
+                        post_hit_counts.push_back(0);
+                    }
+                    post_hit_counts.at(i) += hit_flags.at(i);
+
+                    if (post_pos_amounts.size() <= i) {
+                        post_pos_amounts.push_back(0);
+                    }
+                    ++ post_pos_amounts.at(i);
+                }
             }
             cout << "avg_perplex:" << exp(sum/word_sum) << endl;
             cout << "avg_hit:" << static_cast<float>(hit_sum) / word_sum << endl;
+            for (int i = 0; i < post_hit_counts.size(); ++i) {
+                cout << i << " " << static_cast<float>(post_hit_counts.at(i)) /
+                        post_pos_amounts.at(i) << endl;
+            }
             perplex_mutex.lock();
             perplex += sum;
             corpus_hit_sum += hit_sum;
             size_sum += word_sum;
+
+            for (int i = 0; i < post_hit_counts.size(); ++i) {
+                if (corpus_pos_amount.size() <= i) {
+                    corpus_pos_amount.push_back(0);
+                }
+                corpus_pos_amount.at(i) += post_pos_amounts.at(i);
+                if (corpus_pos_hit_amount.size() <= i) {
+                    corpus_pos_hit_amount.push_back(0);
+                }
+                corpus_pos_hit_amount.at(i) += post_hit_counts.at(i);
+            }
+
             perplex_mutex.unlock();
         };
         post(pool, f);
@@ -404,6 +434,12 @@ float metricTestPosts(const HyperParams &hyper_params, ModelParams &model_params
     perplex = exp(perplex / size_sum);
     cout << "total avg perplex:" << perplex << endl;
     cout << "corpus hit rate:" << static_cast<float>(corpus_hit_sum) / size_sum << endl;
+    cout << "corpus_pos_hit_amount size:" << corpus_pos_hit_amount.size() << endl;
+    for (int i = 0; i < corpus_pos_hit_amount.size(); ++i) {
+        cout << boost::format("pos:%1% hit:%2% all:%3% rate:%4%") % i %
+            corpus_pos_hit_amount.at(i) % corpus_pos_amount.at(i) %
+            (static_cast<float>(corpus_pos_hit_amount.at(i)) / corpus_pos_amount.at(i)) << endl;
+    }
     return perplex;
 }
 
@@ -463,7 +499,8 @@ void decodedPPL(const HyperParams &hyper_params, ModelParams &model_params,
                 return model_params.lookup_table.getElemId(w);
                 });
         int hit_count;
-        float perplex = computePerplex(nodes, word_ids, hit_count);
+        vector<int> hit_flags;
+        float perplex = computePerplex(nodes, word_ids, hit_count, hit_flags);
         ppl_sum += perplex;
         len_sum += word_ids.size();
         cout << "ppl:" << perplex << " avg:" << exp(ppl_sum / len_sum)  << endl;

@@ -12,9 +12,11 @@
 #include "N3LDG.h"
 
 float computePerplex(const std::vector<Node *> &nodes, const std::vector<int> &answers,
-        int &hit_count) {
+        int &hit_count,
+        vector<int> &hit_flags) {
     float log_sum = 0.0f;
     float count_sum = 0;
+    hit_flags.clear();
 
     for (int i = 0; i < nodes.size(); ++i) {
         Node &node = *nodes.at(i);
@@ -36,6 +38,7 @@ float computePerplex(const std::vector<Node *> &nodes, const std::vector<int> &a
         if (hit) {
             ++count_sum;
         }
+        hit_flags.push_back(hit);
     }
 
     hit_count = count_sum;
