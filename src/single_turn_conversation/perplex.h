@@ -45,9 +45,14 @@ float computePerplex(const std::vector<Node *> &nodes, const std::vector<int> &a
     for (int i = len; i < nodes.size(); ++i) {
         bool keyword_hit = hit_flags.at(i);
         keyword_hit_flags.push_back(keyword_hit);
-        unified_token_hit_flags.push_back(keyword_hit);
+        bool inner_fist = true;
         for (;; ++j_begin) {
-            unified_token_hit_flags.push_back(hit_flags.at(j_begin));
+            bool flag = hit_flags.at(j_begin);
+            if (inner_fist) {
+                inner_fist = false;
+                flag = flag && keyword_hit;
+            }
+            unified_token_hit_flags.push_back(flag);
             if (answers.at(i) == answers.at(j_begin) + 1 ||
                     (answers.at(i) == 0 && answers.at(i) == answers.at(j_begin))) {
                 cout << "k ";
