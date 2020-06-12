@@ -447,10 +447,13 @@ float metricTestPosts(const HyperParams &hyper_params, ModelParams &model_params
     cout << "metricTestPosts begin" << endl;
     hyper_params.print();
     float rep_perplex(0.0f);
-    float corpus_hypo_ppl_log_sum = 0;
+    int corpus_hit_count = 0;
     thread_pool pool(16);
     mutex rep_perplex_mutex;
     int size_sum = 0;
+    vector<int> corpus_keyword_hit_counts, corpus_keyword_sizes;
+    vector<int> corpus_token_hit_counts, corpus_token_sizes;
+    vector<int> corpus_unified_hit_counts, corpus_unified_sizes;
 
     for (const PostAndResponses &post_and_responses : post_and_responses_vector) {
         auto f = [&]() {
@@ -460,10 +463,15 @@ float metricTestPosts(const HyperParams &hyper_params, ModelParams &model_params
 
             const vector<int> &response_ids = post_and_responses.response_ids;
             float avg_perplex = 0.0f;
-            float sentence_hypo_ppl_log_sum = 0;
+            int post_hit_count = 0;
             int sum = 0;
+            vector<int> post_keyword_hit_counts, post_keyword_sizes;
+            vector<int> post_token_hit_counts, post_token_sizes;
+            vector<int> post_unified_hit_counts, post_unified_sizes;
+
             cout << "response size:" << response_ids.size() << endl;
             for (int response_id : response_ids) {
+                print(response_sentences.at(response_id));
                 const WordIdfInfo &idf_info = response_idf_info_list.at(response_id);
                 n3ldg_cuda::Profiler &profiler = n3ldg_cuda::Profiler::Ins();
                 profiler.BeginEvent("build computation graph");
@@ -501,19 +509,109 @@ float metricTestPosts(const HyperParams &hyper_params, ModelParams &model_params
                     word_ids.push_back(keyword_nodes_and_ids.second.at(i));
                 }
 
-                float hypo_ppl_log;
-                float perplex = computePerplex(nodes, word_ids, sentence_len, hypo_ppl_log);
-                sentence_hypo_ppl_log_sum += hypo_ppl_log;
+                int hit_count;
+                vector<int> keyword_hit_flags, token_hit_flags, unified_hit_flags;
+                float perplex = computePerplex(nodes, word_ids, sentence_len, hit_count,
+                        keyword_hit_flags, token_hit_flags, unified_hit_flags);
                 avg_perplex += perplex;
+                post_hit_count += hit_count;
                 sum += word_ids_size;
+
+                for(int i = 0; i < keyword_hit_flags.size(); ++i) {
+                    if (post_keyword_hit_counts.size() <= i) {
+                        post_keyword_hit_counts.push_back(0);
+                    }
+                    post_keyword_hit_counts.at(i) += keyword_hit_flags.at(i);
+
+                    if (post_keyword_sizes.size() <= i) {
+                        post_keyword_sizes.push_back(0);
+                    }
+                    post_keyword_sizes.at(i)++;
+                }
+
+                for (int i = 0; i < token_hit_flags.size(); ++i) {
+                    if (post_token_hit_counts.size() <= i) {
+                        post_token_hit_counts.push_back(0);
+                    }
+                    post_token_hit_counts.at(i) += token_hit_flags.at(i);
+
+                    if (post_token_sizes.size() <= i) {
+                        post_token_sizes.push_back(0);
+                    }
+                    post_token_sizes.at(i)++;
+                }
+
+                for (int i = 0; i < unified_hit_flags.size(); ++i) {
+                    if (post_unified_hit_counts.size() <= i) {
+                        post_unified_hit_counts.push_back(0);
+                    }
+                    post_unified_hit_counts.at(i) += unified_hit_flags.at(i);
+
+                    if (post_unified_sizes.size() <= i) {
+                        post_unified_sizes.push_back(0);
+                    }
+                    post_unified_sizes.at(i)++;
+                }
             }
             cout << "size:" << response_ids.size() << endl;
             cout << "avg_perplex:" << exp(avg_perplex/sum) << endl;
-            cout << "hypo:" << exp(sentence_hypo_ppl_log_sum / sum) << endl;
+            cout << "hit rate:" << static_cast<float>(post_hit_count) / sum << endl;
+            for (int i = 0; i < post_keyword_sizes.size(); ++i) {
+                cout << boost::format("keyword %1% hit rate:%2%") % i %
+                    (static_cast<float>(post_keyword_hit_counts.at(i)) /
+                     post_keyword_sizes.at(i)) << endl;
+            }
+            for (int i = 0; i < post_token_sizes.size(); ++i) {
+                cout << boost::format("token %1% hit rate:%2%") % i %
+                    (static_cast<float>(post_token_hit_counts.at(i)) /
+                     post_token_sizes.at(i)) << endl;
+            }
+            for (int i = 0; i < post_unified_sizes.size(); ++i) {
+                cout << boost::format("unified %1% hit rate:%2%") % i %
+                    (static_cast<float>(post_unified_hit_counts.at(i)) /
+                     post_unified_sizes.at(i)) << endl;
+            }
             rep_perplex_mutex.lock();
             rep_perplex += avg_perplex;
-            corpus_hypo_ppl_log_sum += sentence_hypo_ppl_log_sum;
+            corpus_hit_count += post_hit_count;
             size_sum += sum;
+
+            for (int i = 0; i < post_keyword_sizes.size(); ++i) {
+                if (corpus_keyword_hit_counts.size() <= i) {
+                    corpus_keyword_hit_counts.push_back(0);
+                }
+                corpus_keyword_hit_counts.at(i) += post_keyword_hit_counts.at(i);
+
+                if (corpus_keyword_sizes.size() <=i) {
+                    corpus_keyword_sizes.push_back(0);
+                }
+                corpus_keyword_sizes.at(i) += post_keyword_sizes.at(i);
+            }
+
+            for (int i = 0; i < post_token_sizes.size(); ++i) {
+                if (corpus_token_hit_counts.size() <= i) {
+                    corpus_token_hit_counts.push_back(0);
+                }
+                corpus_token_hit_counts.at(i) += post_token_hit_counts.at(i);
+
+                if (corpus_token_sizes.size() <=i) {
+                    corpus_token_sizes.push_back(0);
+                }
+                corpus_token_sizes.at(i) += post_token_sizes.at(i);
+            }
+
+            for (int i = 0; i < post_unified_sizes.size(); ++i) {
+                if (corpus_unified_hit_counts.size() <= i) {
+                    corpus_unified_hit_counts.push_back(0);
+                }
+                corpus_unified_hit_counts.at(i) += post_unified_hit_counts.at(i);
+
+                if (corpus_unified_sizes.size() <=i) {
+                    corpus_unified_sizes.push_back(0);
+                }
+                corpus_unified_sizes.at(i) += post_unified_sizes.at(i);
+            }
+
             rep_perplex_mutex.unlock();
         };
         post(pool, f);
@@ -522,7 +620,25 @@ float metricTestPosts(const HyperParams &hyper_params, ModelParams &model_params
     rep_perplex = exp(rep_perplex / size_sum);
 
     cout << "total avg perplex:" << rep_perplex << endl;
-    cout << "corpus hypo ppl:" << exp(corpus_hypo_ppl_log_sum / size_sum) << endl;
+    cout << "corpus hypo ppl:" << static_cast<float>(corpus_hit_count) / size_sum << endl;
+    for (int i = 0; i < corpus_keyword_sizes.size(); ++i) {
+        cout << boost::format("keyword %1% hit:%2% amount:%3% rate:%4%") % i %
+            corpus_keyword_hit_counts.at(i) % corpus_keyword_sizes.at(i) %
+            (static_cast<float>(corpus_keyword_hit_counts.at(i)) / corpus_keyword_sizes.at(i))
+            << endl;
+    }
+    for (int i = 0; i < corpus_token_sizes.size(); ++i) {
+        cout << boost::format("token %1% hit:%2% amount:%3% rate:%4%") % i %
+            corpus_token_hit_counts.at(i) % corpus_token_sizes.at(i) %
+            (static_cast<float>(corpus_token_hit_counts.at(i)) / corpus_token_sizes.at(i))
+            << endl;
+    }
+    for (int i = 0; i < corpus_unified_sizes.size(); ++i) {
+        cout << boost::format("unified %1% hit:%2% amount:%3% rate:%4%") % i %
+            corpus_unified_hit_counts.at(i) % corpus_unified_sizes.at(i) %
+            (static_cast<float>(corpus_unified_hit_counts.at(i)) / corpus_unified_sizes.at(i))
+            << endl;
+    }
     return rep_perplex;
 }
 
