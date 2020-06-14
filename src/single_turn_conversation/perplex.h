@@ -59,6 +59,7 @@ float computePerplex(const std::vector<Node *> &nodes, const std::vector<int> &a
                 if (keyword_hit && hit_flags.at(j_begin)) {
                     ++hit_count;
                 }
+                ++j_begin;
                 break;
             } else {
                 if (hit_flags.at(j_begin)) {
