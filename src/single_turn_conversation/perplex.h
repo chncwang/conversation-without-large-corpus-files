@@ -21,16 +21,20 @@ float computePerplex(const std::vector<Node *> &nodes, const std::vector<int> &a
     token_hit_flags.clear();
     unified_token_hit_flags.clear();
     vector<int> hit_flags;
+    int hit_beam = 5;
 
     for (int i = 0; i < nodes.size(); ++i) {
         Node &node = *nodes.at(i);
         dtype reciprocal_answer_prob = 1 / node.getVal().v[answers.at(i)];
         log_sum += log(reciprocal_answer_prob);
         bool hit = true;
+        int hit_count = 0;
         for (int j = 0; j < node.getDim(); ++j) {
-            if (node.getVal().v[j] > node.getVal().v[answers.at(i)]) {
-                hit = false;
-                break;
+            if (node.getVal().v[j] >= node.getVal().v[answers.at(i)]) {
+                if (++hit_count > hit_beam) {
+                    hit = false;
+                    break;
+                }
             }
         }
         hit_flags.push_back(hit);
