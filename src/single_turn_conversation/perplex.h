@@ -13,7 +13,12 @@
 
 float computePerplex(const std::vector<Node *> &nodes, const std::vector<int> &answers,
         int &hit_count,
-        vector<int> &hit_flags) {
+        vector<int> &hit_flags,
+        int hit_beam) {
+    if (hit_beam < 1) {
+        cerr << "hit beam is less than 0" << hit_beam << endl;
+        abort();
+    }
     float log_sum = 0.0f;
     float count_sum = 0;
     hit_flags.clear();
@@ -29,10 +34,13 @@ float computePerplex(const std::vector<Node *> &nodes, const std::vector<int> &a
         log_sum += log(reciprocal_answer_prob);
 
         bool hit = true;
+        int larger_count = 0;
         for (int j = 0; j < node.getDim(); ++j) {
-            if (node.getVal()[j] > node.getVal()[answer]) {
-                hit = false;
-                break;
+            if (node.getVal()[j] >= node.getVal()[answer]) {
+                if (++larger_count > hit_beam) {
+                    hit = false;
+                    break;
+                }
             }
         }
         if (hit) {

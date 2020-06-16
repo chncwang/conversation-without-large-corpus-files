@@ -387,7 +387,7 @@ float metricTestPosts(const HyperParams &hyper_params, ModelParams &model_params
                         });
                 int hit_count;
                 vector<int> hit_flags;
-                float perplex = computePerplex(nodes, word_ids, hit_count, hit_flags);
+                float perplex = computePerplex(nodes, word_ids, hit_count, hit_flags, 5);
                 sum += perplex;
                 hit_sum += hit_count;
                 word_sum += word_ids.size();
@@ -500,7 +500,7 @@ void decodedPPL(const HyperParams &hyper_params, ModelParams &model_params,
                 });
         int hit_count;
         vector<int> hit_flags;
-        float perplex = computePerplex(nodes, word_ids, hit_count, hit_flags);
+        float perplex = computePerplex(nodes, word_ids, hit_count, hit_flags, 5);
         ppl_sum += perplex;
         len_sum += word_ids.size();
         cout << "ppl:" << perplex << " avg:" << exp(ppl_sum / len_sum)  << endl;
