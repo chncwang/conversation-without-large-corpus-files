@@ -11,15 +11,8 @@
 
 #include "N3LDG.h"
 
-float computePerplex(const std::vector<Node *> &nodes, const std::vector<int> &answers, int len,
-        int &hit_count_result,
-        vector<int> &keyword_hit_flags,
-        vector<int> &token_hit_flags,
-        vector<int> &unified_token_hit_flags) {
+float computePerplex(const std::vector<Node *> &nodes, const std::vector<int> &answers, int len) {
     float log_sum = 0.0f;
-    keyword_hit_flags.clear();
-    token_hit_flags.clear();
-    unified_token_hit_flags.clear();
     vector<int> hit_flags;
     int hit_beam = 5;
 
@@ -38,9 +31,6 @@ float computePerplex(const std::vector<Node *> &nodes, const std::vector<int> &a
             }
         }
         hit_flags.push_back(hit);
-        if (i < len) {
-            token_hit_flags.push_back(hit);
-        }
     }
 
     int hit_count = 0;
@@ -48,7 +38,6 @@ float computePerplex(const std::vector<Node *> &nodes, const std::vector<int> &a
 
     for (int i = len; i < nodes.size(); ++i) {
         bool keyword_hit = hit_flags.at(i);
-        keyword_hit_flags.push_back(keyword_hit);
         bool inner_fist = true;
         for (;; ++j_begin) {
             bool flag = hit_flags.at(j_begin);
@@ -56,7 +45,6 @@ float computePerplex(const std::vector<Node *> &nodes, const std::vector<int> &a
                 inner_fist = false;
                 flag = flag && keyword_hit;
             }
-            unified_token_hit_flags.push_back(flag);
             if (answers.at(i) == answers.at(j_begin) + 1 ||
                     (answers.at(i) == 0 && answers.at(i) == answers.at(j_begin))) {
                 cout << "k ";
@@ -75,13 +63,6 @@ float computePerplex(const std::vector<Node *> &nodes, const std::vector<int> &a
     }
     cout << endl;
 
-    if (len != unified_token_hit_flags.size()) {
-        cerr << boost::format("sentence len:%1% unified_token_hit_flags size:%2%") % len %
-            unified_token_hit_flags.size() << endl;
-        abort();
-    }
-
-    hit_count_result = hit_count;
     return log_sum;
 }
 

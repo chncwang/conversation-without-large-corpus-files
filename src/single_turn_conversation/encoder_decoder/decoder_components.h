@@ -45,8 +45,7 @@ struct DecoderComponents {
     ResultAndKeywordVectors decoderToWordVectors(Graph &graph, const HyperParams &hyper_params,
             ModelParams &model_params,
             vector<Node *> &encoder_hiddens,
-            int i,
-            bool return_keyword) {
+            int i) {
         vector<Node *> concat_inputs = {
             contexts.at(i), decoder._hiddens.at(i),
             i == 0 ? n3ldg_plus::bucket(graph, hyper_params.word_dim, 0) :
@@ -60,7 +59,7 @@ struct DecoderComponents {
         Node *concat_node = n3ldg_plus::concat(graph, concat_inputs);
 
         Node *keyword;
-        if (return_keyword) {
+        if (i == 0) {
             Node *context_concated = n3ldg_plus::concat(graph, {decoder._hiddens.at(i),
                     contexts.at(i)});
             keyword = n3ldg_plus::linear(graph, model_params.hidden_to_keyword_params,
