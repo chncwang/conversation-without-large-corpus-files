@@ -408,6 +408,25 @@ float metricTestPosts(const HyperParams &hyper_params, ModelParams &model_params
     return rep_perplex;
 }
 
+void computeMeanAndStandardDeviation(const vector<float> &nums, float &mean, float &sd) {
+    float sum = 0;
+    for (float num : nums) {
+        sum += num;
+    }
+    mean = sum / nums.size();
+    if (nums.size() == 1) {
+        sd = 0;
+    } else {
+        float variance = 0;
+        for (float num : nums) {
+            float x = num - mean;
+            variance += x * x;
+        }
+        variance /= (nums.size() - 1);
+        sd = sqrt(variance);
+    }
+}
+
 void decodeTestPosts(const HyperParams &hyper_params, ModelParams &model_params,
         ModelParams &mmi_model_params,
         DefaultConfig &default_config,
@@ -437,6 +456,7 @@ void decodeTestPosts(const HyperParams &hyper_params, ModelParams &model_params,
     float mmi_flops_sum = 0;
     int64_t activations_sum = 0;
     int loop_i = 0;
+    vector <float> greedy_matching_similarities;
     for (const PostAndResponses &post_and_responses : post_and_responses_vector) {
         ++loop_i;
         cout << "post:" << endl;
@@ -522,8 +542,6 @@ void decodeTestPosts(const HyperParams &hyper_params, ModelParams &model_params,
             cout << "bleu_" << ngram << ":" << bleu_value << endl;
             float nist_value = computeNist(candidate_and_references_vector, ngram);
             cout << "nist_" << ngram << ":" << nist_value << endl;
-            float idf_value = computeEntropy(candidate_and_references_vector, all_idf);
-            cout << "idf:" << idf_value << endl;
             float dist_value = computeDist(candidate_and_references_vector, ngram);
             cout << "dist_" << ngram << ":" << dist_value << endl;
         }
@@ -701,7 +719,7 @@ int main(int argc, char *argv[]) {
         << endl;
     vector<PostAndResponses> test_post_and_responses = readPostAndResponsesVector(
             default_config.test_pair_file);
-//    preserveVector(test_post_and_responses, default_config.test_sample_count, default_config.seed);
+    preserveVector(test_post_and_responses, default_config.test_sample_count, default_config.seed);
     cout << "test_post_and_responses_vector size:" << test_post_and_responses.size()
         << endl;
     vector<ConversationPair> train_conversation_pairs;

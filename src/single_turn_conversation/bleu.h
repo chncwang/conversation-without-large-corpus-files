@@ -14,6 +14,7 @@
 #include "tinyutf8.h"
 #include "mteval/NISTEvaluator.h"
 #include "mteval/BLEUEvaluator.h"
+#include "N3LDG.h"
 
 using namespace std;
 
@@ -305,6 +306,60 @@ float computeDist(const vector<CandidateAndReferences> &candidate_and_references
         }
     }
     return static_cast<float>(distinctions.size()) / sentence_len_sum;
+}
+
+float vectorCos(const dtype *a, const dtype *b, int len) {
+    float inner_prod_sum = 0;
+    float a_len_square = 0;
+    float b_len_square = 0;
+
+    for (int i = 0; i < len; ++i) {
+        inner_prod_sum += a[i] * b[i];
+        a_len_square += a[i] * a[i];
+        b_len_square += b[i] * b[i];
+    }
+
+    return inner_prod_sum / sqrt(a_len_square) / sqrt(b_len_square);
+}
+
+float greedyMatching(const vector<string> &a, const vector<string> &b,
+        LookupTable<Param>& embedding_table) {
+    float max_cos_sum = 0;
+    for (const auto &candidate_word : a) {
+        float max_cos = -2;
+        for (const auto &ref_word : b) {
+            int candidate_id = embedding_table.elems.from_string(candidate_word);
+            dtype *candidate_vector = embedding_table.E.val[candidate_id];
+            int ref_id = embedding_table.elems.from_string(ref_word);
+            dtype *ref_vector = embedding_table.E.val[ref_id];
+            float cos = vectorCos(candidate_vector, ref_vector, embedding_table.E.outDim());
+            if (cos > max_cos) {
+                max_cos = cos;
+            }
+        }
+        max_cos_sum += max_cos;
+    }
+    return max_cos_sum / a.size();
+}
+
+float computeGreedyMatching(const CandidateAndReferences &candidate_and_refs,
+        LookupTable<Param>& embedding_table) {
+    const auto &refs = candidate_and_refs.references;
+    float max_g = -2;
+    for (const auto &ref : refs) {
+        auto known_ref = ref;
+        for (auto &w : known_ref) {
+            if (!embedding_table.findElemId(w)) {
+                w = unknownkey;
+            }
+        }
+        float g = 0.5 * (greedyMatching(known_ref, candidate_and_refs.candidate, embedding_table) +
+            greedyMatching(candidate_and_refs.candidate, known_ref, embedding_table));
+        if (g > max_g) {
+            max_g = g;
+        }
+    }
+    return max_g;
 }
 
 #endif
