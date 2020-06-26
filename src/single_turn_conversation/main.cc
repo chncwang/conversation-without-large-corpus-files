@@ -545,6 +545,7 @@ void decodeTestPosts(const HyperParams &hyper_params, ModelParams &model_params,
     int loop_i = 0;
     vector <float> greedy_matching_similarities;
     vector <float> avg_matching_similarities;
+    vector <float> extrema_similarities;
     for (const PostAndResponses &post_and_responses : post_and_responses_vector) {
         ++loop_i;
         cout << "post:" << endl;
@@ -654,6 +655,12 @@ void decodeTestPosts(const HyperParams &hyper_params, ModelParams &model_params,
                 avg_matching_sim_sd);
         cout << boost::format("embedding average mean:%1% standard_deviation:%2%") %
             avg_matching_sim_mean % avg_matching_sim_sd << endl;
+        float extrema = computeExtrema(candidate_and_references, original_embeddings);
+        extrema_similarities.push_back(extrema);
+        float extrema_mean, extrema_sd;
+        computeMeanAndStandardDeviation(extrema_similarities, extrema_mean, extrema_sd);
+        cout << boost::format("extrema mean:%1% standard_deviation:%2%") % extrema_mean %
+            extrema_sd << endl;
     }
 }
 
