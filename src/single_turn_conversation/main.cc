@@ -457,6 +457,7 @@ void decodeTestPosts(const HyperParams &hyper_params, ModelParams &model_params,
     int64_t activations_sum = 0;
     int loop_i = 0;
     vector <float> greedy_matching_similarities;
+    vector <float> avg_matching_similarities;
     for (const PostAndResponses &post_and_responses : post_and_responses_vector) {
         ++loop_i;
         cout << "post:" << endl;
@@ -555,6 +556,13 @@ void decodeTestPosts(const HyperParams &hyper_params, ModelParams &model_params,
                 greedy_matching_sim_sd);
         cout << boost::format("greedy matching mean:%1% standard_deviation:%2%") %
             greedy_matching_sim_mean % greedy_matching_sim_sd << endl;
+        float avg_sim = computeEmbeddingAvg(candidate_and_references, original_embeddings);
+        avg_matching_similarities.push_back(avg_sim);
+        float avg_matching_sim_mean, avg_matching_sim_sd;
+        computeMeanAndStandardDeviation(avg_matching_similarities, avg_matching_sim_mean,
+                avg_matching_sim_sd);
+        cout << boost::format("embedding average mean:%1% standard_deviation:%2%") %
+            avg_matching_sim_mean % avg_matching_sim_sd << endl;
     }
 }
 
