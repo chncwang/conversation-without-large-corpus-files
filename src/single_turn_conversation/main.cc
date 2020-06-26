@@ -669,6 +669,9 @@ void decodeTestPosts(const HyperParams &hyper_params, ModelParams &model_params,
         const vector<vector<string>> &post_sentences,
         const vector<vector<string>> &response_sentences,
         const vector<string> &black_list) {
+    LookupTable<Param> original_embeddings;
+    original_embeddings.init(model_params.lookup_table.elems, hyper_params.word_file);
+
     vector<vector<vector<string>>> ref_sentences;
     for (const PostAndResponses &post_and_responses : post_and_responses_vector) {
         vector<vector<string>> pair;
@@ -799,7 +802,7 @@ void decodeTestPosts(const HyperParams &hyper_params, ModelParams &model_params,
         float matched_idf = computeMatchedEntropy(candidate_and_references_vector, word_idf_table);
         cout << "matched idf:" << matched_idf << endl;
         float greedy_matching_sim = computeGreedyMatching(candidate_and_references,
-                model_params.lookup_table);
+                original_embeddings);
         greedy_matching_similarities.push_back(greedy_matching_sim);
         float greedy_matching_sim_mean, greedy_matching_sim_sd;
         computeMeanAndStandardDeviation(greedy_matching_similarities, greedy_matching_sim_mean,
