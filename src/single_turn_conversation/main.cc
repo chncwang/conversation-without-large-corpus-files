@@ -398,6 +398,25 @@ float metricTestPosts(const HyperParams &hyper_params, ModelParams &model_params
     return rep_perplex;
 }
 
+void computeMeanAndStandardDeviation(const vector<float> &nums, float &mean, float &sd) {
+    float sum = 0;
+    for (float num : nums) {
+        sum += num;
+    }
+    mean = sum / nums.size();
+    if (nums.size() == 1) {
+        sd = 0;
+    } else {
+        float variance = 0;
+        for (float num : nums) {
+            float x = num - mean;
+            variance += x * x;
+        }
+        variance /= (nums.size() - 1);
+        sd = sqrt(variance);
+    }
+}
+
 void decodeTestPosts(const HyperParams &hyper_params, ModelParams &model_params,
         DefaultConfig &default_config,
         const vector<PostAndResponses> &post_and_responses_vector,
@@ -414,6 +433,7 @@ void decodeTestPosts(const HyperParams &hyper_params, ModelParams &model_params,
     map<string, int64_t> overall_flops;
     int64_t activations_sum = 0;
     int loop_i = 0;
+    vector <float> greedy_matching_similarities;
     for (const PostAndResponses &post_and_responses : post_and_responses_vector) {
         ++loop_i;
         cout << "post:" << endl;
@@ -501,6 +521,14 @@ void decodeTestPosts(const HyperParams &hyper_params, ModelParams &model_params,
         }
         float entropy = computeEntropy(candidate_and_references_vector, idf_table);
         cout << "idf:" << entropy << endl;
+        float greedy_matching_sim = computeGreedyMatching(candidate_and_references,
+                model_params.lookup_table);
+        greedy_matching_similarities.push_back(greedy_matching_sim);
+        float greedy_matching_sim_mean, greedy_matching_sim_sd;
+        computeMeanAndStandardDeviation(greedy_matching_similarities, greedy_matching_sim_mean,
+                greedy_matching_sim_sd);
+        cout << boost::format("greedy matching mean:%1% standard_deviation:%2%") %
+            greedy_matching_sim_mean % greedy_matching_sim_sd << endl;
     }
 }
 
