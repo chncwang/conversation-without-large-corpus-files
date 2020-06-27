@@ -427,6 +427,8 @@ void decodeTestPosts(const HyperParams &hyper_params, ModelParams &model_params,
         const unordered_map<string, float> &idf_table,
         const map<string, float> &post_idf_map,
         const unordered_map<string, int> response_occurence_map) {
+    LookupTable<Param> original_embeddings;
+    original_embeddings.init(model_params.lookup_table.elems, hyper_params.word_file);
     cout << "decodeTestPosts begin" << endl;
     hyper_params.print();
     vector<CandidateAndReferences> candidate_and_references_vector;
@@ -522,7 +524,7 @@ void decodeTestPosts(const HyperParams &hyper_params, ModelParams &model_params,
         float entropy = computeEntropy(candidate_and_references_vector, idf_table);
         cout << "idf:" << entropy << endl;
         float greedy_matching_sim = computeGreedyMatching(candidate_and_references,
-                model_params.lookup_table);
+                original_embeddings);
         greedy_matching_similarities.push_back(greedy_matching_sim);
         float greedy_matching_sim_mean, greedy_matching_sim_sd;
         computeMeanAndStandardDeviation(greedy_matching_similarities, greedy_matching_sim_mean,
