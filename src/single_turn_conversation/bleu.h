@@ -415,6 +415,58 @@ float computeEmbeddingAvg(const CandidateAndReferences &candidate_and_refs,
     return max_avg;
 }
 
+vector<float> sentenceExtrema(const vector<string> &s, LookupTable<Param>& embedding_table) {
+    vector<float> result;
+    int dim = embedding_table.E.outDim();
+    result.resize(dim);
+    for (int i = 0; i < embedding_table.E.outDim(); ++i) {
+        result.at(i) = 0;
+    }
+
+    for (const string &w : s) {
+        int word_id = embedding_table.elems.from_string(w);
+        dtype *emb_vector = embedding_table.E.val[word_id];
+        for (int i = 0; i < dim; ++i) {
+            result.at(i) += emb_vector[i];
+            if (abs(emb_vector[i]) > abs(result.at(i))) {
+                result.at(i) = emb_vector[i];
+            }
+        }
+    }
+
+    return result;
+}
+
+float extrema(const vector<string> &a, const vector<string> &b,
+        LookupTable<Param>& embedding_table) {
+    auto av = sentenceExtrema(a, embedding_table);
+    auto bv = sentenceExtrema(b, embedding_table);
+    if (av.size() != bv.size()) {
+        cerr << "embeddingAvg - av size is not equal to bv size" << endl;
+        abort();
+    }
+    return vectorCos(av.data(), bv.data(), av.size());
+}
+
+float computeExtrema(const CandidateAndReferences &candidate_and_refs,
+        LookupTable<Param>& embedding_table) {
+    const auto &refs = candidate_and_refs.references;
+    float max_avg = -1e10;
+    for (const auto &ref : refs) {
+        auto known_ref = ref;
+        for (auto &w : known_ref) {
+            if (!embedding_table.findElemId(w)) {
+                w = unknownkey;
+            }
+        }
+        float avg = extrema(known_ref, candidate_and_refs.candidate, embedding_table);
+        if (avg > max_avg) {
+            max_avg = avg;
+        }
+    }
+    return max_avg;
+}
+
 const string NGRAM_SEG = "*%*";
 
 set<string> ngramKeys(const vector<string> &sentence, int ngram) {
