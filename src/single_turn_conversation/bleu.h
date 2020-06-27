@@ -362,4 +362,195 @@ float computeGreedyMatching(const CandidateAndReferences &candidate_and_refs,
     return max_g;
 }
 
+vector<float> sentenceAvgEmbedding(const vector<string> &s, LookupTable<Param>& embedding_table) {
+    vector<float> result;
+    int dim = embedding_table.E.outDim();
+    result.resize(dim);
+    for (int i = 0; i < embedding_table.E.outDim(); ++i) {
+        result.at(i) = 0;
+    }
+
+    for (const string &w : s) {
+        int word_id = embedding_table.elems.from_string(w);
+        dtype *emb_vector = embedding_table.E.val[word_id];
+        for (int i = 0; i < dim; ++i) {
+            result.at(i) += emb_vector[i];
+        }
+    }
+
+    for (float &v : result) {
+        v /= s.size();
+    }
+
+    return result;
+}
+
+float embeddingAvg(const vector<string> &a, const vector<string> &b,
+        LookupTable<Param>& embedding_table) {
+    auto av = sentenceAvgEmbedding(a, embedding_table);
+    auto bv = sentenceAvgEmbedding(b, embedding_table);
+    if (av.size() != bv.size()) {
+        cerr << "embeddingAvg - av size is not equal to bv size" << endl;
+        abort();
+    }
+    return vectorCos(av.data(), bv.data(), av.size());
+}
+
+float computeEmbeddingAvg(const CandidateAndReferences &candidate_and_refs,
+        LookupTable<Param>& embedding_table) {
+    const auto &refs = candidate_and_refs.references;
+    float max_avg = -1e10;
+    for (const auto &ref : refs) {
+        auto known_ref = ref;
+        for (auto &w : known_ref) {
+            if (!embedding_table.findElemId(w)) {
+                w = unknownkey;
+            }
+        }
+        float avg = embeddingAvg(known_ref, candidate_and_refs.candidate, embedding_table);
+        if (avg > max_avg) {
+            max_avg = avg;
+        }
+    }
+    return max_avg;
+}
+
+const string NGRAM_SEG = "*%*";
+
+set<string> ngramKeys(const vector<string> &sentence, int ngram) {
+    set<string> results;
+    if (sentence.size() >= ngram) {
+        for (int i = 0; i < sentence.size() + 1 - ngram; ++i) {
+            string key;
+            for (int j = 0; j < ngram; ++j) {
+                key += sentence.at(i + j) + NGRAM_SEG;
+            }
+            results.insert(key);
+        }
+    }
+    return results;
+}
+
+unordered_map<string, float> computeNgramIdf(const vector<vector<vector<string>>> &sentences,
+        int ngram) {
+    unordered_map<string, int> count_table;
+    for (const auto pair : sentences) {
+        set<string> pair_set;
+        for (const auto sentence : pair) {
+            if (sentence.size() < ngram) {
+                continue;
+            }
+            for (int i = 0; i < sentence.size() + 1 - ngram; ++i) {
+                string key;
+                for (int j = 0; j < ngram; ++j) {
+                    key += sentence.at(i + j) + NGRAM_SEG;
+                }
+                pair_set.insert(key);
+            }
+        }
+
+        for (const string &w : pair_set) {
+            const auto &it = count_table.find(w);
+            if (it == count_table.end()) {
+                count_table.insert(make_pair(w, 1));
+            } else {
+                count_table.at(w)++;
+            }
+        }
+    }
+
+    unordered_map<string, float> idf_table;
+    for (const auto &it : count_table) {
+        float idf = log(sentences.size() / static_cast<float>(it.second));
+        idf_table.insert(make_pair(it.first, idf));
+    }
+    return idf_table;
+}
+
+vector<float> zeroVector(int size) {
+    vector<float> result;
+    result.resize(size);
+    for (float &e : result) {
+        e = 0;
+    }
+    return result;
+}
+
+float occurenceIdf(const vector<string> &sentence, int ngram, const string &word, float idf) {
+    if (sentence.size() < ngram) {
+        return 0;
+    }
+
+    float result = 0;
+
+    for (int i = 0; i < sentence.size() + 1 - ngram; ++i) {
+        string key;
+        for (int j = 0; j < ngram; ++j) {
+            key += sentence.at(i + j) + NGRAM_SEG;
+        }
+        if (key == word) {
+            result += idf;
+        }
+    }
+    return result;
+}
+
+float vectorLen(const vector<float> &v) {
+    float square_sum = 0;
+    for (float n : v) {
+        square_sum += n * n;
+    }
+    return sqrt(square_sum);
+}
+
+float vectorCos(const vector<float> &a, const vector<float> &b) {
+    if (a.size() != b.size()) {
+        cerr << "vectorCos - input sizes are not equal" << endl;
+        abort();
+    }
+
+    float sum = 0;
+    for (int i = 0; i < a.size(); ++i) {
+        sum += a.at(i) * b.at(i);
+    }
+    int a_len = vectorLen(a);
+    int b_len = vectorLen(b);
+    if (a_len == 0 || b_len == 0) {
+        return 0;
+    }
+    return sum / (a_len * b_len);
+}
+
+float computeCIDEr(const CandidateAndReferences &candidate_and_references,
+        const unordered_map<string, float> idf_table,
+        int ngram) {
+    set<string> can_words = ngramKeys(candidate_and_references.candidate, ngram);
+    float sum = 0;
+    for (const auto &ref : candidate_and_references.references) {
+        set<string> words = ngramKeys(ref, ngram);
+        for (const string &cw : can_words) {
+            words.insert(cw);
+        }
+        auto can_vec = zeroVector(words.size());
+        auto ref_vec = zeroVector(words.size());
+        int offset = 0;
+        for (const string &word : words) {
+            const auto &it = idf_table.find(word);
+            float idf = it == idf_table.end() ? 0 : it->second;
+            can_vec.at(offset) = occurenceIdf(candidate_and_references.candidate, ngram, word,
+                    idf);
+            ref_vec.at(offset) = occurenceIdf(ref, ngram, word, idf);
+            offset++;
+        }
+        float cos = vectorCos(can_vec, ref_vec);
+        cout << "can:";
+        print(candidate_and_references.candidate);
+        cout << "ref:";
+        print(ref);
+        cout << "cos:" << cos << endl << endl;
+        sum += cos;
+    }
+    return sum / candidate_and_references.references.size();
+}
+
 #endif
