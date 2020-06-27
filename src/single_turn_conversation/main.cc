@@ -939,7 +939,7 @@ int main(int argc, char *argv[]) {
         << endl;
     vector<PostAndResponses> test_post_and_responses = readPostAndResponsesVector(
             default_config.test_pair_file);
-//    preserveVector(test_post_and_responses, default_config.test_sample_count, default_config.seed);
+    preserveVector(test_post_and_responses, default_config.test_sample_count, default_config.seed);
     cout << "test_post_and_responses_vector size:" << test_post_and_responses.size()
         << endl;
     vector<ConversationPair> train_conversation_pairs;
