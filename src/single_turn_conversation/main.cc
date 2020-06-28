@@ -804,7 +804,7 @@ int main(int argc, char *argv[]) {
         << endl;
     vector<PostAndResponses> test_post_and_responses = readPostAndResponsesVector(
             default_config.test_pair_file);
-//    preserveVector(test_post_and_responses, default_config.test_sample_count, default_config.seed);
+    preserveVector(test_post_and_responses, default_config.test_sample_count, default_config.seed);
     cout << "test_post_and_responses_vector size:" << test_post_and_responses.size()
         << endl;
     vector<ConversationPair> train_conversation_pairs;
@@ -1135,16 +1135,6 @@ int main(int argc, char *argv[]) {
                     int response_id = train_conversation_pairs.at(instance_index).response_id;
                     auto response_sentence = response_sentences.at(response_id);
                     vector<int> word_ids = toIds(response_sentence, model_params.lookup_table);
-                    for (int j = 0; j < word_ids.size(); ++j) {
-                        if (j < word_ids.size() - 1) {
-                            --word_ids.at(j);
-                        } else {
-                            if (word_ids.at(j) != 0) {
-                                cerr << "stop symbol id is not 0:" << word_ids.at(j) << endl;
-                                abort();
-                            }
-                        }
-                    }
                     vector<Node*> result_nodes =
                         toNodePointers(decoder_components_vector.at(i).wordvector_to_onehots);
                     std::pair<dtype, std::vector<int>> result;

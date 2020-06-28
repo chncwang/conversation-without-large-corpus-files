@@ -366,14 +366,7 @@ vector<BeamSearchResult> mostProbableKeywords(
     cout << "black size:" << black_list.size() << endl;
     vector<Node *> keyword_nodes, hiddens, nodes;
     for (int ii = 0; ii < beam.size(); ++ii) {
-        bool should_predict_keyword;
-        if (last_results.empty()) {
-            should_predict_keyword = true;
-        } else {
-            vector<WordIdAndProbability> path = last_results.at(ii).getPath();
-            int size = path.size();
-            should_predict_keyword = path.at(size - 2).word_id == path.at(size - 1).word_id;
-        }
+        bool should_predict_keyword = is_first;
         Node *node, *keyword_node, *hidden;
         hidden = beam.at(ii).decoder._hiddens.at(word_pos);
         if (should_predict_keyword) {
@@ -762,10 +755,6 @@ struct GraphBuilder {
             most_probable_results.clear();
             auto beam = decoder_components_beam;
             int closured_count = word_ids_result.size();
-//            for (int i = 0; i < closured_count; ++i) {
-//                auto & r = word_ids_result.at(i);
-//                ++closured_count;
-//            }
             if (closured_count >= default_config.result_count_factor * k) {
                 break;
             }
