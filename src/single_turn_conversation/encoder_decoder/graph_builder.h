@@ -67,7 +67,7 @@ struct WordIdAndProbability {
 string getSentence(const vector<int> &word_ids_vector, const ModelParams &model_params) {
     string words;
     for (const int &w : word_ids_vector) {
-        string str = model_params.lookup_table.elems.from_id(w);
+        string str = model_params.decoder_lookup_table.elems.from_id(w);
         words += str;
     }
     return words;
@@ -241,11 +241,11 @@ vector<BeamSearchResult> mostProbableResults(
             if (is_first) {
                 if (searched_word_ids.find(j) != searched_word_ids.end()) {
                     cout << boost::format("word id searched:%1% word:%2%\n") % j %
-                        model_params.lookup_table.elems.from_id(j);
+                        model_params.decoder_lookup_table.elems.from_id(j);
                     continue;
                 }
             }
-            if (j == model_params.lookup_table.getElemId(::unknownkey)) {
+            if (j == model_params.decoder_lookup_table.getElemId(::unknownkey)) {
                 continue;
             }
             dtype word_probability = node.getVal().v[j];
@@ -310,7 +310,7 @@ vector<BeamSearchResult> mostProbableResults(
         final_results.push_back(result);
         cout << boost::format("mostProbableResults - i:%1% prob:%2% score:%3%") % i %
             result.finalLogProbability() % result.finalScore() << endl;
-        printWordIds(result.getPath(), model_params.lookup_table);
+        printWordIds(result.getPath(), model_params.decoder_lookup_table);
         ++i;
     }
 
@@ -328,7 +328,7 @@ struct GraphBuilder {
         using namespace n3ldg_plus;
         Node *hidden_bucket = bucket(graph, hyper_params.hidden_dim, 0);
         for (const string &word : sentence) {
-            Node *input_lookup = embedding(graph, model_params.lookup_table, word);
+            Node *input_lookup = embedding(graph, model_params.encoder_lookup_table, word);
             Node *dropout_node = dropout(graph, *input_lookup, hyper_params.dropout, is_training);
             encoder_lookups.push_back(dropout_node);
         }
@@ -358,7 +358,7 @@ struct GraphBuilder {
         using namespace n3ldg_plus;
         Node *last_input;
         if (i > 0) {
-            Node *decoder_lookup = embedding(graph, model_params.lookup_table, *answer);
+            Node *decoder_lookup = embedding(graph, model_params.decoder_lookup_table, *answer);
             decoder_lookup = dropout(graph, *decoder_lookup, hyper_params.dropout, is_training);
             decoder_components.decoder_lookups.push_back(decoder_lookup);
             last_input = decoder_components.decoder_lookups.at(i - 1);
@@ -372,8 +372,9 @@ struct GraphBuilder {
         Node *decoder_to_wordvector = decoder_components.decoderToWordVectors(graph, hyper_params,
                 model_params, i);
         decoder_components.decoder_to_wordvectors.push_back(decoder_to_wordvector);
-        Node *wordvector_to_onehot = linearWordVector(graph, model_params.lookup_table.nVSize,
-                model_params.lookup_table.E, *decoder_to_wordvector);
+        Node *wordvector_to_onehot = linearWordVector(graph,
+                model_params.decoder_lookup_table.nVSize, model_params.decoder_lookup_table.E,
+                *decoder_to_wordvector);
         Node *softmax = n3ldg_plus::softmax(graph, *wordvector_to_onehot);
         decoder_components.wordvector_to_onehots.push_back(softmax);
     }
@@ -425,7 +426,7 @@ struct GraphBuilder {
                             beam_search_result.getPath();
 
                         int last_word_id = word_ids.at(word_ids.size() - 1).word_id;
-                        const string &word = model_params.lookup_table.elems.from_id(
+                        const string &word = model_params.decoder_lookup_table.elems.from_id(
                                 last_word_id);
                         if (word == STOP_SYMBOL) {
                             word_ids_result.push_back(make_pair(word_ids,
@@ -469,7 +470,7 @@ struct GraphBuilder {
         for (const auto &pair : word_ids_result) {
             const vector<WordIdAndProbability> ids = pair.first;
             cout << boost::format("beam result:%1%") % exp(pair.second) << endl;
-            printWordIds(ids, model_params.lookup_table);
+            printWordIds(ids, model_params.decoder_lookup_table);
         }
 
         auto compair = [](const pair<vector<WordIdAndProbability>, dtype> &a,
