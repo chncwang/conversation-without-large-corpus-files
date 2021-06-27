@@ -167,6 +167,8 @@ HyperParams parseHyperParams(INIReader &ini_reader) {
     }
     hyper_params.batch_size = batch_size;
 
+    hyper_params.clip_grad = ini_reader.GetReal("hyper", "clip_grad", 10.0);
+
     float learning_rate = ini_reader.GetReal("hyper", "learning_rate", 0.001f);
     if (learning_rate <= 0.0f) {
         cerr << "learning_rate wrong" << endl;
@@ -849,6 +851,9 @@ int main(int argc, char *argv[]) {
                         sqrt(iteration);
                     optimizer.setLearningRate(lr);
                 }
+                if (batch_i % 10 == 5) {
+                    cout << "lr:" << optimizer.getLearningRate() << endl;
+                }
 
                 vector<Node *> decoder_outputs;
                 for (int i = 0; i < batch_size; ++i) {
@@ -946,7 +951,11 @@ int main(int argc, char *argv[]) {
 //                            "");
 //                }
 
-                optimizer.step();
+                if (hyper_params.clip_grad > 1e4) {
+                    optimizer.step();
+                } else {
+                    optimizer.step(hyper_params.clip_grad);
+                }
                 auto stop = high_resolution_clock::now();
                 auto duration = duration_cast<milliseconds>(stop - start);
                 duration_count = 0.99 * duration_count + 0.01 * duration.count();
