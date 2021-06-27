@@ -280,11 +280,8 @@ float metricTestPosts(const HyperParams &hyper_params, ModelParams &model_params
     float perplex(0.0f), corpus_hit_sum(0);
     vector<int> corpus_pos_hit_amount, corpus_pos_amount;
     int size_sum = 0;
-    thread_pool pool(16);
-    mutex perplex_mutex;
 
     for (const PostAndResponses &post_and_responses : post_and_responses_vector) {
-        auto f = [&]() {
             cout << "post:" << endl;
             print(post_sentences.at(post_and_responses.post_id));
 
@@ -333,7 +330,6 @@ float metricTestPosts(const HyperParams &hyper_params, ModelParams &model_params
                 cout << i << " " << static_cast<float>(post_hit_counts.at(i)) /
                         post_pos_amounts.at(i) << endl;
             }
-            perplex_mutex.lock();
             perplex += sum;
             corpus_hit_sum += hit_sum;
             size_sum += word_sum;
@@ -348,12 +344,7 @@ float metricTestPosts(const HyperParams &hyper_params, ModelParams &model_params
                 }
                 corpus_pos_hit_amount.at(i) += post_hit_counts.at(i);
             }
-
-            perplex_mutex.unlock();
-        };
-        post(pool, f);
     }
-    pool.join();
 
     perplex = exp(perplex / size_sum);
     cout << "total avg perplex:" << perplex << endl;
