@@ -4,57 +4,42 @@
 #include <fstream>
 #include <iostream>
 
-#include "N3LDG.h"
+#include "insnet/insnet.h"
 
-struct ModelParams : public N3LDGSerializable, public TunableCombination<BaseParam>
+using namespace insnet;
+
+struct ModelParams : public TunableParamCollection
 #if USE_GPU
-, public TransferableComponents
+, public cuda::TransferableComponents
 #endif
 {
-    LookupTable<SparseParam> encoder_lookup_table;
-    LookupTable<Param> decoder_lookup_table;
-    UniParams hidden_to_wordvector_params;
-    LSTM1Params left_to_right_encoder_params;
-    LSTM1Params left_to_right_decoder_params;
+    Embedding<Param> lookup_table;
+    LSTMParams l2r_encoder_params;
+    LSTMParams r2l_encoder_params;
+    LSTMParams decoder_params;
     AdditiveAttentionParams attention_params;
 
-    ModelParams() : encoder_lookup_table("encoder_lookup_table"),
-    decoder_lookup_table("decoder_lookup_table"),
-    hidden_to_wordvector_params("hidden_to_wordvector_params"),
-    left_to_right_encoder_params("encoder"), left_to_right_decoder_params("decoder"),
+    ModelParams() : l2r_encoder_params("l2r_encoder_params"),
+    r2l_encoder_params("r2l_encoder_params"), decoder_params("decoder_params"),
     attention_params("attention_params") {}
 
-    Json::Value toJson() const override {
-        Json::Value json;
-        json["encoder_lookup_table"] = encoder_lookup_table.toJson();
-        json["decoder_lookup_table"] = decoder_lookup_table.toJson();
-        json["hidden_to_wordvector_params"] = hidden_to_wordvector_params.toJson();
-        json["left_to_right_encoder_params"] = left_to_right_encoder_params.toJson();
-        json["left_to_right_decoder_params"] = left_to_right_decoder_params.toJson();
-        json["attention_params"] = attention_params.toJson();
-        return json;
-    }
 
-    void fromJson(const Json::Value &json) override {
-        encoder_lookup_table.fromJson(json["encoder_lookup_table"]);
-        decoder_lookup_table.fromJson(json["decoder_lookup_table"]);
-        hidden_to_wordvector_params.fromJson(json["hidden_to_wordvector_params"]);
-        left_to_right_encoder_params.fromJson(json["left_to_right_encoder_params"]);
-        left_to_right_decoder_params.fromJson(json["left_to_right_decoder_params"]);
-        attention_params.fromJson(json["attention_params"]);
+    template<typename Archive>
+    void serialize(Archive &ar) {
+        ar(lookup_table, l2r_encoder_params, r2l_encoder_params, decoder_params, attention_params);
     }
 
 #if USE_GPU
-    std::vector<n3ldg_cuda::Transferable *> transferablePtrs() override {
-        return {&encoder_lookup_table, &decoder_lookup_table, &hidden_to_wordvector_params,
-            &left_to_right_encoder_params, &left_to_right_decoder_params, &attention_params};
+    std::vector<cuda::Transferable *> transferablePtrs() override {
+        return {&lookup_table, &l2r_encoder_params, &r2l_encoder_params, &decoder_params,
+            &attention_params};
     }
 #endif
 
 protected:
-    virtual std::vector<Tunable<BaseParam>*> tunableComponents() override {
-        return {&encoder_lookup_table, &decoder_lookup_table, &hidden_to_wordvector_params,
-            &left_to_right_encoder_params, &left_to_right_decoder_params, &attention_params};
+    virtual std::vector<TunableParam *> tunableComponents() override {
+        return {&lookup_table, &l2r_encoder_params, &r2l_encoder_params, &decoder_params,
+            &attention_params};
     }
 };
 

@@ -19,9 +19,10 @@
 #include "tinyutf8.h"
 #include "mteval/NISTEvaluator.h"
 #include "mteval/BLEUEvaluator.h"
-#include "N3LDG.h"
+#include "insnet/insnet.h"
 
 using namespace std;
+using namespace insnet;
 
 struct CandidateAndReferences {
     vector<string> candidate;
@@ -399,70 +400,73 @@ float vectorCos(const dtype *a, const dtype *b, int len) {
 }
 
 float greedyMatching(const vector<string> &a, const vector<string> &b,
-        LookupTable<Param>& embedding_table) {
-    float max_cos_sum = 0;
-    for (const auto &candidate_word : a) {
-        float max_cos = -2;
-        for (const auto &ref_word : b) {
-            int candidate_id = embedding_table.elems.from_string(candidate_word);
-            dtype *candidate_vector = embedding_table.E.val[candidate_id];
-            int ref_id = embedding_table.elems.from_string(ref_word);
-            dtype *ref_vector = embedding_table.E.val[ref_id];
-            float cos = vectorCos(candidate_vector, ref_vector, embedding_table.E.outDim());
-            if (cos > max_cos) {
-                max_cos = cos;
-            }
-        }
-        max_cos_sum += max_cos;
-    }
-    return max_cos_sum / a.size();
+        Embedding<Param>& embedding_table) {
+    return 0;
+//    float max_cos_sum = 0;
+//    for (const auto &candidate_word : a) {
+//        float max_cos = -2;
+//        for (const auto &ref_word : b) {
+//            int candidate_id = embedding_table.vocab.from_string(candidate_word);
+//            dtype *candidate_vector = embedding_table.E.val[candidate_id];
+//            int ref_id = embedding_table.elems.from_string(ref_word);
+//            dtype *ref_vector = embedding_table.E.val[ref_id];
+//            float cos = vectorCos(candidate_vector, ref_vector, embedding_table.E.outDim());
+//            if (cos > max_cos) {
+//                max_cos = cos;
+//            }
+//        }
+//        max_cos_sum += max_cos;
+//    }
+//    return max_cos_sum / a.size();
 }
 
 float computeGreedyMatching(const CandidateAndReferences &candidate_and_refs,
-        LookupTable<Param>& embedding_table) {
-    const auto &refs = candidate_and_refs.references;
-    float max_g = -2;
-    for (const auto &ref : refs) {
-        auto known_ref = ref;
-        for (auto &w : known_ref) {
-            if (!embedding_table.findElemId(w)) {
-                w = unknownkey;
-            }
-        }
-        float g = 0.5 * (greedyMatching(known_ref, candidate_and_refs.candidate, embedding_table) +
-            greedyMatching(candidate_and_refs.candidate, known_ref, embedding_table));
-        if (g > max_g) {
-            max_g = g;
-        }
-    }
-    return max_g;
+        Embedding<Param>& embedding_table) {
+    return 0;
+//    const auto &refs = candidate_and_refs.references;
+//    float max_g = -2;
+//    for (const auto &ref : refs) {
+//        auto known_ref = ref;
+//        for (auto &w : known_ref) {
+//            if (!embedding_table.findElemId(w)) {
+//                w = unknownkey;
+//            }
+//        }
+//        float g = 0.5 * (greedyMatching(known_ref, candidate_and_refs.candidate, embedding_table) +
+//            greedyMatching(candidate_and_refs.candidate, known_ref, embedding_table));
+//        if (g > max_g) {
+//            max_g = g;
+//        }
+//    }
+//    return max_g;
 }
 
-vector<float> sentenceAvgEmbedding(const vector<string> &s, LookupTable<Param>& embedding_table) {
+vector<float> sentenceAvgEmbedding(const vector<string> &s, Embedding<Param>& embedding_table) {
     vector<float> result;
-    int dim = embedding_table.E.outDim();
-    result.resize(dim);
-    for (int i = 0; i < embedding_table.E.outDim(); ++i) {
-        result.at(i) = 0;
-    }
-
-    for (const string &w : s) {
-        int word_id = embedding_table.elems.from_string(w);
-        dtype *emb_vector = embedding_table.E.val[word_id];
-        for (int i = 0; i < dim; ++i) {
-            result.at(i) += emb_vector[i];
-        }
-    }
-
-    for (float &v : result) {
-        v /= s.size();
-    }
-
     return result;
+//    int dim = embedding_table.E.outDim();
+//    result.resize(dim);
+//    for (int i = 0; i < embedding_table.E.outDim(); ++i) {
+//        result.at(i) = 0;
+//    }
+
+//    for (const string &w : s) {
+//        int word_id = embedding_table.elems.from_string(w);
+//        dtype *emb_vector = embedding_table.E.val[word_id];
+//        for (int i = 0; i < dim; ++i) {
+//            result.at(i) += emb_vector[i];
+//        }
+//    }
+
+//    for (float &v : result) {
+//        v /= s.size();
+//    }
+
+//    return result;
 }
 
 float embeddingAvg(const vector<string> &a, const vector<string> &b,
-        LookupTable<Param>& embedding_table) {
+        Embedding<Param>& embedding_table) {
     auto av = sentenceAvgEmbedding(a, embedding_table);
     auto bv = sentenceAvgEmbedding(b, embedding_table);
     if (av.size() != bv.size()) {
@@ -473,14 +477,14 @@ float embeddingAvg(const vector<string> &a, const vector<string> &b,
 }
 
 float computeEmbeddingAvg(const CandidateAndReferences &candidate_and_refs,
-        LookupTable<Param>& embedding_table) {
+        Embedding<Param>& embedding_table) {
     const auto &refs = candidate_and_refs.references;
     float max_avg = -1e10;
     for (const auto &ref : refs) {
         auto known_ref = ref;
         for (auto &w : known_ref) {
             if (!embedding_table.findElemId(w)) {
-                w = unknownkey;
+                w = insnet::UNKNOWN_WORD;
             }
         }
         float avg = embeddingAvg(known_ref, candidate_and_refs.candidate, embedding_table);
@@ -491,30 +495,30 @@ float computeEmbeddingAvg(const CandidateAndReferences &candidate_and_refs,
     return max_avg;
 }
 
-vector<float> sentenceExtrema(const vector<string> &s, LookupTable<Param>& embedding_table) {
+vector<float> sentenceExtrema(const vector<string> &s, Embedding<Param>& embedding_table) {
     vector<float> result;
-    int dim = embedding_table.E.outDim();
-    result.resize(dim);
-    for (int i = 0; i < embedding_table.E.outDim(); ++i) {
-        result.at(i) = 0;
-    }
+//    int dim = embedding_table.E.outDim();
+//    result.resize(dim);
+//    for (int i = 0; i < embedding_table.E.outDim(); ++i) {
+//        result.at(i) = 0;
+//    }
 
-    for (const string &w : s) {
-        int word_id = embedding_table.elems.from_string(w);
-        dtype *emb_vector = embedding_table.E.val[word_id];
-        for (int i = 0; i < dim; ++i) {
-            result.at(i) += emb_vector[i];
-            if (abs(emb_vector[i]) > abs(result.at(i))) {
-                result.at(i) = emb_vector[i];
-            }
-        }
-    }
+//    for (const string &w : s) {
+//        int word_id = embedding_table.elems.from_string(w);
+//        dtype *emb_vector = embedding_table.E.val[word_id];
+//        for (int i = 0; i < dim; ++i) {
+//            result.at(i) += emb_vector[i];
+//            if (abs(emb_vector[i]) > abs(result.at(i))) {
+//                result.at(i) = emb_vector[i];
+//            }
+//        }
+//    }
 
     return result;
 }
 
 float extrema(const vector<string> &a, const vector<string> &b,
-        LookupTable<Param>& embedding_table) {
+        Embedding<Param>& embedding_table) {
     auto av = sentenceExtrema(a, embedding_table);
     auto bv = sentenceExtrema(b, embedding_table);
     if (av.size() != bv.size()) {
@@ -525,14 +529,14 @@ float extrema(const vector<string> &a, const vector<string> &b,
 }
 
 float computeExtrema(const CandidateAndReferences &candidate_and_refs,
-        LookupTable<Param>& embedding_table) {
+        Embedding<Param>& embedding_table) {
     const auto &refs = candidate_and_refs.references;
     float max_avg = -1e10;
     for (const auto &ref : refs) {
         auto known_ref = ref;
         for (auto &w : known_ref) {
             if (!embedding_table.findElemId(w)) {
-                w = unknownkey;
+                w = insnet::UNKNOWN_WORD;
             }
         }
         float avg = extrema(known_ref, candidate_and_refs.candidate, embedding_table);
