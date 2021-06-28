@@ -19,6 +19,7 @@ enum Optimizer {
 
 struct HyperParams {
     int hidden_dim;
+    int word_dim;
     int batch_size;
     dtype learning_rate;
     dtype dropout;
@@ -29,12 +30,13 @@ struct HyperParams {
 
     template<typename Archive>
     void serialize(Archive &ar) {
-        ar(hidden_dim, batch_size, learning_rate, dropout, warm_up_iterations, word_cutoff,
-                optimizer, clip_grad);
+        ar(hidden_dim, word_dim, batch_size, learning_rate, dropout, warm_up_iterations,
+                word_cutoff, optimizer, clip_grad);
     }
 
     void print() const {
         std::cout << "hidden_dim:" << hidden_dim << std::endl
+            << "word_dim:" << word_dim << std::endl
             << "batch_size:" << batch_size << std::endl
             << "learning_rate:" << learning_rate << std::endl
             << "clip_grad:" << clip_grad << std::endl

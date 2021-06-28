@@ -316,7 +316,8 @@ struct GraphBuilder {
         }
 
         Node *hidden_matrix = cat(decoder_hiddens);
-        Node *onehot = linear(*hidden_matrix, model_params.lookup_table.E);
+        Node *hidden_linear = linear(*hidden_matrix, model_params.output_params);
+        Node *onehot = linear(*hidden_linear, model_params.lookup_table.E);
         Node *softmax = insnet::softmax(*onehot, model_params.lookup_table.size());
         return softmax;
     }
