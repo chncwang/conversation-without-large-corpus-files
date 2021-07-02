@@ -701,6 +701,7 @@ int main(int argc, char *argv[]) {
         };
         wordStat();
         word_counts[insnet::UNKNOWN_WORD] = 1000000000;
+        word_counts[BEGIN_SYMBOL] = 1000000000;
         alphabet.init(word_counts, hyper_params.word_cutoff);
         cout << boost::format("post alphabet size:%1%") % alphabet.size() << endl;
     }
@@ -788,16 +789,16 @@ int main(int argc, char *argv[]) {
             grad_checker.init(model_params.tunableParams());
         }
 
-        dtype loss_sum = 0.0f;
 
         insnet::Profiler &profiler = insnet::Profiler::Ins();
         profiler.SetEnabled(false);
         profiler.BeginEvent("total");
 
         string last_saved_model;
-        int corpus_word_sum = 0;
 
         for (int epoch = saved_epoch + 1; epoch < default_config.max_epoch; ++epoch) {
+            dtype loss_sum = 0.0f;
+            int corpus_word_sum = 0;
             cout << "epoch:" << epoch << endl;
 
             auto cmp = [&] (const ConversationPair &a, const ConversationPair &b)->bool {
@@ -896,8 +897,8 @@ int main(int argc, char *argv[]) {
                 }
 
                 float loss = insnet::NLLLoss(decoder_outputs,
-                        model_params.lookup_table.size(), total_word_ids, 1.0/ word_sum);
-                loss_sum += loss * word_sum;
+                        model_params.lookup_table.size(), total_word_ids, 1.0);
+                loss_sum += loss;
 
                 auto predicted_ids = argmax(decoder_outputs, model_params.lookup_table.nVSize);
                 for (int i = 0; i < predicted_ids.size(); ++i) {
