@@ -17,12 +17,12 @@ struct ModelParams : public TunableParamCollection
     LSTMParams l2r_encoder_params;
     LSTMParams r2l_encoder_params;
     LSTMParams decoder_params;
-    LinearParams output_params;
     AdditiveAttentionParams attention_params;
+    LinearParams output_params;
 
     ModelParams() : l2r_encoder_params("l2r_encoder_params"),
     r2l_encoder_params("r2l_encoder_params"), decoder_params("decoder_params"),
-    output_params("output_params"), attention_params("attention_params") {}
+    attention_params("attention_params"), output_params("output_params") {}
 
 
     template<typename Archive>

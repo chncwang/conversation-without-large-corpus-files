@@ -714,14 +714,14 @@ int main(int argc, char *argv[]) {
             ModelParams &model_params,
             const Vocab *alphabet) {
         if (alphabet != nullptr) {
-            model_params.lookup_table.init(*alphabet, hyper_params.word_dim, true);
+            model_params.lookup_table.init(*alphabet, hyper_params.hidden_dim, true);
         }
         model_params.attention_params.init(hyper_params.hidden_dim * 2, hyper_params.hidden_dim);
-        model_params.l2r_encoder_params.init(hyper_params.hidden_dim, hyper_params.word_dim);
-        model_params.r2l_encoder_params.init(hyper_params.hidden_dim, hyper_params.word_dim);
+        model_params.output_params.init(hyper_params.hidden_dim, hyper_params.hidden_dim * 2);
+        model_params.l2r_encoder_params.init(hyper_params.hidden_dim, hyper_params.hidden_dim);
+        model_params.r2l_encoder_params.init(hyper_params.hidden_dim, hyper_params.hidden_dim);
         model_params.decoder_params.init(hyper_params.hidden_dim,
-                2 * hyper_params.hidden_dim + hyper_params.word_dim);
-        model_params.output_params.init(hyper_params.word_dim, hyper_params.hidden_dim);
+                2 * hyper_params.hidden_dim + hyper_params.hidden_dim);
     };
 
     int saved_epoch = -1;

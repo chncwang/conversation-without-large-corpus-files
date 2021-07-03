@@ -312,12 +312,13 @@ struct GraphBuilder {
                     model_params.attention_params).first;
             Node *in = cat({emb, context});
             last_state = lstm(last_state, *in, model_params.decoder_params, hyper_params.dropout);
-            decoder_hiddens.push_back(last_state.hidden);
+            Node *o = cat({last_state.hidden, emb});
+            decoder_hiddens.push_back(o);
         }
 
         Node *hidden_matrix = cat(decoder_hiddens);
-        Node *hidden_linear = linear(*hidden_matrix, model_params.output_params);
-        Node *onehot = linear(*hidden_linear, model_params.lookup_table.E);
+        hidden_matrix = linear(*hidden_matrix, model_params.output_params);
+        Node *onehot = linear(*hidden_matrix, model_params.lookup_table.E);
         Node *softmax = insnet::softmax(*onehot, model_params.lookup_table.size());
         return softmax;
     }
