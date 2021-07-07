@@ -1056,28 +1056,14 @@ int main(int argc, char *argv[]) {
                 model_params.lookup_table.init(*alphabet, hyper_params.word_dim, true);
             }
         }
-        model_params.attention_params.init(hyper_params.hidden_dim, hyper_params.hidden_dim);
-        model_params.left_to_right_encoder_params.init(hyper_params.hidden_dim,
-                hyper_params.word_dim);
-        model_params.left_to_right_decoder_params.init(hyper_params.hidden_dim,
-                2 * hyper_params.word_dim + hyper_params.hidden_dim);
-        function<void(UniParams &, int)> init_param = [&](UniParams &params, int layer) {
-            int in_dim, dim;
-            if (layer == 0) {
-                in_dim = 2 * hyper_params.hidden_dim + 2 * hyper_params.word_dim;
-                dim = hyper_params.hidden_dim;
-            } else if (layer == 2) {
-                in_dim = hyper_params.hidden_dim;
-                dim = hyper_params.word_dim;
-            } else {
-                in_dim = hyper_params.hidden_dim;
-                dim = hyper_params.hidden_dim;
-            }
-            params.init(dim, in_dim, false);
-        };
+        model_params.attention_params.init(2 * hyper_params.hidden_dim, hyper_params.hidden_dim);
+        model_params.l2r_encoder_params.init(hyper_params.hidden_dim, hyper_params.word_dim);
+        model_params.r2l_encoder_params.init(hyper_params.hidden_dim, hyper_params.word_dim);
+        model_params.decoder_params.init(hyper_params.hidden_dim, 2 * hyper_params.word_dim +
+                2 * hyper_params.hidden_dim);
         model_params.hidden_to_wordvector_params.init(3, init_param);
         model_params.hidden_to_keyword_params.init(hyper_params.word_dim,
-                2 * hyper_params.hidden_dim, false);
+                3 * hyper_params.hidden_dim, true);
     };
 
     if (default_config.program_mode != ProgramMode::METRIC) {

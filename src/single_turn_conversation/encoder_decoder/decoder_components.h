@@ -2,9 +2,12 @@
 #define SINGLE_TURN_CONVERSATION_SRC_ENCODER_DECODER_DECODER_COMPONENTS_H
 
 #include <memory>
-#include "N3LDG.h"
+#include "insnet/insnet.h"
 #include "single_turn_conversation/encoder_decoder/model_params.h"
 #include "single_turn_conversation/encoder_decoder/hyper_params.h"
+
+using namespace insnet;
+using namespace std;
 
 struct ResultAndKeywordVectors {
     Node *result;
