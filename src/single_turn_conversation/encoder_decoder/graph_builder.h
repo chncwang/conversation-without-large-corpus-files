@@ -293,7 +293,7 @@ struct GraphBuilder {
     }
 
     Node *forwardDecoder(const vector<string> &answer, const HyperParams &hyper_params,
-            ModelParams &model_params) {
+            ModelParams &model_params, Node &emb) {
         using namespace insnet;
 
         vector<string> words;
@@ -318,7 +318,8 @@ struct GraphBuilder {
 
         Node *hidden_matrix = cat(decoder_hiddens);
         hidden_matrix = linear(*hidden_matrix, model_params.output_params);
-        Node *onehot = linear(*hidden_matrix, model_params.lookup_table.E);
+//        Node *onehot = linear(*hidden_matrix, model_params.lookup_table.E);
+        Node *onehot = insnet::matmul(emb, *hidden_matrix, hyper_params.word_dim, true);
         Node *softmax = insnet::softmax(*onehot, model_params.lookup_table.size());
         return softmax;
     }

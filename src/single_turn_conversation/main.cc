@@ -278,87 +278,86 @@ float metricTestPosts(const HyperParams &hyper_params, ModelParams &model_params
         const vector<PostAndResponses> &post_and_responses_vector,
         const vector<vector<string>> &post_sentences,
         const vector<vector<string>> &response_sentences) {
-    cout << "metricTestPosts begin" << endl;
-    hyper_params.print();
-    float perplex(0.0f), corpus_hit_sum(0);
-    vector<int> corpus_pos_hit_amount, corpus_pos_amount;
-    int size_sum = 0;
+//    cout << "metricTestPosts begin" << endl;
+//    hyper_params.print();
+//    float perplex(0.0f), corpus_hit_sum(0);
+//    vector<int> corpus_pos_hit_amount, corpus_pos_amount;
+//    int size_sum = 0;
 
-    for (const PostAndResponses &post_and_responses : post_and_responses_vector) {
-            cout << "post:" << endl;
-            print(post_sentences.at(post_and_responses.post_id));
+//    for (const PostAndResponses &post_and_responses : post_and_responses_vector) {
+//            cout << "post:" << endl;
+//            print(post_sentences.at(post_and_responses.post_id));
 
-            const vector<int> &response_ids = post_and_responses.response_ids;
-            float sum = 0.0f;
-            int hit_sum = 0;
-            int word_sum = 0;
-            vector<int> post_hit_counts, post_pos_amounts;
-            cout << "response size:" << response_ids.size() << endl;
-            for (int response_id : response_ids) {
-                //            cout << "response:" << endl;
-                //            print(response_sentences.at(response_id));
-                Graph graph(ModelStage::INFERENCE);
-                GraphBuilder graph_builder;
-                graph_builder.forward(graph, post_sentences.at(post_and_responses.post_id),
-                        hyper_params, model_params);
-                Node *node = graph_builder.forwardDecoder(response_sentences.at(response_id),
-                        hyper_params, model_params);
-                graph.forward();
-                vector<int> word_ids = transferVector<int, string>(
-                        response_sentences.at(response_id), [&](const string &w) -> int {
-                        return model_params.lookup_table.getElemId(w);
-                        });
-                int hit_count;
-                vector<int> hit_flags;
-                float perplex = computePerplex(*node, model_params.lookup_table.vocab.size(),
-                        word_ids, hit_count, hit_flags, 5);
-                sum += perplex;
-                hit_sum += hit_count;
-                word_sum += word_ids.size();
-                for (int i = 0; i < hit_flags.size(); ++i) {
-                    if (post_hit_counts.size() <= i) {
-                        post_hit_counts.push_back(0);
-                    }
-                    post_hit_counts.at(i) += hit_flags.at(i);
+//            const vector<int> &response_ids = post_and_responses.response_ids;
+//            float sum = 0.0f;
+//            int hit_sum = 0;
+//            int word_sum = 0;
+//            vector<int> post_hit_counts, post_pos_amounts;
+//            cout << "response size:" << response_ids.size() << endl;
+//            for (int response_id : response_ids) {
+                            cout << "response:" << endl;
+//                Graph graph(ModelStage::INFERENCE);
+//                GraphBuilder graph_builder;
+//                graph_builder.forward(graph, post_sentences.at(post_and_responses.post_id),
+//                        hyper_params, model_params);
+//                Node *node = graph_builder.forwardDecoder(response_sentences.at(response_id),
+//                        hyper_params, model_params);
+//                graph.forward();
+//                vector<int> word_ids = transferVector<int, string>(
+//                        response_sentences.at(response_id), [&](const string &w) -> int {
+//                        return model_params.lookup_table.getElemId(w);
+//                        });
+//                int hit_count;
+//                vector<int> hit_flags;
+//                float perplex = computePerplex(*node, model_params.lookup_table.vocab.size(),
+//                        word_ids, hit_count, hit_flags, 5);
+//                sum += perplex;
+//                hit_sum += hit_count;
+//                word_sum += word_ids.size();
+//                for (int i = 0; i < hit_flags.size(); ++i) {
+//                    if (post_hit_counts.size() <= i) {
+//                        post_hit_counts.push_back(0);
+//                    }
+//                    post_hit_counts.at(i) += hit_flags.at(i);
 
-                    if (post_pos_amounts.size() <= i) {
-                        post_pos_amounts.push_back(0);
-                    }
-                    ++ post_pos_amounts.at(i);
-                }
-            }
-            cout << "avg_perplex:" << exp(sum/word_sum) << endl;
-            cout << "avg_hit:" << static_cast<float>(hit_sum) / word_sum << endl;
-            for (int i = 0; i < post_hit_counts.size(); ++i) {
-                cout << i << " " << static_cast<float>(post_hit_counts.at(i)) /
-                        post_pos_amounts.at(i) << endl;
-            }
-            perplex += sum;
-            corpus_hit_sum += hit_sum;
-            size_sum += word_sum;
+//                    if (post_pos_amounts.size() <= i) {
+//                        post_pos_amounts.push_back(0);
+//                    }
+//                    ++ post_pos_amounts.at(i);
+//                }
+//            }
+//            cout << "avg_perplex:" << exp(sum/word_sum) << endl;
+//            cout << "avg_hit:" << static_cast<float>(hit_sum) / word_sum << endl;
+//            for (int i = 0; i < post_hit_counts.size(); ++i) {
+//                cout << i << " " << static_cast<float>(post_hit_counts.at(i)) /
+//                        post_pos_amounts.at(i) << endl;
+//            }
+//            perplex += sum;
+//            corpus_hit_sum += hit_sum;
+//            size_sum += word_sum;
 
-            for (int i = 0; i < post_hit_counts.size(); ++i) {
-                if (corpus_pos_amount.size() <= i) {
-                    corpus_pos_amount.push_back(0);
-                }
-                corpus_pos_amount.at(i) += post_pos_amounts.at(i);
-                if (corpus_pos_hit_amount.size() <= i) {
-                    corpus_pos_hit_amount.push_back(0);
-                }
-                corpus_pos_hit_amount.at(i) += post_hit_counts.at(i);
-            }
-    }
+//            for (int i = 0; i < post_hit_counts.size(); ++i) {
+//                if (corpus_pos_amount.size() <= i) {
+//                    corpus_pos_amount.push_back(0);
+//                }
+//                corpus_pos_amount.at(i) += post_pos_amounts.at(i);
+//                if (corpus_pos_hit_amount.size() <= i) {
+//                    corpus_pos_hit_amount.push_back(0);
+//                }
+//                corpus_pos_hit_amount.at(i) += post_hit_counts.at(i);
+//            }
+//    }
 
-    perplex = exp(perplex / size_sum);
-    cout << "total avg perplex:" << perplex << endl;
-    cout << "corpus hit rate:" << static_cast<float>(corpus_hit_sum) / size_sum << endl;
-    cout << "corpus_pos_hit_amount size:" << corpus_pos_hit_amount.size() << endl;
-    for (int i = 0; i < corpus_pos_hit_amount.size(); ++i) {
-        cout << boost::format("pos:%1% hit:%2% all:%3% rate:%4%") % i %
-            corpus_pos_hit_amount.at(i) % corpus_pos_amount.at(i) %
-            (static_cast<float>(corpus_pos_hit_amount.at(i)) / corpus_pos_amount.at(i)) << endl;
-    }
-    return perplex;
+//    perplex = exp(perplex / size_sum);
+//    cout << "total avg perplex:" << perplex << endl;
+//    cout << "corpus hit rate:" << static_cast<float>(corpus_hit_sum) / size_sum << endl;
+//    cout << "corpus_pos_hit_amount size:" << corpus_pos_hit_amount.size() << endl;
+//    for (int i = 0; i < corpus_pos_hit_amount.size(); ++i) {
+//        cout << boost::format("pos:%1% hit:%2% all:%3% rate:%4%") % i %
+//            corpus_pos_hit_amount.at(i) % corpus_pos_amount.at(i) %
+//            (static_cast<float>(corpus_pos_hit_amount.at(i)) / corpus_pos_amount.at(i)) << endl;
+//    }
+//    return perplex;
 }
 
 void computeMeanAndStandardDeviation(const vector<float> &nums, float &mean, float &sd) {
@@ -785,9 +784,9 @@ int main(int argc, char *argv[]) {
         insnet::AdamOptimzer optimizer(model_params.tunableParams());
 
         CheckGrad grad_checker;
-        if (default_config.check_grad) {
-            grad_checker.init(model_params.tunableParams());
-        }
+#if !USE_FLOAT
+        grad_checker.init(model_params.tunableParams());
+#endif
 
 
         insnet::Profiler &profiler = insnet::Profiler::Ins();
@@ -859,6 +858,8 @@ int main(int argc, char *argv[]) {
                     cout << "lr:" << optimizer.getLearningRate() << endl;
                 }
 
+                Node *emb_node = insnet::param(graph, model_params.lookup_table.E);
+
                 vector<Node *> decoder_outputs;
                 for (int i = 0; i < batch_size; ++i) {
                     shared_ptr<GraphBuilder> graph_builder(new GraphBuilder);
@@ -871,7 +872,7 @@ int main(int argc, char *argv[]) {
                             model_params);
                     int response_id = train_conversation_pairs.at(instance_index).response_id;
                     Node *node = graph_builder->forwardDecoder(response_sentences.at(response_id),
-                            hyper_params, model_params);
+                            hyper_params, model_params, *emb_node);
                     decoder_outputs.push_back(node);
                 }
                 profiler.EndCudaEvent();
@@ -926,34 +927,35 @@ int main(int argc, char *argv[]) {
 
                 graph.backward();
 
-//                if (default_config.check_grad) {
-//                    auto loss_function = [&](const ConversationPair &conversation_pair) -> dtype {
-//                        GraphBuilder graph_builder;
-//                        Graph graph(false);
+#if !USE_FLOAT
+                 {
+                    auto loss_function = [&](const ConversationPair &conversation_pair) -> dtype {
+                        GraphBuilder graph_builder;
+                        Graph graph;
 
-//                        graph_builder.forward(graph, post_sentences.at(conversation_pair.post_id),
-//                                hyper_params, model_params, true);
+                        graph_builder.forward(graph, post_sentences.at(conversation_pair.post_id),
+                                hyper_params, model_params);
 
-//                        DecoderComponents decoder_components;
-//                        graph_builder.forwardDecoder(graph, decoder_components,
-//                                response_sentences.at(conversation_pair.response_id),
-//                                hyper_params, model_params, true);
+                        Node *emb = param(graph, model_params.lookup_table.E);
+                        Node *node = graph_builder.forwardDecoder(
+                                response_sentences.at(conversation_pair.response_id),
+                                hyper_params, model_params, *emb);
 
-//                        graph.compute();
+                        graph.forward();
 
-//                        vector<int> word_ids = toIds(response_sentences.at(
-//                                    conversation_pair.response_id),
-//                                model_params.decoder_lookup_table);
-//                        vector<Node*> result_nodes = toNodePointers(
-//                                decoder_components.wordvector_to_onehots);
-//                        return maxLogProbabilityLoss(result_nodes, word_ids, 1.0 /
-//                                word_ids.size()).first;
-//                    };
-//                    cout << format("checking grad - conversation_pair size:%1%") %
-//                        conversation_pair_in_batch.size() << endl;
-//                    grad_checker.check<ConversationPair>(loss_function, conversation_pair_in_batch,
-//                            "");
-//                }
+                        vector<int> word_ids = toIds(response_sentences.at(
+                                    conversation_pair.response_id),
+                                model_params.lookup_table);
+                        vector<Node *> nodes = {node};
+                        vector<vector<int>> ids_arr = {word_ids};
+                        return NLLLoss(nodes, model_params.lookup_table.size(), ids_arr, 1.0);
+                    };
+                    cout << format("checking grad - conversation_pair size:%1%") %
+                        conversation_pair_in_batch.size() << endl;
+                    grad_checker.check<ConversationPair>(loss_function, conversation_pair_in_batch,
+                            "");
+                }
+#endif
 
                 if (hyper_params.clip_grad > 1e4) {
                     optimizer.step();

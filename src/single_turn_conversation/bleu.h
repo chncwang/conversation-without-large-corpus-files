@@ -441,8 +441,8 @@ float computeGreedyMatching(const CandidateAndReferences &candidate_and_refs,
 //    return max_g;
 }
 
-vector<float> sentenceAvgEmbedding(const vector<string> &s, Embedding<Param>& embedding_table) {
-    vector<float> result;
+vector<dtype> sentenceAvgEmbedding(const vector<string> &s, Embedding<Param>& embedding_table) {
+    vector<dtype> result;
     return result;
 //    int dim = embedding_table.E.outDim();
 //    result.resize(dim);
@@ -495,8 +495,8 @@ float computeEmbeddingAvg(const CandidateAndReferences &candidate_and_refs,
     return max_avg;
 }
 
-vector<float> sentenceExtrema(const vector<string> &s, Embedding<Param>& embedding_table) {
-    vector<float> result;
+vector<dtype> sentenceExtrema(const vector<string> &s, Embedding<Param>& embedding_table) {
+    vector<dtype> result;
 //    int dim = embedding_table.E.outDim();
 //    result.resize(dim);
 //    for (int i = 0; i < embedding_table.E.outDim(); ++i) {
