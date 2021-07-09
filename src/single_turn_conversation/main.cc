@@ -23,7 +23,7 @@
 #include <boost/algorithm/string/regex.hpp>
 #include <boost/filesystem.hpp>
 #include <boost/range/iterator_range.hpp>
-#include "N3LDG.h"
+#include "insnet/insnet.h"
 #include "single_turn_conversation/data_manager.h"
 #include "single_turn_conversation/def.h"
 #include "single_turn_conversation/bleu.h"
@@ -68,7 +68,7 @@ unordered_map<string, float> calculateIdf(const vector<vector<string>> sentences
 
     unordered_map<string, float> result;
     for (const auto &it : doc_counts) {
-        float idf = it.first == unknownkey ? 1e-3 :
+        float idf = it.first == insnet::UNKNOWN_WORD ? 1e-3 :
             log(sentences.size() / static_cast<float>(it.second));
         if (idf < 0.0) {
             cerr << "idf:" << idf << endl;
@@ -278,11 +278,11 @@ HyperParams parseHyperParams(INIReader &ini_reader) {
     hyper_params.l2_reg = l2_reg;
     string optimizer = ini_reader.Get("hyper", "optimzer", "");
     if (optimizer == "adam") {
-        hyper_params.optimizer = Optimizer::ADAM;
+        hyper_params.optimizer = ::Optimizer::ADAM;
     } else if (optimizer == "adagrad") {
-        hyper_params.optimizer = Optimizer::ADAGRAD;
+        hyper_params.optimizer = ::Optimizer::ADAGRAD;
     } else if (optimizer == "adamw") {
-        hyper_params.optimizer = Optimizer::ADAMW;
+        hyper_params.optimizer = ::Optimizer::ADAMW;
     } else {
         cerr << "invalid optimzer:" << optimizer << endl;
         abort();
@@ -291,12 +291,12 @@ HyperParams parseHyperParams(INIReader &ini_reader) {
     return hyper_params;
 }
 
-vector<int> toIds(const vector<string> &sentence, const LookupTable<Param> &lookup_table,
+vector<int> toIds(const vector<string> &sentence, const Embedding<Param> &lookup_table,
         bool permit_unkown = true) {
     vector<int> ids;
     for (const string &word : sentence) {
 	int xid = lookup_table.getElemId(word);
-        if (!permit_unkown && xid == lookup_table.elems.from_string(::unknownkey)) {
+        if (!permit_unkown && xid == lookup_table.vocab.from_string(insnet::UNKNOWN_WORD)) {
             cerr << "toIds error: unknown word " << word << endl;
             abort();
         }
@@ -313,22 +313,22 @@ vector<int> toIds(const vector<string> &sentence, const LookupTable<Param> &look
     return ids;
 }
 
-void printWordIds(const vector<int> &word_ids, const LookupTable<Param> &lookup_table) {
+void printWordIds(const vector<int> &word_ids, const Embedding<Param> &lookup_table) {
     for (int word_id : word_ids) {
-        cout << lookup_table.elems.from_id(word_id) << " ";
+        cout << lookup_table.vocab.from_id(word_id) << " ";
     }
     cout << endl;
 }
 
-void printWordIdsWithKeywords(const vector<int> &word_ids, const LookupTable<Param> &lookup_table) {
+void printWordIdsWithKeywords(const vector<int> &word_ids, const Embedding<Param> &lookup_table) {
     for (int i = 0; i < word_ids.size(); i += 2) {
         int word_id = word_ids.at(i);
-        cout << lookup_table.elems.from_id(word_id) << " ";
+        cout << lookup_table.vocab.from_id(word_id) << " ";
     }
     cout << endl;
     for (int i = 1; i < word_ids.size(); i += 2) {
         int word_id = word_ids.at(i);
-        cout << lookup_table.elems.from_id(word_id) << " ";
+        cout << lookup_table.vocab.from_id(word_id) << " ";
     }
     cout << endl;
 }
@@ -352,28 +352,28 @@ void analyze(const vector<int> &results, const vector<int> &answers, Metric &met
 
 string saveModel(const HyperParams &hyper_params, ModelParams &model_params,
         const string &filename_prefix, int epoch) {
-    cout << "saving model file..." << endl;
-    auto t = time(nullptr);
-    auto tm = *localtime(&t);
-    ostringstream oss;
-    oss << put_time(&tm, "%d-%m-%Y-%H-%M-%S");
-    string filename = filename_prefix + oss.str() + "-epoch" + to_string(epoch);
-#if USE_GPU
-    model_params.copyFromDeviceToHost();
-#endif
+//    cout << "saving model file..." << endl;
+//    auto t = time(nullptr);
+//    auto tm = *localtime(&t);
+//    ostringstream oss;
+//    oss << put_time(&tm, "%d-%m-%Y-%H-%M-%S");
+//    string filename = filename_prefix + oss.str() + "-epoch" + to_string(epoch);
+//#if USE_GPU
+//    model_params.copyFromDeviceToHost();
+//#endif
 
-    Json::Value root;
-    root["hyper_params"] = hyper_params.toJson();
-    root["model_params"] = model_params.toJson();
-    Json::StreamWriterBuilder builder;
-    builder["commentStyle"] = "None";
-    builder["indentation"] = "";
-    string json_str = Json::writeString(builder, root);
-    ofstream out(filename);
-    out << json_str;
-    out.close();
-    cout << format("model file %1% saved") % filename << endl;
-    return filename;
+//    Json::Value root;
+//    root["hyper_params"] = hyper_params.toJson();
+//    root["model_params"] = model_params.toJson();
+//    Json::StreamWriterBuilder builder;
+//    builder["commentStyle"] = "None";
+//    builder["indentation"] = "";
+//    string json_str = Json::writeString(builder, root);
+//    ofstream out(filename);
+//    out << json_str;
+//    out.close();
+//    cout << format("model file %1% saved") % filename << endl;
+//    return filename;
 }
 
 shared_ptr<Json::Value> loadModel(const string &filename) {
@@ -404,14 +404,14 @@ void loadModel(const DefaultConfig &default_config, HyperParams &hyper_params,
         ModelParams &model_params,
         const Json::Value *root,
         const function<void(const DefaultConfig &default_config, const HyperParams &hyper_params,
-            ModelParams &model_params, const Alphabet*)> &allocate_model_params) {
-    hyper_params.fromJson((*root)["hyper_params"]);
-    hyper_params.print();
-    allocate_model_params(default_config, hyper_params, model_params, nullptr);
-    model_params.fromJson((*root)["model_params"]);
-#if USE_GPU
-    model_params.copyFromHostToDevice();
-#endif
+            ModelParams &model_params, const Vocab*)> &allocate_model_params) {
+//    hyper_params.fromJson((*root)["hyper_params"]);
+//    hyper_params.print();
+//    allocate_model_params(default_config, hyper_params, model_params, nullptr);
+//    model_params.fromJson((*root)["model_params"]);
+//#if USE_GPU
+//    model_params.copyFromHostToDevice();
+//#endif
 }
 
 pair<vector<Node *>, vector<int>> keywordNodesAndIds(const DecoderComponents &decoder_components,
@@ -466,19 +466,16 @@ float metricTestPosts(const HyperParams &hyper_params, ModelParams &model_params
             for (int response_id : response_ids) {
                 print(response_sentences.at(response_id));
                 const WordIdfInfo &idf_info = response_idf_info_list.at(response_id);
-                n3ldg_cuda::Profiler &profiler = n3ldg_cuda::Profiler::Ins();
-                profiler.BeginEvent("build computation graph");
                 Graph graph;
                 GraphBuilder graph_builder;
+                Node *param_node = insnet::param(graph, model_params.lookup_table.E);
                 graph_builder.forward(graph, post_sentences.at(post_and_responses.post_id),
                         hyper_params, model_params, false);
-                DecoderComponents decoder_components;
-                graph_builder.forwardDecoder(graph, decoder_components,
+                graph_builder.forwardDecoder(graph, *graph_builder.encoder_hiddens,
                         response_sentences.at(response_id),
                         idf_info.keywords_behind,
-                        hyper_params, model_params, false);
-                profiler.EndEvent();
-                graph.compute();
+                        hyper_params, model_params, *param_node);
+                graph.forward();
                 vector<Node*> nodes = toNodePointers(decoder_components.wordvector_to_onehots);
                 vector<int> word_ids = transferVector<int, string>(
                         response_sentences.at(response_id), [&](const string &w) -> int {

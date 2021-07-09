@@ -1,7 +1,7 @@
-CMAKE_MINIMUM_REQUIRED(VERSION 2.8)
+CMAKE_MINIMUM_REQUIRED(VERSION 3.2)
 PROJECT(single-turn-conversation)
 
-SET(CMAKE_CXX_COMPILER g++)
+SET(CMAKE_CXX_COMPILER /usr/bin/g++)
 
 ######## Cross-compiler, cross-platform options
 set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -DEIGEN_FAST_MATH -Wall -Wno-sign-compare")
@@ -49,6 +49,6 @@ IF(USE_CUDA)
 ENDIF()
 
 SET(LIBS ${LIBS} insnet)
-add_subdirectory(3rd/insnet)
+add_subdirectory(3rd/n3ldg)
 TARGET_LINK_LIBRARIES(main pthread ${LIBS})
 TARGET_LINK_LIBRARIeS(main ${Boost_LIBRARIES})
