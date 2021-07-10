@@ -13,7 +13,7 @@
 #include <utility>
 #include <atomic>
 #include <mutex>
-#include "N3LDG.h"
+#include "insnet/insnet.h"
 #include "single_turn_conversation/conversation_structure.h"
 #include "single_turn_conversation/def.h"
 #include "single_turn_conversation/default_config.h"

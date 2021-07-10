@@ -9,13 +9,20 @@
 #include <iostream>
 #include <boost/format.hpp>
 
-#include "N3LDG.h"
+#include "insnet/insnet.h"
+
+using namespace std;
+using namespace insnet;
 
 float computePerplex(const std::vector<Node *> &nodes, const std::vector<int> &answers, int len,
         int &hit_count_result,
         vector<int> &keyword_hit_flags,
         vector<int> &token_hit_flags,
-        vector<int> &unified_token_hit_flags) {
+        vector<int> &unified_token_hit_flags,
+        float &keyword_ppl,
+        float &normal_ppl) {
+    keyword_ppl = 0;
+    normal_ppl = 0;
     float log_sum = 0.0f;
     keyword_hit_flags.clear();
     token_hit_flags.clear();
@@ -25,11 +32,15 @@ float computePerplex(const std::vector<Node *> &nodes, const std::vector<int> &a
 
     for (int i = 0; i < nodes.size(); ++i) {
         Node &node = *nodes.at(i);
+#if USE_GPU
+        const_cast<insnet::Node &>(node).val().copyFromDeviceToHost();
+#endif
         dtype reciprocal_answer_prob = 1 / node.getVal().v[answers.at(i)];
-        log_sum += log(reciprocal_answer_prob);
+        dtype l = log(reciprocal_answer_prob);
+        log_sum += l;
         bool hit = true;
         int hit_count = 0;
-        for (int j = 0; j < node.getDim(); ++j) {
+        for (int j = 0; j < node.size(); ++j) {
             if (node.getVal().v[j] >= node.getVal().v[answers.at(i)]) {
                 if (++hit_count > hit_beam) {
                     hit = false;
@@ -40,6 +51,9 @@ float computePerplex(const std::vector<Node *> &nodes, const std::vector<int> &a
         hit_flags.push_back(hit);
         if (i < len) {
             token_hit_flags.push_back(hit);
+            normal_ppl += l;
+        } else {
+            keyword_ppl += l;
         }
     }
 

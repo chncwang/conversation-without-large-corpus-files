@@ -352,28 +352,22 @@ void analyze(const vector<int> &results, const vector<int> &answers, Metric &met
 
 string saveModel(const HyperParams &hyper_params, ModelParams &model_params,
         const string &filename_prefix, int epoch) {
-//    cout << "saving model file..." << endl;
-//    auto t = time(nullptr);
-//    auto tm = *localtime(&t);
-//    ostringstream oss;
-//    oss << put_time(&tm, "%d-%m-%Y-%H-%M-%S");
-//    string filename = filename_prefix + oss.str() + "-epoch" + to_string(epoch);
-//#if USE_GPU
-//    model_params.copyFromDeviceToHost();
-//#endif
+    cout << "saving model file..." << endl;
+    auto t = time(nullptr);
+    auto tm = *localtime(&t);
+    ostringstream oss;
+    oss << put_time(&tm, "%d-%m-%Y-%H-%M-%S");
+    string filename = filename_prefix + oss.str() + "-epoch" + to_string(epoch);
+#if USE_GPU
+    model_params.copyFromDeviceToHost();
+#endif
 
-//    Json::Value root;
-//    root["hyper_params"] = hyper_params.toJson();
-//    root["model_params"] = model_params.toJson();
-//    Json::StreamWriterBuilder builder;
-//    builder["commentStyle"] = "None";
-//    builder["indentation"] = "";
-//    string json_str = Json::writeString(builder, root);
-//    ofstream out(filename);
-//    out << json_str;
-//    out.close();
-//    cout << format("model file %1% saved") % filename << endl;
-//    return filename;
+    ofstream out(filename, ios::binary);
+    cereal::BinaryOutputArchive output_ar(out);
+    output_ar(hyper_params, model_params, epoch);
+    out.close();
+    cout << format("model file %1% saved") % filename << endl;
+    return filename;
 }
 
 shared_ptr<Json::Value> loadModel(const string &filename) {
@@ -414,16 +408,15 @@ void loadModel(const DefaultConfig &default_config, HyperParams &hyper_params,
 //#endif
 }
 
-pair<vector<Node *>, vector<int>> keywordNodesAndIds(const DecoderComponents &decoder_components,
+pair<vector<Node *>, vector<int>> keywordNodesAndIds(const vector<Node *> &keyword_probs,
         const WordIdfInfo &idf_info,
         const ModelParams &model_params) {
-    vector<Node *> keyword_result_nodes = decoder_components.keyword_vector_to_onehots;
     vector<int> keyword_ids = toIds(idf_info.keywords_behind, model_params.lookup_table, true);
     vector<Node *> non_null_nodes;
     vector<int> chnanged_keyword_ids;
-    for (int j = 0; j < keyword_result_nodes.size(); ++j) {
-        if (keyword_result_nodes.at(j) != nullptr) {
-            non_null_nodes.push_back(keyword_result_nodes.at(j));
+    for (int j = 0; j < keyword_probs.size(); ++j) {
+        if (keyword_probs.at(j) != nullptr) {
+            non_null_nodes.push_back(keyword_probs.at(j));
             chnanged_keyword_ids.push_back(keyword_ids.at(j));
         }
     }
@@ -439,176 +432,179 @@ float metricTestPosts(const HyperParams &hyper_params, ModelParams &model_params
         const vector<WordIdfInfo> &response_idf_info_list) {
     cout << "metricTestPosts begin" << endl;
     hyper_params.print();
-    float rep_perplex(0.0f);
+    float overall_ppl(0.0f), keyword_ppl_sum(0.0f), normal_ppl_sum(0.0f);
     int corpus_hit_count = 0;
-    thread_pool pool(16);
-    mutex rep_perplex_mutex;
     int size_sum = 0;
+    int total_keyword_size_sum = 0;
     vector<int> corpus_keyword_hit_counts, corpus_keyword_sizes;
     vector<int> corpus_token_hit_counts, corpus_token_sizes;
     vector<int> corpus_unified_hit_counts, corpus_unified_sizes;
 
     for (const PostAndResponses &post_and_responses : post_and_responses_vector) {
-        auto f = [&]() {
-            cout << "post:" << endl;
-            auto post = post_sentences.at(post_and_responses.post_id);
-            print(post);
+        cout << "post:" << endl;
+        auto post = post_sentences.at(post_and_responses.post_id);
+        print(post);
 
-            const vector<int> &response_ids = post_and_responses.response_ids;
-            float avg_perplex = 0.0f;
-            int post_hit_count = 0;
-            int sum = 0;
-            vector<int> post_keyword_hit_counts, post_keyword_sizes;
-            vector<int> post_token_hit_counts, post_token_sizes;
-            vector<int> post_unified_hit_counts, post_unified_sizes;
+        const vector<int> &response_ids = post_and_responses.response_ids;
+        float post_ppl = 0.0f;
+        int post_hit_count = 0;
+        int sum = 0;
+        int keyword_sum = 0;
+        vector<int> post_keyword_hit_counts, post_keyword_sizes;
+        vector<int> post_token_hit_counts, post_token_sizes;
+        vector<int> post_unified_hit_counts, post_unified_sizes;
 
-            cout << "response size:" << response_ids.size() << endl;
-            for (int response_id : response_ids) {
-                print(response_sentences.at(response_id));
-                const WordIdfInfo &idf_info = response_idf_info_list.at(response_id);
-                Graph graph;
-                GraphBuilder graph_builder;
-                Node *param_node = insnet::param(graph, model_params.lookup_table.E);
-                graph_builder.forward(graph, post_sentences.at(post_and_responses.post_id),
-                        hyper_params, model_params, false);
-                graph_builder.forwardDecoder(graph, *graph_builder.encoder_hiddens,
-                        response_sentences.at(response_id),
-                        idf_info.keywords_behind,
-                        hyper_params, model_params, *param_node);
-                graph.forward();
-                vector<Node*> nodes = toNodePointers(decoder_components.wordvector_to_onehots);
-                vector<int> word_ids = transferVector<int, string>(
-                        response_sentences.at(response_id), [&](const string &w) -> int {
-                        return model_params.lookup_table.getElemId(w);
-                        });
-                for (int i = 0; i < word_ids.size(); ++i) {
-                    if (i != word_ids.size() - 1) {
-                        --word_ids.at(i);
-                    } else if (word_ids.at(i) != 0) {
-                        cerr << "last word id is not 0:" << word_ids.at(i) << endl;
-                        abort();
-                    }
-                }
-                int word_ids_size = word_ids.size();
-                auto keyword_nodes_and_ids = keywordNodesAndIds(decoder_components, idf_info,
-                        model_params);
-                int sentence_len = nodes.size();
-                for (int i = 0; i < keyword_nodes_and_ids.first.size(); ++i) {
-                    nodes.push_back(keyword_nodes_and_ids.first.at(i));
-                    word_ids.push_back(keyword_nodes_and_ids.second.at(i));
-                }
-
-                int hit_count;
-                vector<int> keyword_hit_flags, token_hit_flags, unified_hit_flags;
-                float perplex = computePerplex(nodes, word_ids, sentence_len, hit_count,
-                        keyword_hit_flags, token_hit_flags, unified_hit_flags);
-                avg_perplex += perplex;
-                post_hit_count += hit_count;
-                sum += word_ids_size;
-
-                for(int i = 0; i < keyword_hit_flags.size(); ++i) {
-                    if (post_keyword_hit_counts.size() <= i) {
-                        post_keyword_hit_counts.push_back(0);
-                    }
-                    post_keyword_hit_counts.at(i) += keyword_hit_flags.at(i);
-
-                    if (post_keyword_sizes.size() <= i) {
-                        post_keyword_sizes.push_back(0);
-                    }
-                    post_keyword_sizes.at(i)++;
-                }
-
-                for (int i = 0; i < token_hit_flags.size(); ++i) {
-                    if (post_token_hit_counts.size() <= i) {
-                        post_token_hit_counts.push_back(0);
-                    }
-                    post_token_hit_counts.at(i) += token_hit_flags.at(i);
-
-                    if (post_token_sizes.size() <= i) {
-                        post_token_sizes.push_back(0);
-                    }
-                    post_token_sizes.at(i)++;
-                }
-
-                for (int i = 0; i < unified_hit_flags.size(); ++i) {
-                    if (post_unified_hit_counts.size() <= i) {
-                        post_unified_hit_counts.push_back(0);
-                    }
-                    post_unified_hit_counts.at(i) += unified_hit_flags.at(i);
-
-                    if (post_unified_sizes.size() <= i) {
-                        post_unified_sizes.push_back(0);
-                    }
-                    post_unified_sizes.at(i)++;
+        cout << "response size:" << response_ids.size() << endl;
+        for (int response_id : response_ids) {
+            print(response_sentences.at(response_id));
+            const WordIdfInfo &idf_info = response_idf_info_list.at(response_id);
+            Graph graph(ModelStage::INFERENCE);
+            GraphBuilder graph_builder;
+            graph_builder.forward(graph, post_sentences.at(post_and_responses.post_id),
+                    hyper_params, model_params);
+            auto p = graph_builder.forwardDecoder(graph, *graph_builder.encoder_hiddens,
+                    response_sentences.at(response_id),
+                    idf_info.keywords_behind,
+                    hyper_params, model_params);
+            graph.forward();
+            auto nodes = p.second;
+            vector<int> word_ids = transferVector<int, string>(
+                    response_sentences.at(response_id), [&](const string &w) -> int {
+                    return model_params.lookup_table.getElemId(w);
+                    });
+            for (int i = 0; i < word_ids.size(); ++i) {
+                if (i != word_ids.size() - 1) {
+                    --word_ids.at(i);
+                } else if (word_ids.at(i) != 0) {
+                    cerr << "last word id is not 0:" << word_ids.at(i) << endl;
+                    abort();
                 }
             }
-            cout << "size:" << response_ids.size() << endl;
-            cout << "avg_perplex:" << exp(avg_perplex/sum) << endl;
-            cout << "hit rate:" << static_cast<float>(post_hit_count) / sum << endl;
-            for (int i = 0; i < post_keyword_sizes.size(); ++i) {
-                cout << boost::format("keyword %1% hit rate:%2%") % i %
-                    (static_cast<float>(post_keyword_hit_counts.at(i)) /
-                     post_keyword_sizes.at(i)) << endl;
-            }
-            for (int i = 0; i < post_token_sizes.size(); ++i) {
-                cout << boost::format("token %1% hit rate:%2%") % i %
-                    (static_cast<float>(post_token_hit_counts.at(i)) /
-                     post_token_sizes.at(i)) << endl;
-            }
-            for (int i = 0; i < post_unified_sizes.size(); ++i) {
-                cout << boost::format("unified %1% hit rate:%2%") % i %
-                    (static_cast<float>(post_unified_hit_counts.at(i)) /
-                     post_unified_sizes.at(i)) << endl;
-            }
-            rep_perplex_mutex.lock();
-            rep_perplex += avg_perplex;
-            corpus_hit_count += post_hit_count;
-            size_sum += sum;
-
-            for (int i = 0; i < post_keyword_sizes.size(); ++i) {
-                if (corpus_keyword_hit_counts.size() <= i) {
-                    corpus_keyword_hit_counts.push_back(0);
-                }
-                corpus_keyword_hit_counts.at(i) += post_keyword_hit_counts.at(i);
-
-                if (corpus_keyword_sizes.size() <=i) {
-                    corpus_keyword_sizes.push_back(0);
-                }
-                corpus_keyword_sizes.at(i) += post_keyword_sizes.at(i);
+            int word_ids_size = word_ids.size();
+            auto keyword_nodes_and_ids = keywordNodesAndIds(p.first, idf_info,
+                    model_params);
+            int sentence_len = nodes.size();
+            for (int i = 0; i < keyword_nodes_and_ids.first.size(); ++i) {
+                nodes.push_back(keyword_nodes_and_ids.first.at(i));
+                word_ids.push_back(keyword_nodes_and_ids.second.at(i));
             }
 
-            for (int i = 0; i < post_token_sizes.size(); ++i) {
-                if (corpus_token_hit_counts.size() <= i) {
-                    corpus_token_hit_counts.push_back(0);
-                }
-                corpus_token_hit_counts.at(i) += post_token_hit_counts.at(i);
+            int hit_count;
+            vector<int> keyword_hit_flags, token_hit_flags, unified_hit_flags;
+            dtype keyword_ppl, normal_ppl;
+            float perplex = computePerplex(nodes, word_ids, sentence_len, hit_count,
+                    keyword_hit_flags, token_hit_flags, unified_hit_flags, keyword_ppl,
+                    normal_ppl);
+            keyword_ppl_sum += keyword_ppl;
+            normal_ppl_sum += normal_ppl;
 
-                if (corpus_token_sizes.size() <=i) {
-                    corpus_token_sizes.push_back(0);
+            post_ppl += perplex;
+            post_hit_count += hit_count;
+            sum += word_ids_size;
+            keyword_sum += nodes.size() - sentence_len;
+
+            for(int i = 0; i < keyword_hit_flags.size(); ++i) {
+                if (post_keyword_hit_counts.size() <= i) {
+                    post_keyword_hit_counts.push_back(0);
                 }
-                corpus_token_sizes.at(i) += post_token_sizes.at(i);
+                post_keyword_hit_counts.at(i) += keyword_hit_flags.at(i);
+
+                if (post_keyword_sizes.size() <= i) {
+                    post_keyword_sizes.push_back(0);
+                }
+                post_keyword_sizes.at(i)++;
             }
 
-            for (int i = 0; i < post_unified_sizes.size(); ++i) {
-                if (corpus_unified_hit_counts.size() <= i) {
-                    corpus_unified_hit_counts.push_back(0);
+            for (int i = 0; i < token_hit_flags.size(); ++i) {
+                if (post_token_hit_counts.size() <= i) {
+                    post_token_hit_counts.push_back(0);
                 }
-                corpus_unified_hit_counts.at(i) += post_unified_hit_counts.at(i);
+                post_token_hit_counts.at(i) += token_hit_flags.at(i);
 
-                if (corpus_unified_sizes.size() <=i) {
-                    corpus_unified_sizes.push_back(0);
+                if (post_token_sizes.size() <= i) {
+                    post_token_sizes.push_back(0);
                 }
-                corpus_unified_sizes.at(i) += post_unified_sizes.at(i);
+                post_token_sizes.at(i)++;
             }
 
-            rep_perplex_mutex.unlock();
-        };
-        post(pool, f);
+            for (int i = 0; i < unified_hit_flags.size(); ++i) {
+                if (post_unified_hit_counts.size() <= i) {
+                    post_unified_hit_counts.push_back(0);
+                }
+                post_unified_hit_counts.at(i) += unified_hit_flags.at(i);
+
+                if (post_unified_sizes.size() <= i) {
+                    post_unified_sizes.push_back(0);
+                }
+                post_unified_sizes.at(i)++;
+            }
+        }
+        cout << "size:" << response_ids.size() << endl;
+        cout << "post_ppl:" << exp(post_ppl/sum) << endl;
+        cout << "hit rate:" << static_cast<float>(post_hit_count) / sum << endl;
+        for (int i = 0; i < post_keyword_sizes.size(); ++i) {
+            cout << boost::format("keyword %1% hit rate:%2%") % i %
+                (static_cast<float>(post_keyword_hit_counts.at(i)) /
+                 post_keyword_sizes.at(i)) << endl;
+        }
+        for (int i = 0; i < post_token_sizes.size(); ++i) {
+            cout << boost::format("token %1% hit rate:%2%") % i %
+                (static_cast<float>(post_token_hit_counts.at(i)) /
+                 post_token_sizes.at(i)) << endl;
+        }
+        for (int i = 0; i < post_unified_sizes.size(); ++i) {
+            cout << boost::format("unified %1% hit rate:%2%") % i %
+                (static_cast<float>(post_unified_hit_counts.at(i)) /
+                 post_unified_sizes.at(i)) << endl;
+        }
+        overall_ppl += post_ppl;
+        corpus_hit_count += post_hit_count;
+        size_sum += sum;
+        total_keyword_size_sum += keyword_sum;
+
+        for (int i = 0; i < post_keyword_sizes.size(); ++i) {
+            if (corpus_keyword_hit_counts.size() <= i) {
+                corpus_keyword_hit_counts.push_back(0);
+            }
+            corpus_keyword_hit_counts.at(i) += post_keyword_hit_counts.at(i);
+
+            if (corpus_keyword_sizes.size() <=i) {
+                corpus_keyword_sizes.push_back(0);
+            }
+            corpus_keyword_sizes.at(i) += post_keyword_sizes.at(i);
+        }
+
+        for (int i = 0; i < post_token_sizes.size(); ++i) {
+            if (corpus_token_hit_counts.size() <= i) {
+                corpus_token_hit_counts.push_back(0);
+            }
+            corpus_token_hit_counts.at(i) += post_token_hit_counts.at(i);
+
+            if (corpus_token_sizes.size() <=i) {
+                corpus_token_sizes.push_back(0);
+            }
+            corpus_token_sizes.at(i) += post_token_sizes.at(i);
+        }
+
+        for (int i = 0; i < post_unified_sizes.size(); ++i) {
+            if (corpus_unified_hit_counts.size() <= i) {
+                corpus_unified_hit_counts.push_back(0);
+            }
+            corpus_unified_hit_counts.at(i) += post_unified_hit_counts.at(i);
+
+            if (corpus_unified_sizes.size() <=i) {
+                corpus_unified_sizes.push_back(0);
+            }
+            corpus_unified_sizes.at(i) += post_unified_sizes.at(i);
+        }
     }
-    pool.join();
-    rep_perplex = exp(rep_perplex / size_sum);
+    overall_ppl = exp(overall_ppl / size_sum);
+    keyword_ppl_sum = exp(keyword_ppl_sum / total_keyword_size_sum);
+    normal_ppl_sum = exp(normal_ppl_sum / size_sum);
+    cout << "total keyword ppl:" << keyword_ppl_sum << endl;
+    cout << "total normal ppl:" << normal_ppl_sum << endl;
 
-    cout << "total avg perplex:" << rep_perplex << endl;
+    cout << "total avg perplex:" << overall_ppl << endl;
     cout << "corpus hypo ppl:" << static_cast<float>(corpus_hit_count) / size_sum << endl;
     for (int i = 0; i < corpus_keyword_sizes.size(); ++i) {
         cout << boost::format("keyword %1% hit:%2% amount:%3% rate:%4%") % i %
@@ -628,7 +624,7 @@ float metricTestPosts(const HyperParams &hyper_params, ModelParams &model_params
             (static_cast<float>(corpus_unified_hit_counts.at(i)) / corpus_unified_sizes.at(i))
             << endl;
     }
-    return rep_perplex;
+    return overall_ppl;
 }
 
 void computeMeanAndStandardDeviation(const vector<float> &nums, float &mean, float &sd) {
@@ -650,144 +646,6 @@ void computeMeanAndStandardDeviation(const vector<float> &nums, float &mean, flo
     }
 }
 
-void decodeTestPosts(const HyperParams &hyper_params, ModelParams &model_params,
-        DefaultConfig &default_config,
-        const unordered_map<string, float> & word_idf_table,
-        const vector<WordIdfInfo> &response_idf_info_list,
-        const vector<PostAndResponses> &post_and_responses_vector,
-        const vector<vector<string>> &post_sentences,
-        const vector<vector<string>> &response_sentences,
-        const vector<string> &black_list) {
-    LookupTable<Param> original_embeddings;
-    original_embeddings.init(model_params.lookup_table.elems, hyper_params.word_file);
-    cout << "decodeTestPosts begin" << endl;
-    hyper_params.print();
-    vector<CandidateAndReferences> candidate_and_references_vector;
-    map<string, int64_t> overall_flops;
-    int64_t activations_sum = 0;
-    int loop_i = 0;
-    vector <float> greedy_matching_similarities;
-    vector <float> avg_matching_similarities;
-    vector <float> extrema_similarities;
-    for (const PostAndResponses &post_and_responses : post_and_responses_vector) {
-        ++loop_i;
-        cout << "post:" << endl;
-        auto post_sentence = post_sentences.at(post_and_responses.post_id);
-        print(post_sentence);
-        Graph graph(false, true, true);
-        GraphBuilder graph_builder;
-        graph_builder.forward(graph, post_sentences.at(post_and_responses.post_id),
-                hyper_params, model_params, false);
-        vector<DecoderComponents> decoder_components_vector;
-        decoder_components_vector.resize(hyper_params.beam_size);
-        auto pair = graph_builder.forwardDecoderUsingBeamSearch(graph, decoder_components_vector,
-                word_idf_table, hyper_params.beam_size, hyper_params, model_params, default_config,
-                black_list);
-        const vector<WordIdAndProbability> &word_ids_and_probability = pair.first;
-        cout << "post:" << endl;
-        print(post_sentences.at(post_and_responses.post_id));
-        cout << "response:" << endl;
-        printWordIdsWithKeywords(word_ids_and_probability, model_params.lookup_table,
-                word_idf_table);
-        cout << "response words:" << endl;
-        printWordIdsWithKeywords(word_ids_and_probability, model_params.lookup_table,
-                word_idf_table, true);
-        const auto &flops = graph.getFLOPs();
-        if (loop_i == 1) {
-            overall_flops = flops;
-        } else {
-            for (const auto &it : flops) {
-                overall_flops.at(it.first) += it.second;
-            }
-        }
-
-        float flops_sum = 0;
-        for (const auto &it : overall_flops) {
-            flops_sum += it.second;
-        }
-        for (const auto &it : overall_flops) {
-            cout << it.first << ":" << it.second / flops_sum << endl;
-        }
-
-        cout << boost::format("flops overall:%1% avg:%2%") % flops_sum %
-            (static_cast<float>(flops_sum) / loop_i) << endl;
-
-        activations_sum += graph.getActivations();
-        cout << boost::format("activations:%1% avg:%2%") % activations_sum %
-            (static_cast<float>(activations_sum) / loop_i) << endl;
-
-        dtype probability = pair.second;
-        cout << format("probability:%1%") % probability << endl;
-        if (word_ids_and_probability.empty()) {
-            continue;
-        }
-
-        auto to_word = [&](const WordIdAndProbability &in) {
-            return model_params.lookup_table.elems.from_id(in.word_id);
-        };
-        vector<string> decoded;
-        transform(word_ids_and_probability.begin(), word_ids_and_probability.end(),
-                back_inserter(decoded), to_word);
-        vector<string> filtered;
-        for (int i = 1; i < decoded.size(); i += 2) {
-            filtered.push_back(decoded.at(i));
-        }
-        filtered.pop_back();
-
-        const vector<int> &response_ids = post_and_responses.response_ids;
-        vector<vector<string>> str_references =
-            transferVector<vector<string>, int>(response_ids,
-                    [&](int response_id) -> vector<string> {
-                    return response_sentences.at(response_id);
-                    });
-        vector<vector<string>> id_references;
-        for (const vector<string> &strs : str_references) {
-            auto stop_removed = strs;
-            stop_removed.pop_back();
-            id_references.push_back(stop_removed);
-        }
-
-        CandidateAndReferences candidate_and_references(filtered, id_references);
-        candidate_and_references_vector.push_back(candidate_and_references);
-
-        for (int ngram = 1; ngram <=4; ++ngram) {
-            float bleu_value = computeBleu(candidate_and_references_vector, ngram);
-            cout << "bleu_" << ngram << ":" << bleu_value << endl;
-            float bleu_mean, bleu_deviation;
-            computeMtevalBleuForEachResponse(candidate_and_references_vector, ngram, bleu_mean,
-                    bleu_deviation);
-            cout << boost::format("bleu_%1% mean:%2% deviation:%3%") % ngram % bleu_mean %
-                bleu_deviation << endl;
-            float nist_value = computeNist(candidate_and_references_vector, ngram);
-            cout << "nist_" << ngram << ":" << nist_value << endl;
-            float dist_value = computeDist(candidate_and_references_vector, ngram);
-            cout << "dist_" << ngram << ":" << dist_value << endl;
-        }
-        float idf_value = computeEntropy(candidate_and_references_vector, word_idf_table);
-        cout << "idf:" << idf_value << endl;
-        float greedy_matching_sim = computeGreedyMatching(candidate_and_references,
-                original_embeddings);
-        greedy_matching_similarities.push_back(greedy_matching_sim);
-        float greedy_matching_sim_mean, greedy_matching_sim_sd;
-        computeMeanAndStandardDeviation(greedy_matching_similarities, greedy_matching_sim_mean,
-                greedy_matching_sim_sd);
-        cout << boost::format("greedy matching mean:%1% standard_deviation:%2%") %
-            greedy_matching_sim_mean % greedy_matching_sim_sd << endl;
-        float avg_sim = computeEmbeddingAvg(candidate_and_references, original_embeddings);
-        avg_matching_similarities.push_back(avg_sim);
-        float avg_matching_sim_mean, avg_matching_sim_sd;
-        computeMeanAndStandardDeviation(avg_matching_similarities, avg_matching_sim_mean,
-                avg_matching_sim_sd);
-        cout << boost::format("embedding average mean:%1% standard_deviation:%2%") %
-            avg_matching_sim_mean % avg_matching_sim_sd << endl;
-        float extrema = computeExtrema(candidate_and_references, original_embeddings);
-        extrema_similarities.push_back(extrema);
-        float extrema_mean, extrema_sd;
-        computeMeanAndStandardDeviation(extrema_similarities, extrema_mean, extrema_sd);
-        cout << boost::format("extrema mean:%1% standard_deviation:%2%") % extrema_mean %
-            extrema_sd << endl;
-    }
-}
 
 void interact(const DefaultConfig &default_config, const HyperParams &hyper_params,
         ModelParams &model_params,
@@ -838,7 +696,20 @@ vector<string> getAllWordsByIdfAscendingly(const unordered_map<string, float> &i
     }
 
     auto cmp = [&idf_table](const string &a, const string &b) -> bool {
-        return idf_table.at(a) < idf_table.at(b);
+        dtype av, bv;
+        try {
+            av = idf_table.at(a);
+        } catch (const std::exception &e) {
+            cerr << fmt::format("getAllWordsByIdfAscendingly - {} not found", a) << endl;
+            abort();
+        }
+        try {
+            bv = idf_table.at(b);
+        } catch (const std::exception &e) {
+            cerr << fmt::format("getAllWordsByIdfAscendingly - {} not found", b) << endl;
+            abort();
+        }
+        return av < bv;
     };
 
     sort(result.begin(), result.end(), cmp);
@@ -849,7 +720,6 @@ vector<string> getAllWordsByIdfAscendingly(const unordered_map<string, float> &i
 std::pair<dtype, std::vector<int>> MaxLogProbabilityLossWithInconsistentDims(
         const std::vector<Node*> &result_nodes,
         const std::vector<int> &ids,
-        int batchsize,
         int vocabulary_size) {
     if (ids.size() != result_nodes.size()) {
         cerr << "ids size is not equal to result_nodes'." << endl;
@@ -861,24 +731,18 @@ std::pair<dtype, std::vector<int>> MaxLogProbabilityLossWithInconsistentDims(
     for (int i = 0; i < result_nodes.size(); ++i) {
         vector<int> id = {ids.at(i)};
         vector<Node *> node = {result_nodes.at(i)};
-        if (id.front() >= node.front()->getDim()) {
+        if (id.front() >= node.front()->size()) {
             cerr << "i:" << i << endl;
-            cerr << boost::format("id:%1% dim:%2%") % id.front() % node.front()->getDim() << endl;
+            cerr << boost::format("id:%1% dim:%2%") % id.front() % node.front()->size() << endl;
             Json::Value info;
             info["i"] = i;
             throw InformedRuntimeError(info);
         }
-        auto result = maxLogProbabilityLoss(node, id, 1.0 / batchsize);
-        if (result.second.size() != 1) {
-            cerr << "result second size:" << result.second.size() << endl;
-            abort();
-        }
-        final_result.first += result.first;
-        int word_id = result.second.front();
+        dtype result = insnet::NLLLoss(node, node.front()->size(), {id}, 1.0);
+        final_result.first += result;
+        int word_id = insnet::argmax(node, node.front()->size()).front().front();
         if (word_id < 0 || word_id > vocabulary_size) {
             cerr << "word_id:" << word_id << endl;
-            node.front()->getVal().print();
-            cout << node.front()->getNodeIndex() << endl;
             abort();
         }
         final_result.second.push_back(word_id);
@@ -916,7 +780,7 @@ int main(int argc, char *argv[]) {
     default_config.print();
 
 #if USE_GPU
-    n3ldg_cuda::InitCuda(default_config.device_id, default_config.memory_in_gb);
+    cuda::initCuda(default_config.device_id, default_config.memory_in_gb);
 #endif
 
     HyperParams hyper_params = parseHyperParams(ini_reader);
@@ -955,7 +819,7 @@ int main(int argc, char *argv[]) {
         is_response_in_train_set.at(p.response_id) = true;
     }
 
-    Alphabet alphabet;
+    Vocab alphabet;
     shared_ptr<Json::Value> root_ptr;
     unordered_map<string, int> word_counts;
     auto wordStat = [&]() {
@@ -994,13 +858,13 @@ int main(int argc, char *argv[]) {
     };
     wordStat();
 
-    word_counts[unknownkey] = 1000000000;
+    word_counts[insnet::UNKNOWN_WORD] = 1000000000;
 
     for (auto &s : post_sentences) {
         for (string &w : s) {
             const auto &it = word_counts.find(w);
             if (it == word_counts.end() || it->second <= hyper_params.word_cutoff) {
-                w = unknownkey;
+                w = insnet::UNKNOWN_WORD;
             }
         }
     }
@@ -1008,7 +872,7 @@ int main(int argc, char *argv[]) {
         for (string &w : s) {
             const auto &it = word_counts.find(w);
             if (it == word_counts.end() || it->second <= hyper_params.word_cutoff) {
-                w = unknownkey;
+                w = insnet::UNKNOWN_WORD;
             }
         }
     }
@@ -1023,6 +887,7 @@ int main(int argc, char *argv[]) {
     cout << "merged" << endl;
     cout << "calculating idf" << endl;
     auto all_idf = calculateIdf(all_sentences);
+    all_idf[insnet::UNKNOWN_WORD] = 0.01;
     cout << "idf calculated" << endl;
     vector<string> all_word_list = getAllWordsByIdfAscendingly(all_idf, word_counts,
                         hyper_params.word_cutoff);
@@ -1041,7 +906,7 @@ int main(int argc, char *argv[]) {
     auto allocate_model_params = [](const DefaultConfig &default_config,
             const HyperParams &hyper_params,
             ModelParams &model_params,
-            const Alphabet *alphabet) {
+            const Vocab *alphabet) {
         cout << format("allocate word_file:%1%\n") % hyper_params.word_file;
         if (alphabet != nullptr) {
             if(hyper_params.word_file != "" &&
@@ -1058,7 +923,10 @@ int main(int argc, char *argv[]) {
         model_params.r2l_encoder_params.init(hyper_params.hidden_dim, hyper_params.word_dim);
         model_params.decoder_params.init(hyper_params.hidden_dim, 2 * hyper_params.word_dim +
                 2 * hyper_params.hidden_dim);
-        model_params.hidden_to_wordvector_params.init(3, init_param);
+        model_params.hidden_to_wordvector_params_a.init(hyper_params.hidden_dim * 4,
+                hyper_params.hidden_dim * 3 + hyper_params.word_dim * 2);
+        model_params.hidden_to_wordvector_params_b.init(hyper_params.word_dim,
+                hyper_params.hidden_dim * 4);
         model_params.hidden_to_keyword_params.init(hyper_params.word_dim,
                 3 * hyper_params.hidden_dim, true);
     };
@@ -1097,7 +965,7 @@ int main(int argc, char *argv[]) {
     cout << "reading response idf info ..." << endl;
     vector<WordIdfInfo> response_idf_info_list = readWordIdfInfoList(response_sentences,
             is_response_in_train_set, all_idf, word_counts,
-            model_params.lookup_table.elems.m_string_to_id, hyper_params.word_cutoff);
+            model_params.lookup_table.vocab.m_string_to_id, hyper_params.word_cutoff);
     cout << "completed" << endl;
 
     if (default_config.program_mode == ProgramMode::INTERACTING) {
@@ -1107,9 +975,9 @@ int main(int argc, char *argv[]) {
     } else if (default_config.program_mode == ProgramMode::DECODING) {
         globalPoolEnabled() = false;
         hyper_params.beam_size = beam_size;
-        decodeTestPosts(hyper_params, model_params, default_config, all_idf,
-                response_idf_info_list, test_post_and_responses, post_sentences,
-                response_sentences, black_list);
+//        decodeTestPosts(hyper_params, model_params, default_config, all_idf,
+//                response_idf_info_list, test_post_and_responses, post_sentences,
+//                response_sentences, black_list);
     } else if (default_config.program_mode == ProgramMode::METRIC) {
         path dir_path(default_config.input_model_dir);
         if (!is_directory(dir_path)) {
@@ -1151,26 +1019,25 @@ int main(int argc, char *argv[]) {
             }
         }
     } else if (default_config.program_mode == ProgramMode::TRAINING) {
-        ModelUpdate model_update;
-        model_update._alpha = hyper_params.learning_rate;
-        model_update._reg = hyper_params.l2_reg;
-        model_update.setParams(model_params.tunableParams());
+        insnet::AdamOptimizer optimizer(model_params.tunableParams(), hyper_params.learning_rate);
 
         CheckGrad grad_checker;
         if (default_config.check_grad) {
             grad_checker.init(model_params.tunableParams());
         }
 
-        dtype last_loss_sum = 1e10f;
-        dtype loss_sum = 0.0f;
 
         int iteration = 0;
         string last_saved_model;
 
         default_random_engine engine(default_config.seed);
         for (int epoch = 0; epoch < default_config.max_epoch; ++epoch) {
+            dtype loss_sum = 0.0f;
+            int word_sum = 0;
+            dtype keyword_loss_sum = 0;
+            int keyword_sum = 0;
+            dtype normal_loss_sum = 0;
             cout << "epoch:" << epoch << endl;
-            model_params.lookup_table.E.is_fixed = false;
             auto cmp = [&] (const ConversationPair &a, const ConversationPair &b)->bool {
                 auto len = [&] (const ConversationPair &pair)->int {
                     return post_sentences.at(pair.post_id).size() +
@@ -1196,38 +1063,33 @@ int main(int argc, char *argv[]) {
 
             unique_ptr<Metric> metric = unique_ptr<Metric>(new Metric);
             unique_ptr<Metric> keyword_metric = unique_ptr<Metric>(new Metric);
-            n3ldg_cuda::Profiler::Reset();
-            n3ldg_cuda::Profiler &profiler = n3ldg_cuda::Profiler::Ins();
-            profiler.SetEnabled(false);
-            profiler.BeginEvent("total");
 
             for (int batch_i = 0; batch_i < batch_count +
                     (train_conversation_pairs.size() > hyper_params.batch_size * batch_count);
                     ++batch_i) {
-                cout << format("batch_i:%1% iteration:%2%") % batch_i % iteration << endl;
-                if (epoch == 0 && default_config.input_model_file == "") {
-                    if (iteration < hyper_params.warm_up_iterations) {
-                        model_update._alpha = hyper_params.learning_rate * (iteration + 1) /
-                            hyper_params.warm_up_iterations;
-                        cout << "learning_rate:" << model_update._alpha << endl;
-                    } else {
-                        model_update._alpha = hyper_params.learning_rate;
-                        cout << "warm up finished, learning rate now:" <<
-                            hyper_params.learning_rate << endl;
-                    }
+                if (batch_i % 10 == 5) {
+                    cout << format("batch_i:%1% iteration:%2%") % batch_i % iteration << endl;
                 }
-                cout << format("batch_i:%1% iteration:%2%") % batch_i % iteration << endl;
+                if (epoch == 0 && default_config.input_model_file == "") {
+                    dtype lr;
+                    if (iteration < hyper_params.warm_up_iterations) {
+                        lr = hyper_params.learning_rate;
+                    } else {
+                        lr = std::sqrt(1.0 * hyper_params.warm_up_iterations / iteration) *
+                            hyper_params.learning_rate;
+                    }
+                    optimizer.setLearningRate(lr);
+                }
                 int batch_size = batch_i == batch_count ?
                     train_conversation_pairs.size() % hyper_params.batch_size :
                     hyper_params.batch_size;
-                profiler.BeginEvent("build braph");
                 Graph graph;
                 vector<shared_ptr<GraphBuilder>> graph_builders;
-                vector<DecoderComponents> decoder_components_vector;
                 vector<ConversationPair> conversation_pair_in_batch;
                 auto getSentenceIndex = [batch_i, batch_count](int i) {
                     return i * batch_count + batch_i;
                 };
+                vector<pair<vector<Node *>, vector<Node *>>> results;
                 for (int i = 0; i < batch_size; ++i) {
                     shared_ptr<GraphBuilder> graph_builder(new GraphBuilder);
                     graph_builders.push_back(graph_builder);
@@ -1236,17 +1098,18 @@ int main(int argc, char *argv[]) {
                     conversation_pair_in_batch.push_back(train_conversation_pairs.at(
                                 instance_index));
                     auto post_sentence = post_sentences.at(post_id);
-                    graph_builder->forward(graph, post_sentence, hyper_params, model_params, true);
+                    graph_builder->forward(graph, post_sentence, hyper_params, model_params);
                     int response_id = train_conversation_pairs.at(instance_index).response_id;
                     auto response_sentence = response_sentences.at(response_id);
                     const WordIdfInfo &idf_info = response_idf_info_list.at(response_id);
-                    DecoderComponents decoder_components;
-                    graph_builder->forwardDecoder(graph, decoder_components, response_sentence,
-                            idf_info.keywords_behind, hyper_params, model_params, true);
-                    decoder_components_vector.push_back(decoder_components);
+                    auto p = graph_builder->forwardDecoder(graph, *graph_builder->encoder_hiddens,
+                            response_sentence,
+                            idf_info.keywords_behind, hyper_params, model_params);
+                    results.push_back(move(p));
+                    word_sum += response_sentence.size();
                 }
 
-                graph.compute();
+                graph.forward();
 
                 for (int i = 0; i < batch_size; ++i) {
                     int instance_index = getSentenceIndex(i);
@@ -1263,13 +1126,11 @@ int main(int argc, char *argv[]) {
                             }
                         }
                     }
-                    vector<Node*> result_nodes =
-                        toNodePointers(decoder_components_vector.at(i).wordvector_to_onehots);
+                    vector<Node*> result_nodes = results.at(i).second;
                     std::pair<dtype, std::vector<int>> result;
                     try {
                         result = MaxLogProbabilityLossWithInconsistentDims(result_nodes,
-                                word_ids, batch_size * response_sentence.size(),
-                                model_params.lookup_table.nVSize);
+                                word_ids, model_params.lookup_table.nVSize);
                     } catch (const InformedRuntimeError &e) {
                         cerr << e.what() << endl;
                         int i = e.getInfo()["i"].asInt();
@@ -1280,30 +1141,28 @@ int main(int argc, char *argv[]) {
                             all_idf.find(word)->second % all_idf.find(keyword)->second << endl;
                         print(response_idf_info_list.at(response_id).keywords_behind);
                         cerr << boost::format("%1% id:%3% %2% id:%4%") % word % keyword %
-                            model_params.lookup_table.elems.from_string(word) %
-                            model_params.lookup_table.elems.from_string(keyword) << endl;
+                            model_params.lookup_table.vocab.from_string(word) %
+                            model_params.lookup_table.vocab.from_string(keyword) << endl;
 
                         print(response_sentence);
                         print(response_idf_info_list.at(response_id).keywords_behind);
                         abort();
                     }
-                    profiler.EndCudaEvent();
                     loss_sum += result.first;
+                    normal_loss_sum += result.first;
                     analyze(result.second, word_ids, *metric);
                     const WordIdfInfo &response_idf = response_idf_info_list.at(response_id);
                     auto keyword_nodes_and_ids = keywordNodesAndIds(
-                            decoder_components_vector.at(i), response_idf, model_params);
-                    profiler.BeginEvent("loss");
+                            results.at(i).first, response_idf, model_params);
                     auto keyword_result = MaxLogProbabilityLossWithInconsistentDims(
                             keyword_nodes_and_ids.first, keyword_nodes_and_ids.second,
-                            hyper_params.batch_size * response_sentence.size(),
-                            model_params.lookup_table.nVSize);
-                    profiler.EndCudaEvent();
+                            model_params.lookup_table.size());
+                    keyword_sum += keyword_nodes_and_ids.second.size();
                     loss_sum += keyword_result.first;
+                    keyword_loss_sum += keyword_result.first;
                     analyze(keyword_result.second, keyword_nodes_and_ids.second, *keyword_metric);
 
-                    static int count_for_print;
-                    if (++count_for_print % 100 == 1) {
+                    if (batch_i % 10 == 5 && i == 0) {
                         int post_id = train_conversation_pairs.at(instance_index).post_id;
                         cout << "post:" << post_id << endl;
                         print(post_sentences.at(post_id));
@@ -1326,61 +1185,56 @@ int main(int argc, char *argv[]) {
                     }
                 }
 
-                cout << "loss:" << loss_sum << endl;
-                cout << "normal:" << endl;
-                metric->print();
-                cout << "keyword:" << endl;
-                keyword_metric->print();
+                if (batch_i % 10 == 5) {
+                    cout << "loss:" << loss_sum <<" ppl:" << std::exp(loss_sum / word_sum) <<
+                        "normal ppl:" << std::exp(normal_loss_sum / word_sum) <<
+                        "keyword ppl:" << std::exp(keyword_loss_sum / keyword_sum)<< endl;
+                    cout << "normal:" << endl;
+                    metric->print();
+                    cout << "keyword:" << endl;
+                    keyword_metric->print();
+                }
 
                 graph.backward();
 
                 if (default_config.check_grad) {
-                    auto loss_function = [&](const ConversationPair &conversation_pair) -> dtype {
-                        GraphBuilder graph_builder;
-                        Graph graph;
+//                    auto loss_function = [&](const ConversationPair &conversation_pair) -> dtype {
+//                        GraphBuilder graph_builder;
+//                        Graph graph;
 
-                        graph_builder.forward(graph, post_sentences.at(conversation_pair.post_id),
-                                hyper_params, model_params, true);
+//                        graph_builder.forward(graph, post_sentences.at(conversation_pair.post_id),
+//                                hyper_params, model_params, true);
 
-                        DecoderComponents decoder_components;
-                        graph_builder.forwardDecoder(graph, decoder_components,
-                                response_sentences.at(conversation_pair.response_id),
-                                response_idf_info_list.at(
-                                    conversation_pair.response_id).keywords_behind,
-                                hyper_params, model_params, true);
+//                        DecoderComponents decoder_components;
+//                        graph_builder.forwardDecoder(graph, decoder_components,
+//                                response_sentences.at(conversation_pair.response_id),
+//                                response_idf_info_list.at(
+//                                    conversation_pair.response_id).keywords_behind,
+//                                hyper_params, model_params, true);
 
-                        graph.compute();
+//                        graph.compute();
 
-                        vector<int> word_ids = toIds(response_sentences.at(
-                                    conversation_pair.response_id), model_params.lookup_table);
-                        vector<Node*> result_nodes = toNodePointers(
-                                decoder_components.wordvector_to_onehots);
-                        const WordIdfInfo &response_idf = response_idf_info_list.at(
-                                conversation_pair.response_id);
-                        auto keyword_nodes_and_ids = keywordNodesAndIds(
-                                decoder_components, response_idf, model_params);
-                        return MaxLogProbabilityLossWithInconsistentDims(
-                                keyword_nodes_and_ids.first, keyword_nodes_and_ids.second, 1,
-                                model_params.lookup_table.nVSize).first +
-                            MaxLogProbabilityLossWithInconsistentDims( result_nodes, word_ids, 1,
-                                    model_params.lookup_table.nVSize).first;
-                    };
-                    cout << format("checking grad - conversation_pair size:%1%") %
-                        conversation_pair_in_batch.size() << endl;
-                    grad_checker.check<ConversationPair>(loss_function, conversation_pair_in_batch,
-                            "");
+//                        vector<int> word_ids = toIds(response_sentences.at(
+//                                    conversation_pair.response_id), model_params.lookup_table);
+//                        vector<Node*> result_nodes = toNodePointers(
+//                                decoder_components.wordvector_to_onehots);
+//                        const WordIdfInfo &response_idf = response_idf_info_list.at(
+//                                conversation_pair.response_id);
+//                        auto keyword_nodes_and_ids = keywordNodesAndIds(
+//                                decoder_components, response_idf, model_params);
+//                        return MaxLogProbabilityLossWithInconsistentDims(
+//                                keyword_nodes_and_ids.first, keyword_nodes_and_ids.second, 1,
+//                                model_params.lookup_table.nVSize).first +
+//                            MaxLogProbabilityLossWithInconsistentDims( result_nodes, word_ids, 1,
+//                                    model_params.lookup_table.nVSize).first;
+//                    };
+//                    cout << format("checking grad - conversation_pair size:%1%") %
+//                        conversation_pair_in_batch.size() << endl;
+//                    grad_checker.check<ConversationPair>(loss_function, conversation_pair_in_batch,
+//                            "");
                 }
 
-                if (hyper_params.optimizer == Optimizer::ADAM) {
-                    model_update.updateAdam(10.0f);
-                } else if (hyper_params.optimizer == Optimizer::ADAGRAD) {
-                    model_update.update(10.0f);
-                } else if (hyper_params.optimizer == Optimizer::ADAMW) {
-                    model_update.updateAdamW(10.0f);
-                } else {
-                    cerr << "no optimzer set" << endl;
-                    abort();
-                }
+                optimizer.step(10.0f);
 
                 if (default_config.save_model_per_batch) {
                     saveModel(hyper_params, model_params, default_config.output_model_file_prefix,
@@ -1389,34 +1243,14 @@ int main(int argc, char *argv[]) {
 
                 ++iteration;
             }
-            profiler.EndCudaEvent();
-            profiler.Print();
 
-            cout << "loss_sum:" << loss_sum << " last_loss_sum:" << last_loss_sum << endl;
-            if (loss_sum > last_loss_sum) {
-                if (epoch == 0) {
-                    cerr << "loss is larger than last epoch but epoch is 0" << endl;
-                    abort();
-                }
-                model_update._alpha *= 0.1f;
-                hyper_params.learning_rate = model_update._alpha;
-                cout << "learning_rate decay:" << model_update._alpha << endl;
-                std::shared_ptr<Json::Value> root = loadModel(last_saved_model);
-                model_params.fromJson((*root)["model_params"]);
-#if USE_GPU
-                model_params.copyFromHostToDevice();
-#endif
-            } else {
-                model_update._alpha = (model_update._alpha - hyper_params.min_learning_rate) *
-                    hyper_params.learning_rate_decay + hyper_params.min_learning_rate;
-                hyper_params.learning_rate = model_update._alpha;
-                cout << "learning_rate now:" << hyper_params.learning_rate << endl;
-                last_saved_model = saveModel(hyper_params, model_params,
+            float ppl = metricTestPosts(hyper_params, model_params, dev_post_and_responses,
+                    post_sentences, response_sentences, response_idf_info_list);
+            cout << fmt::format("dev ppl is {}", ppl) << endl;
+
+            cout << "loss_sum:" << loss_sum << endl;
+            last_saved_model = saveModel(hyper_params, model_params,
                         default_config.output_model_file_prefix, epoch);
-            }
-
-            last_loss_sum = loss_sum;
-            loss_sum = 0;
         }
     } else {
         abort();

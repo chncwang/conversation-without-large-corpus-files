@@ -509,13 +509,12 @@ struct GraphBuilder {
             const std::vector<std::string> &answers,
             const std::vector<std::string> &keywords,
             const HyperParams &hyper_params,
-            ModelParams &model_params,
-            Node &emb) {
+            ModelParams &model_params) {
         int keyword_bound = model_params.lookup_table.nVSize;
         vector<Node *> keyword_probs, normal_probs;
 
-        LSTMState last_state;
-        Node *emb_part = &emb;
+        Node *h0 = insnet::tensor(graph, hyper_params.hidden_dim,0);
+        LSTMState last_state = {h0, h0};
         for (int i = 0; i < answers.size(); ++i) {
             if (i > 0) {
                 keyword_bound = model_params.lookup_table.vocab.from_string(keywords.at(i - 1)) +
@@ -566,10 +565,9 @@ struct GraphBuilder {
                 keyword_prob = insnet::cat({last_state.hidden, context});
                 keyword_prob = insnet::linear(*keyword_prob,
                         model_params.hidden_to_keyword_params);
-                keyword_prob = insnet::matmul(*emb_part, *keyword_prob, hyper_params.word_dim,
-                        true);
-                emb_part = insnet::split(*emb_part, normal_bound * hyper_params.word_dim, 0);
-                keyword_prob = insnet::softmax(*keyword_prob, model_params.lookup_table.size());
+                keyword_prob = insnet::linear(*keyword_prob, model_params.lookup_table.E);
+                keyword_prob = insnet::split(*keyword_prob, keyword_bound, 0);
+                keyword_prob = insnet::softmax(*keyword_prob);
             }
             keyword_probs.push_back(keyword_prob);
 
@@ -582,11 +580,14 @@ struct GraphBuilder {
             normal_word_prob = insnet::dropout(*normal_word_prob, hyper_params.dropout);
             normal_word_prob = insnet::linear(*normal_word_prob,
                     model_params.hidden_to_wordvector_params_b);
-            normal_word_prob = insnet::matmul(*emb_part, *normal_word_prob, hyper_params.word_dim,
-                    true);
-            if (i < answers.size() - 1) {
-                normal_word_prob = insnet::split(*normal_word_prob, normal_word_prob->size() - 1,
-                        1);
+            normal_word_prob = insnet::linear(*normal_word_prob, model_params.lookup_table.E);
+            if (i == answers.size() - 1) {
+                normal_word_prob = insnet::split(*normal_word_prob, normal_bound, 0);
+            } else if (i < answers.size() - 1) {
+                normal_word_prob = insnet::split(*normal_word_prob, normal_bound - 1, 1);
+            } else {
+                cerr << "error state" << endl;
+                abort();
             }
             normal_word_prob = insnet::softmax(*normal_word_prob);
             normal_probs.push_back(normal_word_prob);
