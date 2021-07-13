@@ -859,6 +859,9 @@ int main(int argc, char *argv[]) {
     wordStat();
 
     word_counts[insnet::UNKNOWN_WORD] = 1000000000;
+    word_counts[BEGIN_SYMBOL] = 1000000000;
+    word_counts[EMPTY_KEYWORD_SYMBOL] = 1000000000;
+    word_counts[STOP_SYMBOL] = 1000000000;
 
     for (auto &s : post_sentences) {
         for (string &w : s) {
@@ -888,6 +891,8 @@ int main(int argc, char *argv[]) {
     cout << "calculating idf" << endl;
     auto all_idf = calculateIdf(all_sentences);
     all_idf[insnet::UNKNOWN_WORD] = 0.01;
+    all_idf[BEGIN_SYMBOL] = 100;
+    all_idf[EMPTY_KEYWORD_SYMBOL] = 100;
     cout << "idf calculated" << endl;
     vector<string> all_word_list = getAllWordsByIdfAscendingly(all_idf, word_counts,
                         hyper_params.word_cutoff);
@@ -918,17 +923,16 @@ int main(int argc, char *argv[]) {
                 model_params.lookup_table.init(*alphabet, hyper_params.word_dim, true);
             }
         }
-        model_params.attention_params.init(2 * hyper_params.hidden_dim, hyper_params.hidden_dim);
-        model_params.l2r_encoder_params.init(hyper_params.hidden_dim, hyper_params.word_dim);
-        model_params.r2l_encoder_params.init(hyper_params.hidden_dim, hyper_params.word_dim);
-        model_params.decoder_params.init(hyper_params.hidden_dim, 2 * hyper_params.word_dim +
-                2 * hyper_params.hidden_dim);
+        model_params.encoder_params.init(3, hyper_params.hidden_dim, 8, 512);
+        model_params.decoder_params.init(3, hyper_params.hidden_dim, 8, 512);
         model_params.hidden_to_wordvector_params_a.init(hyper_params.hidden_dim * 4,
-                hyper_params.hidden_dim * 3 + hyper_params.word_dim * 2);
-        model_params.hidden_to_wordvector_params_b.init(hyper_params.word_dim,
+                hyper_params.hidden_dim);
+        model_params.hidden_to_wordvector_params_b.init(hyper_params.hidden_dim,
                 hyper_params.hidden_dim * 4);
-        model_params.hidden_to_keyword_params.init(hyper_params.word_dim,
-                3 * hyper_params.hidden_dim, true);
+        model_params.hidden_to_keyword_params_a.init(hyper_params.hidden_dim * 4,
+                hyper_params.hidden_dim);
+        model_params.hidden_to_keyword_params_b.init(hyper_params.hidden_dim,
+                hyper_params.hidden_dim * 4);
     };
 
     if (default_config.program_mode != ProgramMode::METRIC) {

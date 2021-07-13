@@ -16,37 +16,37 @@ struct ModelParams : public TunableParamCollection
     Embedding<Param> lookup_table;
     LinearParams hidden_to_wordvector_params_a;
     LinearParams hidden_to_wordvector_params_b;
-    LinearParams hidden_to_keyword_params;
-    LSTMParams l2r_encoder_params;
-    LSTMParams r2l_encoder_params;
-    LSTMParams decoder_params;
-    AdditiveAttentionParams attention_params;
+    LinearParams hidden_to_keyword_params_a;
+    LinearParams hidden_to_keyword_params_b;
+    TransformerEncoderParams encoder_params;
+    TransformerDecoderParams decoder_params;
 
     ModelParams() : hidden_to_wordvector_params_a("hidden_to_wordvector_params_a"),
     hidden_to_wordvector_params_b("hidden_to_wordvector_params_b"),
-    hidden_to_keyword_params("hidden_to_keyword_params"), l2r_encoder_params("l2r_encoder"),
-    r2l_encoder_params("r2l_encoder"), decoder_params("decoder"), attention_params("attention") {}
+    hidden_to_keyword_params_a("hidden_to_keyword_params_a"),
+    hidden_to_keyword_params_b("hidden_to_keyword_params_b"),
+    encoder_params("encoder_params"), decoder_params("decoder") {}
 
     template<typename Archive>
     void serialize(Archive &ar) {
         ar(lookup_table, hidden_to_wordvector_params_a, hidden_to_wordvector_params_b,
-                hidden_to_keyword_params, l2r_encoder_params,
-                r2l_encoder_params, decoder_params, attention_params);
+                hidden_to_keyword_params_a, hidden_to_keyword_params_b, encoder_params,
+                decoder_params);
     }
 
 #if USE_GPU
     std::vector<cuda::Transferable *> transferablePtrs() override {
         return {&lookup_table, &hidden_to_wordvector_params_a, &hidden_to_wordvector_params_b,
-            &hidden_to_keyword_params, &l2r_encoder_params, &r2l_encoder_params, &decoder_params,
-            &attention_params};
+            &hidden_to_keyword_params_a, &hidden_to_keyword_params_b, &encoder_params,
+            &decoder_params};
     }
 #endif
 
 protected:
     virtual std::vector<Tunable<BaseParam> *> tunableComponents() override {
         return {&lookup_table, &hidden_to_wordvector_params_a, &hidden_to_wordvector_params_b,
-            &hidden_to_keyword_params, &l2r_encoder_params, &r2l_encoder_params, &decoder_params,
-            &attention_params};
+            &hidden_to_keyword_params_a, &hidden_to_keyword_params_b, &encoder_params,
+            &decoder_params};
     }
 };
 

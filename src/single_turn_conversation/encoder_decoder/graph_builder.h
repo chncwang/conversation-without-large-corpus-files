@@ -484,25 +484,10 @@ struct GraphBuilder {
 
     void forward(Graph &graph, const vector<string> &sentence, const HyperParams &hyper_params,
             ModelParams &model_params) {
-        vector<Node *> embs;
-        for (const string &w : sentence) {
-            Node *emb = embedding(graph, w, model_params.lookup_table);
-            emb = dropout(*emb, hyper_params.dropout);
-            embs.push_back(emb);
-        }
-        Node *h0 = tensor(graph, hyper_params.hidden_dim, 0);
-        LSTMState initial_state = {h0, h0};
-        std::vector<Node *> l2r = lstm(initial_state, embs, model_params.l2r_encoder_params,
-                hyper_params.dropout);
-        std::reverse(embs.begin(), embs.end());
-        std::vector<Node *> r2l = lstm(initial_state, embs, model_params.r2l_encoder_params,
-                hyper_params.dropout);
-        std::reverse(r2l.begin(), r2l.end());
-
-        Node *l2r_matrix = cat(l2r);
-        Node *r2l_matrix = cat(r2l);
-        encoder_hiddens = cat({l2r_matrix, r2l_matrix}, l2r.size());
-        enc_len = l2r.size();
+        Node *emb = embedding(graph, sentence, model_params.lookup_table);
+        encoder_hiddens = transformerEncoder(*emb, model_params.encoder_params,
+                hyper_params.dropout).back();
+        enc_len = sentence.size();
     }
 
     pair<vector<Node *>, vector<Node *>> forwardDecoder(Graph &graph, Node &enc,
@@ -510,11 +495,35 @@ struct GraphBuilder {
             const std::vector<std::string> &keywords,
             const HyperParams &hyper_params,
             ModelParams &model_params) {
+        int dec_len = answers.size();
+        vector<string> dec_keyword_inputs, dec_normal_inputs;
+        dec_keyword_inputs.reserve(dec_len);
+        dec_normal_inputs.reserve(dec_len);
+        for (int i = 0; i < dec_len; ++i) {
+            bool predict_keyword = i == 0 ||  answers.at(i - 1) == keywords.at(i - 1);
+            const string *k, *n;
+            if (i == 0) {
+                k = &BEGIN_SYMBOL;
+                n = &BEGIN_SYMBOL;
+            } else {
+                n = &answers.at(i - 1);
+                k = predict_keyword ? &EMPTY_KEYWORD_SYMBOL : &keywords.at(i - 1);
+            }
+
+            dec_keyword_inputs.push_back(*k);
+            dec_normal_inputs.push_back(*n);
+        }
+
+        Node *dec_keyword_emb = embedding(graph, dec_keyword_inputs, model_params.lookup_table);
+        Node *dec_normal_emb = embedding(graph, dec_normal_inputs, model_params.lookup_table);
+        Node *dec_emb = add({dec_keyword_emb, dec_normal_emb});
+
+        Node *dec = transformerDecoder(enc, *dec_emb, model_params.decoder_params,
+                hyper_params.dropout).back();
+
         int keyword_bound = model_params.lookup_table.nVSize;
         vector<Node *> keyword_probs, normal_probs;
 
-        Node *h0 = insnet::tensor(graph, hyper_params.hidden_dim,0);
-        LSTMState last_state = {h0, h0};
         for (int i = 0; i < answers.size(); ++i) {
             if (i > 0) {
                 keyword_bound = model_params.lookup_table.vocab.from_string(keywords.at(i - 1)) +
@@ -526,45 +535,17 @@ struct GraphBuilder {
                 print(keywords);
                 abort();
             }
-            Node *dec_normal_emb, *dec_keyword_emb, *guide;
+
+            Node *hidden = insnet::split(*dec, hyper_params.hidden_dim,
+                    i * hyper_params.hidden_dim);
+
             bool predict_keyword = i == 0 ||  answers.at(i - 1) == keywords.at(i - 1);
-            if (i > 0) {
-                const string &dec_input = answers.at(i - 1);
-                dec_normal_emb = embedding(graph, dec_input, model_params.lookup_table);
-                dec_normal_emb = dropout(*dec_normal_emb, hyper_params.dropout);
-
-                if (predict_keyword) {
-                    dec_keyword_emb = tensor(graph, hyper_params.word_dim, 0);
-                } else {
-                    const string &keyword = keywords.at(i - 1);
-                    dec_keyword_emb = embedding(graph, keyword, model_params.lookup_table);
-                    dec_keyword_emb = dropout(*dec_keyword_emb, hyper_params.dropout);
-                }
-
-                guide = last_state.hidden;
-            } else {
-                Node *bucket = tensor(graph, hyper_params.word_dim, 0);
-                dec_normal_emb = bucket;
-                dec_keyword_emb = bucket;
-                guide = tensor(graph, hyper_params.hidden_dim, 0);
-            }
-
-            int col = enc.size() / 2 / hyper_params.hidden_dim;
-            if (col * 2 * hyper_params.hidden_dim != enc.size()) {
-                cerr << fmt::format("col:{} hidden_dim:{} enc size:{}", col,
-                        hyper_params.hidden_dim, enc.size()) << endl;
-                abort();
-            }
-
-            Node *context = additiveAttention(*guide, enc, col,
-                    model_params.attention_params).first;
-            Node *in = insnet::cat({dec_normal_emb, dec_keyword_emb, context});
-            last_state = lstm(last_state, *in, model_params.decoder_params, hyper_params.dropout);
             Node *keyword_prob = nullptr;
             if (predict_keyword) {
-                keyword_prob = insnet::cat({last_state.hidden, context});
-                keyword_prob = insnet::linear(*keyword_prob,
-                        model_params.hidden_to_keyword_params);
+                keyword_prob = insnet::linear(*hidden, model_params.hidden_to_keyword_params_a);
+                keyword_prob = insnet::relu(*keyword_prob);
+                keyword_prob = insnet::dropout(*keyword_prob, hyper_params.dropout);
+                keyword_prob = insnet::linear(*keyword_prob, model_params.hidden_to_keyword_params_b);
                 keyword_prob = insnet::linear(*keyword_prob, model_params.lookup_table.E);
                 keyword_prob = insnet::split(*keyword_prob, keyword_bound, 0);
                 keyword_prob = insnet::softmax(*keyword_prob);
@@ -572,8 +553,7 @@ struct GraphBuilder {
             keyword_probs.push_back(keyword_prob);
 
             Node *output_keyword_emb = embedding(graph, keywords.at(i), model_params.lookup_table);
-            Node *normal_word_prob = insnet::cat({last_state.hidden, context, dec_normal_emb,
-                    output_keyword_emb});
+            Node *normal_word_prob = insnet::add({hidden, output_keyword_emb});
             normal_word_prob = insnet::linear(*normal_word_prob,
                     model_params.hidden_to_wordvector_params_a);
             normal_word_prob = insnet::relu(*normal_word_prob);
