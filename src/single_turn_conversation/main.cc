@@ -1238,7 +1238,7 @@ int main(int argc, char *argv[]) {
 //                            "");
                 }
 
-                optimizer.step(10.0f);
+                optimizer.step();
 
                 if (default_config.save_model_per_batch) {
                     saveModel(hyper_params, model_params, default_config.output_model_file_prefix,
