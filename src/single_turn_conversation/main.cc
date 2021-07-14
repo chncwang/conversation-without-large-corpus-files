@@ -1074,15 +1074,16 @@ int main(int argc, char *argv[]) {
                 if (batch_i % 10 == 5) {
                     cout << format("batch_i:%1% iteration:%2%") % batch_i % iteration << endl;
                 }
-                if (epoch == 0 && default_config.input_model_file == "") {
-                    dtype lr;
-                    if (iteration < hyper_params.warm_up_iterations) {
-                        lr = hyper_params.learning_rate;
-                    } else {
-                        lr = std::sqrt(1.0 * hyper_params.warm_up_iterations / iteration) *
-                            hyper_params.learning_rate;
-                    }
-                    optimizer.setLearningRate(lr);
+                dtype lr;
+                if (iteration < hyper_params.warm_up_iterations) {
+                    lr = hyper_params.learning_rate;
+                } else {
+                    lr = std::sqrt(1.0 * hyper_params.warm_up_iterations / iteration) *
+                        hyper_params.learning_rate;
+                }
+                optimizer.setLearningRate(lr);
+                if (batch_i % 10 == 5) {
+                    cout << "lr:" << lr << endl;
                 }
                 int batch_size = batch_i == batch_count ?
                     train_conversation_pairs.size() % hyper_params.batch_size :
