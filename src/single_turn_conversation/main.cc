@@ -782,7 +782,7 @@ int main(int argc, char *argv[]) {
 //            }
 //        }
     } else if (default_config.program_mode == ProgramMode::TRAINING) {
-        insnet::AdamOptimzer optimizer(model_params.tunableParams());
+        insnet::AdamOptimizer optimizer(model_params.tunableParams());
 
         CheckGrad grad_checker;
         if (default_config.check_grad) {
@@ -851,9 +851,9 @@ int main(int argc, char *argv[]) {
                 if (iteration < hyper_params.warm_up_iterations) {
                     optimizer.setLearningRate(hyper_params.learning_rate);
                 } else {
-                    dtype lr = hyper_params.learning_rate * sqrt(hyper_params.warm_up_iterations) /
-                        sqrt(iteration);
-                    optimizer.setLearningRate(lr);
+//                    dtype lr = hyper_params.learning_rate * sqrt(hyper_params.warm_up_iterations) /
+//                        sqrt(iteration);
+//                    optimizer.setLearningRate(lr);
                 }
                 if (batch_i % 10 == 5) {
                     cout << "lr:" << optimizer.getLearningRate() << endl;
