@@ -20,25 +20,27 @@ struct ModelParams : public TunableParamCollection
     LinearParams hidden_to_keyword_params_b;
     TransformerEncoderParams encoder_params;
     TransformerDecoderParams decoder_params;
+    LinearParams keyword_emb_linear_params;
 
     ModelParams() : hidden_to_wordvector_params_a("hidden_to_wordvector_params_a"),
     hidden_to_wordvector_params_b("hidden_to_wordvector_params_b"),
     hidden_to_keyword_params_a("hidden_to_keyword_params_a"),
     hidden_to_keyword_params_b("hidden_to_keyword_params_b"),
-    encoder_params("encoder_params"), decoder_params("decoder") {}
+    encoder_params("encoder_params"), decoder_params("decoder"),
+    keyword_emb_linear_params("keyword_emb_linear_params") {}
 
     template<typename Archive>
     void serialize(Archive &ar) {
         ar(lookup_table, hidden_to_wordvector_params_a, hidden_to_wordvector_params_b,
                 hidden_to_keyword_params_a, hidden_to_keyword_params_b, encoder_params,
-                decoder_params);
+                decoder_params, keyword_emb_linear_params);
     }
 
 #if USE_GPU
     std::vector<cuda::Transferable *> transferablePtrs() override {
         return {&lookup_table, &hidden_to_wordvector_params_a, &hidden_to_wordvector_params_b,
             &hidden_to_keyword_params_a, &hidden_to_keyword_params_b, &encoder_params,
-            &decoder_params};
+            &decoder_params, &keyword_emb_linear_params};
     }
 #endif
 
@@ -46,7 +48,7 @@ protected:
     virtual std::vector<Tunable<BaseParam> *> tunableComponents() override {
         return {&lookup_table, &hidden_to_wordvector_params_a, &hidden_to_wordvector_params_b,
             &hidden_to_keyword_params_a, &hidden_to_keyword_params_b, &encoder_params,
-            &decoder_params};
+            &decoder_params, &keyword_emb_linear_params};
     }
 };
 

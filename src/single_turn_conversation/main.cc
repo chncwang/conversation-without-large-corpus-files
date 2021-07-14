@@ -933,6 +933,8 @@ int main(int argc, char *argv[]) {
                 hyper_params.hidden_dim);
         model_params.hidden_to_keyword_params_b.init(hyper_params.hidden_dim,
                 hyper_params.hidden_dim * 4);
+        model_params.keyword_emb_linear_params.init(hyper_params.hidden_dim,
+                hyper_params.hidden_dim);
     };
 
     if (default_config.program_mode != ProgramMode::METRIC) {

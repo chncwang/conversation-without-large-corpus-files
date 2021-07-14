@@ -515,6 +515,7 @@ struct GraphBuilder {
         }
 
         Node *dec_keyword_emb = embedding(graph, dec_keyword_inputs, model_params.lookup_table);
+        dec_keyword_emb = linear(*dec_keyword_emb, model_params.keyword_emb_linear_params);
         Node *dec_normal_emb = embedding(graph, dec_normal_inputs, model_params.lookup_table);
         Node *dec_emb = add({dec_keyword_emb, dec_normal_emb});
 
