@@ -312,7 +312,7 @@ struct GraphBuilder {
                     model_params.attention_params).first;
             Node *in = cat({emb, context});
             last_state = lstm(last_state, *in, model_params.decoder_params, hyper_params.dropout);
-            Node *o = cat({last_state.hidden, emb});
+            Node *o = cat({last_state.hidden, emb, context});
             decoder_hiddens.push_back(o);
         }
 

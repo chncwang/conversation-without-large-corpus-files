@@ -717,7 +717,7 @@ int main(int argc, char *argv[]) {
             model_params.lookup_table.init(*alphabet, hyper_params.hidden_dim, true);
         }
         model_params.attention_params.init(hyper_params.hidden_dim * 2, hyper_params.hidden_dim);
-        model_params.output_params.init(hyper_params.hidden_dim, hyper_params.hidden_dim * 2);
+        model_params.output_params.init(hyper_params.hidden_dim, hyper_params.hidden_dim * 4);
         model_params.l2r_encoder_params.init(hyper_params.hidden_dim, hyper_params.hidden_dim);
         model_params.r2l_encoder_params.init(hyper_params.hidden_dim, hyper_params.hidden_dim);
         model_params.decoder_params.init(hyper_params.hidden_dim,
@@ -848,13 +848,7 @@ int main(int argc, char *argv[]) {
                     return i * batch_count + batch_i;
                 };
 
-                if (iteration < hyper_params.warm_up_iterations) {
-                    optimizer.setLearningRate(hyper_params.learning_rate);
-                } else {
-//                    dtype lr = hyper_params.learning_rate * sqrt(hyper_params.warm_up_iterations) /
-//                        sqrt(iteration);
-//                    optimizer.setLearningRate(lr);
-                }
+                optimizer.setLearningRate(hyper_params.learning_rate);
                 if (batch_i % 10 == 5) {
                     cout << "lr:" << optimizer.getLearningRate() << endl;
                 }
