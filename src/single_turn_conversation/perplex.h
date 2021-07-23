@@ -37,8 +37,8 @@ float computePerplex(const insnet::Node &node, int row, const std::vector<int> &
 #if USE_GPU
         const_cast<insnet::Node &>(node).val().copyFromDeviceToHost();
 #endif
-        float reciprocal_answer_prob = 1 / node.getVal()[row * i + answer];
-        log_sum += log(reciprocal_answer_prob);
+        float v = node.getVal()[row * i + answer];
+        log_sum -= v;
 
         bool hit = true;
         int larger_count = 0;

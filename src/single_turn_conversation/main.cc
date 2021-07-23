@@ -703,6 +703,9 @@ int main(int argc, char *argv[]) {
         word_counts[insnet::UNKNOWN_WORD] = 1000000000;
         word_counts[BEGIN_SYMBOL] = 1000000000;
         alphabet.init(word_counts, hyper_params.word_cutoff);
+        for (int i = 0; i < 10; ++i) {
+            cout << "id:" << alphabet.from_id(i) << endl;
+        }
         cout << boost::format("post alphabet size:%1%") % alphabet.size() << endl;
     }
 
@@ -785,9 +788,9 @@ int main(int argc, char *argv[]) {
         insnet::AdamOptimizer optimizer(model_params.tunableParams());
 
         CheckGrad grad_checker;
-        if (default_config.check_grad) {
-            grad_checker.init(model_params.tunableParams());
-        }
+#if USE_DOUBLE
+        grad_checker.init(model_params.tunableParams());
+#endif
 
 
         insnet::Profiler &profiler = insnet::Profiler::Ins();
@@ -920,34 +923,31 @@ int main(int argc, char *argv[]) {
 
                 graph.backward();
 
-//                if (default_config.check_grad) {
-//                    auto loss_function = [&](const ConversationPair &conversation_pair) -> dtype {
-//                        GraphBuilder graph_builder;
-//                        Graph graph(false);
+#if USE_DOUBLE
+                auto loss_function = [&](const ConversationPair &conversation_pair) -> dtype {
+                    GraphBuilder graph_builder;
+                    Graph graph;
 
-//                        graph_builder.forward(graph, post_sentences.at(conversation_pair.post_id),
-//                                hyper_params, model_params, true);
+                    graph_builder.forward(graph, post_sentences.at(conversation_pair.post_id),
+                            hyper_params, model_params);
 
-//                        DecoderComponents decoder_components;
-//                        graph_builder.forwardDecoder(graph, decoder_components,
-//                                response_sentences.at(conversation_pair.response_id),
-//                                hyper_params, model_params, true);
+                    Node *node = graph_builder.forwardDecoder(response_sentences.at(
+                                conversation_pair.response_id),
+                            hyper_params, model_params);
+                    graph.forward();
 
-//                        graph.compute();
-
-//                        vector<int> word_ids = toIds(response_sentences.at(
-//                                    conversation_pair.response_id),
-//                                model_params.decoder_lookup_table);
-//                        vector<Node*> result_nodes = toNodePointers(
-//                                decoder_components.wordvector_to_onehots);
-//                        return maxLogProbabilityLoss(result_nodes, word_ids, 1.0 /
-//                                word_ids.size()).first;
-//                    };
-//                    cout << format("checking grad - conversation_pair size:%1%") %
-//                        conversation_pair_in_batch.size() << endl;
-//                    grad_checker.check<ConversationPair>(loss_function, conversation_pair_in_batch,
-//                            "");
-//                }
+                    vector<int> word_ids = toIds(response_sentences.at(
+                                conversation_pair.response_id),
+                            model_params.lookup_table);
+                    vector<Node *> nodes = {node};
+                    vector<vector<int>> ids = {word_ids};
+                    return NLLLoss(nodes, model_params.lookup_table.size(), ids, 1.0);
+                };
+                cout << format("checking grad - conversation_pair size:%1%") %
+                    conversation_pair_in_batch.size() << endl;
+                grad_checker.check<ConversationPair>(loss_function, conversation_pair_in_batch,
+                        "");
+#endif
 
                 if (hyper_params.clip_grad > 1e4) {
                     optimizer.step();

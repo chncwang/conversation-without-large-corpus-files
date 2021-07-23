@@ -66,7 +66,7 @@ bool includePunctuation(const string &str) {
     return false;
 }
 
-float mostMatchedCount(const CandidateAndReferences &candidate_and_references,
+dtype mostMatchedCount(const CandidateAndReferences &candidate_and_references,
         int gram_len,
         bool print_log = false) {
     using namespace std;
@@ -169,7 +169,7 @@ int mostMatchedLength(const CandidateAndReferences &candidate_and_references) {
     return puncRemovedLen(*e);
 }
 
-float ngramCount(const vector<string> sentence, int ngram) {
+dtype ngramCount(const vector<string> sentence, int ngram) {
     int len = sentence.size() + 1 - ngram;
     return len;
 }
@@ -185,10 +185,10 @@ vector<string> toChars(const vector<string> &src) {
     return result;
 }
 
-float computeBleu(const vector<CandidateAndReferences> &candidate_and_references_vector,
+dtype computeBleu(const vector<CandidateAndReferences> &candidate_and_references_vector,
         int max_gram_len) {
     using namespace std;
-    float weighted_sum = 0.0f;
+    dtype weighted_sum = 0.0f;
     int r_sum = 0;
     int c_sum = 0;
 
@@ -209,18 +209,18 @@ float computeBleu(const vector<CandidateAndReferences> &candidate_and_references
         }
         c_sum += candidate_len_sum;
 
-        weighted_sum += 1.0f / max_gram_len * log(static_cast<float>(matched_count_sum) /
+        weighted_sum += 1.0f / max_gram_len * log(static_cast<dtype>(matched_count_sum) /
                 candidate_count_sum);
         cout << boost::format("matched_count:%1% candidate_count:%2% weighted_sum%3%") %
             matched_count_sum % candidate_count_sum % weighted_sum << endl;
     }
 
-    float bp = c_sum > r_sum ? 1.0f : exp(1 - static_cast<float>(r_sum) / c_sum);
+    dtype bp = c_sum > r_sum ? 1.0f : exp(1 - static_cast<dtype>(r_sum) / c_sum);
     cout << boost::format("candidate sum:%1% ref:%2% bp:%3%") % c_sum % r_sum % bp << endl;
     return bp * exp(weighted_sum);
 }
 
-float computeMtevalBleu(const vector<CandidateAndReferences> &candidate_and_references_vector,
+dtype computeMtevalBleu(const vector<CandidateAndReferences> &candidate_and_references_vector,
         int max_gram_len) {
     using namespace MTEval;
     EvaluatorParam param;
@@ -241,12 +241,12 @@ float computeMtevalBleu(const vector<CandidateAndReferences> &candidate_and_refe
         stats += evaluator.map(sample);
     }
 
-    float score = evaluator.integrate(stats);
+    dtype score = evaluator.integrate(stats);
 
     return score;
 }
 
-float computeMtevalBleu(const CandidateAndReferences &candidate_and_references,
+dtype computeMtevalBleu(const CandidateAndReferences &candidate_and_references,
         int max_gram_len) {
     vector<CandidateAndReferences> v = {candidate_and_references};
     return computeMtevalBleu(v, max_gram_len);
@@ -255,29 +255,29 @@ float computeMtevalBleu(const CandidateAndReferences &candidate_and_references,
 void computeMtevalBleuForEachResponse(
         const vector<CandidateAndReferences> &candidate_and_references_vector,
         int max_gram_len,
-        float &avg,
-        float &standard_deviation) {
+        dtype &avg,
+        dtype &standard_deviation) {
     using namespace boost::accumulators;
 
-    vector<float> bleus;
+    vector<dtype> bleus;
     for (const auto &e : candidate_and_references_vector) {
-        float bleu = computeMtevalBleu(e, max_gram_len);
+        dtype bleu = computeMtevalBleu(e, max_gram_len);
         bleus.push_back(bleu);
     }
 
     avg = accumulate(bleus.begin(), bleus.end(), 0.0f) / bleus.size();
-    vector<float> zero_centralized_squares;
-    for (float bleu : bleus) {
-        float v = bleu - avg;
+    vector<dtype> zero_centralized_squares;
+    for (dtype bleu : bleus) {
+        dtype v = bleu - avg;
         zero_centralized_squares.push_back(v * v);
     }
-    float variance = zero_centralized_squares.size() == 1 ? 0 :
+    dtype variance = zero_centralized_squares.size() == 1 ? 0 :
         accumulate(zero_centralized_squares.begin(), zero_centralized_squares.end(), 0.0f) /
         (zero_centralized_squares.size() - 1);
     standard_deviation = sqrt(variance);
 }
 
-float computeNist(const vector<CandidateAndReferences> &candidate_and_references_vector,
+dtype computeNist(const vector<CandidateAndReferences> &candidate_and_references_vector,
         int max_gram_len) {
     using namespace MTEval;
     EvaluatorParam param;
@@ -298,14 +298,14 @@ float computeNist(const vector<CandidateAndReferences> &candidate_and_references
         stats += evaluator.map(sample);
     }
 
-    float score = evaluator.integrate(stats);
+    dtype score = evaluator.integrate(stats);
 
     return score;
 }
 
-float computeEntropy(const vector<CandidateAndReferences> &candidate_and_references_vector,
-        const unordered_map<string, float> &idf_table) {
-    float idf_sum = 0;
+dtype computeEntropy(const vector<CandidateAndReferences> &candidate_and_references_vector,
+        const unordered_map<string, dtype> &idf_table) {
+    dtype idf_sum = 0;
     int len_sum = 0;
     for (const CandidateAndReferences &e : candidate_and_references_vector) {
         const auto &s = e.candidate;
@@ -315,7 +315,7 @@ float computeEntropy(const vector<CandidateAndReferences> &candidate_and_referen
                  cerr << "word " << word << " not found" << endl;
                  abort();
              }
-             float idf = it->second;
+             dtype idf = it->second;
              idf_sum += idf;
         }
         len_sum += s.size();
@@ -323,27 +323,27 @@ float computeEntropy(const vector<CandidateAndReferences> &candidate_and_referen
     return idf_sum / len_sum;
 }
 
-float computeMatchedEntropy(const vector<CandidateAndReferences> &candidate_and_references_vector,
-        const unordered_map<string, float> &idf_table) {
-    float idf_sum = 0;
+dtype computeMatchedEntropy(const vector<CandidateAndReferences> &candidate_and_references_vector,
+        const unordered_map<string, dtype> &idf_table) {
+    dtype idf_sum = 0;
     int len_sum = 0;
     for (const CandidateAndReferences &e : candidate_and_references_vector) {
         const auto &s = e.candidate;
-        float max_idf = -1;
+        dtype max_idf = -1;
         for (const auto &ref : e.references) {
             vector<bool> used;
             used.resize(ref.size());
             for (int i = 0; i < used.size(); ++i) {
                 used.at(i) = false;
             }
-            float idf_inner_sum = 0;
+            dtype idf_inner_sum = 0;
             for (const string &word : s) {
                 const auto &it = idf_table.find(word);
                 if (it == idf_table.end()) {
                     cerr << "word " << word << " not found" << endl;
                     abort();
                 }
-                float idf = it->second;
+                dtype idf = it->second;
                 int i = 0;
                 for (const auto &ref_word : ref) {
                     if (!used.at(i) && ref_word == it->first) {
@@ -363,7 +363,7 @@ float computeMatchedEntropy(const vector<CandidateAndReferences> &candidate_and_
     return idf_sum / len_sum;
 }
 
-float computeDist(const vector<CandidateAndReferences> &candidate_and_references_vector,
+dtype computeDist(const vector<CandidateAndReferences> &candidate_and_references_vector,
         int ngram) {
     unordered_set<string> distinctions;
     int sentence_len_sum = 0;
@@ -382,13 +382,13 @@ float computeDist(const vector<CandidateAndReferences> &candidate_and_references
             }
         }
     }
-    return static_cast<float>(distinctions.size()) / sentence_len_sum;
+    return static_cast<dtype>(distinctions.size()) / sentence_len_sum;
 }
 
-float vectorCos(const dtype *a, const dtype *b, int len) {
-    float inner_prod_sum = 0;
-    float a_len_square = 0;
-    float b_len_square = 0;
+dtype vectorCos(const dtype *a, const dtype *b, int len) {
+    dtype inner_prod_sum = 0;
+    dtype a_len_square = 0;
+    dtype b_len_square = 0;
 
     for (int i = 0; i < len; ++i) {
         inner_prod_sum += a[i] * b[i];
@@ -399,18 +399,18 @@ float vectorCos(const dtype *a, const dtype *b, int len) {
     return inner_prod_sum / sqrt(a_len_square) / sqrt(b_len_square);
 }
 
-float greedyMatching(const vector<string> &a, const vector<string> &b,
+dtype greedyMatching(const vector<string> &a, const vector<string> &b,
         Embedding<Param>& embedding_table) {
     return 0;
-//    float max_cos_sum = 0;
+//    dtype max_cos_sum = 0;
 //    for (const auto &candidate_word : a) {
-//        float max_cos = -2;
+//        dtype max_cos = -2;
 //        for (const auto &ref_word : b) {
 //            int candidate_id = embedding_table.vocab.from_string(candidate_word);
 //            dtype *candidate_vector = embedding_table.E.val[candidate_id];
 //            int ref_id = embedding_table.elems.from_string(ref_word);
 //            dtype *ref_vector = embedding_table.E.val[ref_id];
-//            float cos = vectorCos(candidate_vector, ref_vector, embedding_table.E.outDim());
+//            dtype cos = vectorCos(candidate_vector, ref_vector, embedding_table.E.outDim());
 //            if (cos > max_cos) {
 //                max_cos = cos;
 //            }
@@ -420,11 +420,11 @@ float greedyMatching(const vector<string> &a, const vector<string> &b,
 //    return max_cos_sum / a.size();
 }
 
-float computeGreedyMatching(const CandidateAndReferences &candidate_and_refs,
+dtype computeGreedyMatching(const CandidateAndReferences &candidate_and_refs,
         Embedding<Param>& embedding_table) {
     return 0;
 //    const auto &refs = candidate_and_refs.references;
-//    float max_g = -2;
+//    dtype max_g = -2;
 //    for (const auto &ref : refs) {
 //        auto known_ref = ref;
 //        for (auto &w : known_ref) {
@@ -432,7 +432,7 @@ float computeGreedyMatching(const CandidateAndReferences &candidate_and_refs,
 //                w = unknownkey;
 //            }
 //        }
-//        float g = 0.5 * (greedyMatching(known_ref, candidate_and_refs.candidate, embedding_table) +
+//        dtype g = 0.5 * (greedyMatching(known_ref, candidate_and_refs.candidate, embedding_table) +
 //            greedyMatching(candidate_and_refs.candidate, known_ref, embedding_table));
 //        if (g > max_g) {
 //            max_g = g;
@@ -441,8 +441,8 @@ float computeGreedyMatching(const CandidateAndReferences &candidate_and_refs,
 //    return max_g;
 }
 
-vector<float> sentenceAvgEmbedding(const vector<string> &s, Embedding<Param>& embedding_table) {
-    vector<float> result;
+vector<dtype> sentenceAvgEmbedding(const vector<string> &s, Embedding<Param>& embedding_table) {
+    vector<dtype> result;
     return result;
 //    int dim = embedding_table.E.outDim();
 //    result.resize(dim);
@@ -458,14 +458,14 @@ vector<float> sentenceAvgEmbedding(const vector<string> &s, Embedding<Param>& em
 //        }
 //    }
 
-//    for (float &v : result) {
+//    for (dtype &v : result) {
 //        v /= s.size();
 //    }
 
 //    return result;
 }
 
-float embeddingAvg(const vector<string> &a, const vector<string> &b,
+dtype embeddingAvg(const vector<string> &a, const vector<string> &b,
         Embedding<Param>& embedding_table) {
     auto av = sentenceAvgEmbedding(a, embedding_table);
     auto bv = sentenceAvgEmbedding(b, embedding_table);
@@ -476,10 +476,10 @@ float embeddingAvg(const vector<string> &a, const vector<string> &b,
     return vectorCos(av.data(), bv.data(), av.size());
 }
 
-float computeEmbeddingAvg(const CandidateAndReferences &candidate_and_refs,
+dtype computeEmbeddingAvg(const CandidateAndReferences &candidate_and_refs,
         Embedding<Param>& embedding_table) {
     const auto &refs = candidate_and_refs.references;
-    float max_avg = -1e10;
+    dtype max_avg = -1e10;
     for (const auto &ref : refs) {
         auto known_ref = ref;
         for (auto &w : known_ref) {
@@ -487,7 +487,7 @@ float computeEmbeddingAvg(const CandidateAndReferences &candidate_and_refs,
                 w = insnet::UNKNOWN_WORD;
             }
         }
-        float avg = embeddingAvg(known_ref, candidate_and_refs.candidate, embedding_table);
+        dtype avg = embeddingAvg(known_ref, candidate_and_refs.candidate, embedding_table);
         if (avg > max_avg) {
             max_avg = avg;
         }
@@ -495,8 +495,8 @@ float computeEmbeddingAvg(const CandidateAndReferences &candidate_and_refs,
     return max_avg;
 }
 
-vector<float> sentenceExtrema(const vector<string> &s, Embedding<Param>& embedding_table) {
-    vector<float> result;
+vector<dtype> sentenceExtrema(const vector<string> &s, Embedding<Param>& embedding_table) {
+    vector<dtype> result;
 //    int dim = embedding_table.E.outDim();
 //    result.resize(dim);
 //    for (int i = 0; i < embedding_table.E.outDim(); ++i) {
@@ -517,7 +517,7 @@ vector<float> sentenceExtrema(const vector<string> &s, Embedding<Param>& embeddi
     return result;
 }
 
-float extrema(const vector<string> &a, const vector<string> &b,
+dtype extrema(const vector<string> &a, const vector<string> &b,
         Embedding<Param>& embedding_table) {
     auto av = sentenceExtrema(a, embedding_table);
     auto bv = sentenceExtrema(b, embedding_table);
@@ -528,10 +528,10 @@ float extrema(const vector<string> &a, const vector<string> &b,
     return vectorCos(av.data(), bv.data(), av.size());
 }
 
-float computeExtrema(const CandidateAndReferences &candidate_and_refs,
+dtype computeExtrema(const CandidateAndReferences &candidate_and_refs,
         Embedding<Param>& embedding_table) {
     const auto &refs = candidate_and_refs.references;
-    float max_avg = -1e10;
+    dtype max_avg = -1e10;
     for (const auto &ref : refs) {
         auto known_ref = ref;
         for (auto &w : known_ref) {
@@ -539,7 +539,7 @@ float computeExtrema(const CandidateAndReferences &candidate_and_refs,
                 w = insnet::UNKNOWN_WORD;
             }
         }
-        float avg = extrema(known_ref, candidate_and_refs.candidate, embedding_table);
+        dtype avg = extrema(known_ref, candidate_and_refs.candidate, embedding_table);
         if (avg > max_avg) {
             max_avg = avg;
         }
@@ -563,7 +563,7 @@ set<string> ngramKeys(const vector<string> &sentence, int ngram) {
     return results;
 }
 
-unordered_map<string, float> computeNgramIdf(const vector<vector<vector<string>>> &sentences,
+unordered_map<string, dtype> computeNgramIdf(const vector<vector<vector<string>>> &sentences,
         int ngram) {
     unordered_map<string, int> count_table;
     for (const auto pair : sentences) {
@@ -591,29 +591,29 @@ unordered_map<string, float> computeNgramIdf(const vector<vector<vector<string>>
         }
     }
 
-    unordered_map<string, float> idf_table;
+    unordered_map<string, dtype> idf_table;
     for (const auto &it : count_table) {
-        float idf = log(sentences.size() / static_cast<float>(it.second));
+        dtype idf = log(sentences.size() / static_cast<dtype>(it.second));
         idf_table.insert(make_pair(it.first, idf));
     }
     return idf_table;
 }
 
-vector<float> zeroVector(int size) {
-    vector<float> result;
+vector<dtype> zeroVector(int size) {
+    vector<dtype> result;
     result.resize(size);
-    for (float &e : result) {
+    for (dtype &e : result) {
         e = 0;
     }
     return result;
 }
 
-float occurenceIdf(const vector<string> &sentence, int ngram, const string &word, float idf) {
+dtype occurenceIdf(const vector<string> &sentence, int ngram, const string &word, dtype idf) {
     if (sentence.size() < ngram) {
         return 0;
     }
 
-    float result = 0;
+    dtype result = 0;
 
     for (int i = 0; i < sentence.size() + 1 - ngram; ++i) {
         string key;
@@ -627,21 +627,21 @@ float occurenceIdf(const vector<string> &sentence, int ngram, const string &word
     return result;
 }
 
-float vectorLen(const vector<float> &v) {
-    float square_sum = 0;
-    for (float n : v) {
+dtype vectorLen(const vector<dtype> &v) {
+    dtype square_sum = 0;
+    for (dtype n : v) {
         square_sum += n * n;
     }
     return sqrt(square_sum);
 }
 
-float vectorCos(const vector<float> &a, const vector<float> &b) {
+dtype vectorCos(const vector<dtype> &a, const vector<dtype> &b) {
     if (a.size() != b.size()) {
         cerr << "vectorCos - input sizes are not equal" << endl;
         abort();
     }
 
-    float sum = 0;
+    dtype sum = 0;
     for (int i = 0; i < a.size(); ++i) {
         sum += a.at(i) * b.at(i);
     }
@@ -653,11 +653,11 @@ float vectorCos(const vector<float> &a, const vector<float> &b) {
     return sum / (a_len * b_len);
 }
 
-float computeCIDEr(const CandidateAndReferences &candidate_and_references,
-        const unordered_map<string, float> idf_table,
+dtype computeCIDEr(const CandidateAndReferences &candidate_and_references,
+        const unordered_map<string, dtype> idf_table,
         int ngram) {
     set<string> can_words = ngramKeys(candidate_and_references.candidate, ngram);
-    float sum = 0;
+    dtype sum = 0;
     for (const auto &ref : candidate_and_references.references) {
         set<string> words = ngramKeys(ref, ngram);
         for (const string &cw : can_words) {
@@ -668,13 +668,13 @@ float computeCIDEr(const CandidateAndReferences &candidate_and_references,
         int offset = 0;
         for (const string &word : words) {
             const auto &it = idf_table.find(word);
-            float idf = it == idf_table.end() ? 0 : it->second;
+            dtype idf = it == idf_table.end() ? 0 : it->second;
             can_vec.at(offset) = occurenceIdf(candidate_and_references.candidate, ngram, word,
                     idf);
             ref_vec.at(offset) = occurenceIdf(ref, ngram, word, idf);
             offset++;
         }
-        float cos = vectorCos(can_vec, ref_vec);
+        dtype cos = vectorCos(can_vec, ref_vec);
         cout << "can:";
         print(candidate_and_references.candidate);
         cout << "ref:";
