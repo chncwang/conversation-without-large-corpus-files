@@ -717,7 +717,7 @@ vector<string> getAllWordsByIdfAscendingly(const unordered_map<string, float> &i
     return result;
 }
 
-std::pair<dtype, std::vector<int>> MaxLogProbabilityLossWithInconsistentDims(
+dtype MaxLogProbabilityLossWithInconsistentDims(
         const std::vector<Node*> &result_nodes,
         const std::vector<int> &ids,
         int vocabulary_size) {
@@ -726,7 +726,7 @@ std::pair<dtype, std::vector<int>> MaxLogProbabilityLossWithInconsistentDims(
         abort();
     }
 
-    pair<dtype, std::vector<int>> final_result;
+    dtype sum = 0;
 
     for (int i = 0; i < result_nodes.size(); ++i) {
         vector<int> id = {ids.at(i)};
@@ -739,16 +739,10 @@ std::pair<dtype, std::vector<int>> MaxLogProbabilityLossWithInconsistentDims(
             throw InformedRuntimeError(info);
         }
         dtype result = insnet::NLLLoss(node, node.front()->size(), {id}, 1.0);
-        final_result.first += result;
-        int word_id = insnet::argmax(node, node.front()->size()).front().front();
-        if (word_id < 0 || word_id > vocabulary_size) {
-            cerr << "word_id:" << word_id << endl;
-            abort();
-        }
-        final_result.second.push_back(word_id);
+        sum += result;
     }
 
-    return final_result;
+    return sum;
 }
 
 template<typename T>
@@ -1061,9 +1055,6 @@ int main(int argc, char *argv[]) {
             }
 
 
-            unique_ptr<Metric> metric = unique_ptr<Metric>(new Metric);
-            unique_ptr<Metric> keyword_metric = unique_ptr<Metric>(new Metric);
-
             for (int batch_i = 0; batch_i < batch_count +
                     (train_conversation_pairs.size() > hyper_params.batch_size * batch_count);
                     ++batch_i) {
@@ -1122,7 +1113,7 @@ int main(int argc, char *argv[]) {
                         }
                     }
                     vector<Node*> result_nodes = results.at(i).second;
-                    std::pair<dtype, std::vector<int>> result;
+                    dtype result;
                     try {
                         result = MaxLogProbabilityLossWithInconsistentDims(result_nodes,
                                 word_ids, model_params.lookup_table.nVSize);
@@ -1143,9 +1134,8 @@ int main(int argc, char *argv[]) {
                         print(response_idf_info_list.at(response_id).keywords_behind);
                         abort();
                     }
-                    loss_sum += result.first;
-                    normal_loss_sum += result.first;
-                    analyze(result.second, word_ids, *metric);
+                    loss_sum += result;
+                    normal_loss_sum += result;
                     const WordIdfInfo &response_idf = response_idf_info_list.at(response_id);
                     auto keyword_nodes_and_ids = keywordNodesAndIds(
                             results.at(i).first, response_idf, model_params);
@@ -1153,30 +1143,19 @@ int main(int argc, char *argv[]) {
                             keyword_nodes_and_ids.first, keyword_nodes_and_ids.second,
                             model_params.lookup_table.size());
                     keyword_sum += keyword_nodes_and_ids.second.size();
-                    loss_sum += keyword_result.first;
-                    keyword_loss_sum += keyword_result.first;
-                    analyze(keyword_result.second, keyword_nodes_and_ids.second, *keyword_metric);
+                    loss_sum += keyword_result;
+                    keyword_loss_sum += keyword_result;
 
                     if (batch_i % 10 == 5 && i == 0) {
                         int post_id = train_conversation_pairs.at(instance_index).post_id;
                         cout << "post:" << post_id << endl;
                         print(post_sentences.at(post_id));
 
-                        for (int j = 0; j < word_ids.size(); ++j) {
-                            if (j < word_ids.size() - 1) {
-                                ++word_ids.at(j);
-                                ++result.second.at(j);
-                            }
-                        }
                         cout << "golden answer:" << endl;
                         printWordIds(word_ids, model_params.lookup_table);
-                        cout << "output:" << endl;
-                        printWordIds(result.second, model_params.lookup_table);
 
                         cout << "golden keywords:" << endl;
                         printWordIds(keyword_nodes_and_ids.second, model_params.lookup_table);
-                        cout << "output:" << endl;
-                        printWordIds(keyword_result.second, model_params.lookup_table);
                     }
                 }
 
@@ -1184,10 +1163,6 @@ int main(int argc, char *argv[]) {
                     cout << "loss:" << loss_sum <<" ppl:" << std::exp(loss_sum / word_sum) <<
                         "normal ppl:" << std::exp(normal_loss_sum / word_sum) <<
                         "keyword ppl:" << std::exp(keyword_loss_sum / keyword_sum)<< endl;
-                    cout << "normal:" << endl;
-                    metric->print();
-                    cout << "keyword:" << endl;
-                    keyword_metric->print();
                 }
 
                 graph.backward();
