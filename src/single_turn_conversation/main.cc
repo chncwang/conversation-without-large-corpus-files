@@ -370,42 +370,28 @@ string saveModel(const HyperParams &hyper_params, ModelParams &model_params,
     return filename;
 }
 
-shared_ptr<Json::Value> loadModel(const string &filename) {
-    ifstream is(filename.c_str());
-    shared_ptr<Json::Value> root(new Json::Value);
-    if (is) {
-        cout << "loading model..." << endl;
-        stringstream sstr;
-        sstr << is.rdbuf();
-        string str = sstr.str();
-        Json::CharReaderBuilder builder;
-        auto reader = unique_ptr<Json::CharReader>(builder.newCharReader());
-        string error;
-        if (!reader->parse(str.c_str(), str.c_str() + str.size(), root.get(), &error)) {
-            cerr << boost::format("parse json error:%1%") % error << endl;
-            abort();
-        }
-        cout << "model loaded" << endl;
-    } else {
-        cerr << format("failed to open is, error when loading %1%") % filename << endl;
-        abort();
-    }
-
-    return root;
-}
-
 void loadModel(const DefaultConfig &default_config, HyperParams &hyper_params,
         ModelParams &model_params,
-        const Json::Value *root,
+        int &epoch,
+        const string &filename,
         const function<void(const DefaultConfig &default_config, const HyperParams &hyper_params,
             ModelParams &model_params, const Vocab*)> &allocate_model_params) {
-//    hyper_params.fromJson((*root)["hyper_params"]);
-//    hyper_params.print();
-//    allocate_model_params(default_config, hyper_params, model_params, nullptr);
-//    model_params.fromJson((*root)["model_params"]);
-//#if USE_GPU
-//    model_params.copyFromHostToDevice();
-//#endif
+    ifstream is(filename.c_str());
+    if (is) {
+        cout << "loading model..." << endl;
+        cereal::BinaryInputArchive ar(is);
+        ar(hyper_params);
+        hyper_params.print();
+        allocate_model_params(default_config, hyper_params, model_params, nullptr);
+        ar(model_params, epoch);
+#if USE_GPU
+        model_params.copyFromHostToDevice();
+#endif
+        cout << "model loaded" << endl;
+    } else {
+        cerr << fmt::format("load model fail - filename:%1%", filename) << endl;
+        abort();
+    }
 }
 
 pair<vector<Node *>, vector<int>> keywordNodesAndIds(const vector<Node *> &keyword_probs,
@@ -925,14 +911,15 @@ int main(int argc, char *argv[]) {
                 3 * hyper_params.hidden_dim, true);
     };
 
+    int epoch_begin = -1;
+
     if (default_config.program_mode != ProgramMode::METRIC) {
         if (default_config.input_model_file == "") {
             allocate_model_params(default_config, hyper_params, model_params, &alphabet);
             cout << "complete allocate" << endl;
         } else {
-            root_ptr = loadModel(default_config.input_model_file);
-            loadModel(default_config, hyper_params, model_params, root_ptr.get(),
-                    allocate_model_params);
+            loadModel(default_config, hyper_params, model_params, epoch_begin,
+                    default_config.input_model_file, allocate_model_params);
         }
     } else {
         globalPoolEnabled() = false;
@@ -940,9 +927,8 @@ int main(int argc, char *argv[]) {
         if (default_config.input_model_file == "") {
             abort();
         } else {
-            root_ptr = loadModel(default_config.input_model_file);
-            loadModel(default_config, hyper_params, model_params, root_ptr.get(),
-                    allocate_model_params);
+            loadModel(default_config, hyper_params, model_params, epoch_begin,
+                    default_config.input_model_file, allocate_model_params);
             hyper_params.learning_rate_decay = ini_reader.GetFloat("hyper", "learning_rate_decay",
                     0);
             hyper_params.min_learning_rate = ini_reader.GetFloat("hyper", "min_learning_rate",
@@ -973,45 +959,45 @@ int main(int argc, char *argv[]) {
 //                response_idf_info_list, test_post_and_responses, post_sentences,
 //                response_sentences, black_list);
     } else if (default_config.program_mode == ProgramMode::METRIC) {
-        path dir_path(default_config.input_model_dir);
-        if (!is_directory(dir_path)) {
-            cerr << format("%1% is not dir path") % default_config.input_model_dir << endl;
-            abort();
-        }
+//        path dir_path(default_config.input_model_dir);
+//        if (!is_directory(dir_path)) {
+//            cerr << format("%1% is not dir path") % default_config.input_model_dir << endl;
+//            abort();
+//        }
 
-        vector<string> ordered_file_paths;
-        for(auto& entry : boost::make_iterator_range(directory_iterator(dir_path), {})) {
-            string basic_name = entry.path().filename().string();
-            cout << format("basic_name:%1%") % basic_name << endl;
-            if (basic_name.find("model") != 0) {
-                continue;
-            }
+//        vector<string> ordered_file_paths;
+//        for(auto& entry : boost::make_iterator_range(directory_iterator(dir_path), {})) {
+//            string basic_name = entry.path().filename().string();
+//            cout << format("basic_name:%1%") % basic_name << endl;
+//            if (basic_name.find("model") != 0) {
+//                continue;
+//            }
 
-            string model_file_path = entry.path().string();
-            ordered_file_paths.push_back(model_file_path);
-        }
-        std::sort(ordered_file_paths.begin(), ordered_file_paths.end(),
-                [](const string &a, const string &b)->bool {
-                using boost::filesystem::last_write_time;
-                return last_write_time(a) < last_write_time(b);
-                });
+//            string model_file_path = entry.path().string();
+//            ordered_file_paths.push_back(model_file_path);
+//        }
+//        std::sort(ordered_file_paths.begin(), ordered_file_paths.end(),
+//                [](const string &a, const string &b)->bool {
+//                using boost::filesystem::last_write_time;
+//                return last_write_time(a) < last_write_time(b);
+//                });
 
-        float max_rep_perplex = 0.0f;
-        for(const string &model_file_path : ordered_file_paths) {
-            cout << format("model_file_path:%1%") % model_file_path << endl;
-            ModelParams model_params;
-            shared_ptr<Json::Value> root_ptr = loadModel(model_file_path);
-            loadModel(default_config, hyper_params, model_params, root_ptr.get(),
-                    allocate_model_params);
-            float rep_perplex = metricTestPosts(hyper_params, model_params, dev_post_and_responses,
-                    post_sentences, response_sentences, response_idf_info_list);
-            cout << format("model %1% rep_perplex is %2%") % model_file_path % rep_perplex << endl;
-            if (max_rep_perplex < rep_perplex) {
-                max_rep_perplex = rep_perplex;
-                cout << format("best model now is %1%, and rep_perplex is %2%") % model_file_path %
-                    rep_perplex << endl;
-            }
-        }
+//        float max_rep_perplex = 0.0f;
+//        for(const string &model_file_path : ordered_file_paths) {
+//            cout << format("model_file_path:%1%") % model_file_path << endl;
+//            ModelParams model_params;
+//            shared_ptr<Json::Value> root_ptr = loadModel(model_file_path);
+//            loadModel(default_config, hyper_params, model_params, root_ptr.get(),
+//                    allocate_model_params);
+//            float rep_perplex = metricTestPosts(hyper_params, model_params, dev_post_and_responses,
+//                    post_sentences, response_sentences, response_idf_info_list);
+//            cout << format("model %1% rep_perplex is %2%") % model_file_path % rep_perplex << endl;
+//            if (max_rep_perplex < rep_perplex) {
+//                max_rep_perplex = rep_perplex;
+//                cout << format("best model now is %1%, and rep_perplex is %2%") % model_file_path %
+//                    rep_perplex << endl;
+//            }
+//        }
     } else if (default_config.program_mode == ProgramMode::TRAINING) {
         insnet::AdamOptimizer optimizer(model_params.tunableParams(), hyper_params.learning_rate);
 
@@ -1025,7 +1011,7 @@ int main(int argc, char *argv[]) {
         string last_saved_model;
 
         default_random_engine engine(default_config.seed);
-        for (int epoch = 0; epoch < default_config.max_epoch; ++epoch) {
+        for (int epoch = epoch_begin + 1; epoch < default_config.max_epoch; ++epoch) {
             dtype loss_sum = 0.0f;
             int word_sum = 0;
             dtype keyword_loss_sum = 0;
