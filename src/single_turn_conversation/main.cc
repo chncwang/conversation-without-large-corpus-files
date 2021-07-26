@@ -828,7 +828,6 @@ int main(int argc, char *argv[]) {
             }
 
 
-            unique_ptr<Metric> metric = unique_ptr<Metric>(new Metric);
             using namespace std::chrono;
             int duration_count = 1e3;
 
@@ -895,11 +894,8 @@ int main(int argc, char *argv[]) {
 
                 float loss = insnet::NLLLoss(decoder_outputs,
                         model_params.lookup_table.size(), total_word_ids, 1.0);
-                loss_sum += loss;
-
-                auto predicted_ids = argmax(decoder_outputs, model_params.lookup_table.nVSize);
-                for (int i = 0; i < predicted_ids.size(); ++i) {
-                    analyze(predicted_ids.at(i), total_word_ids.at(i), *metric);
+                if (loss < 1e10) {
+                    loss_sum += loss;
                 }
 
                 if (batch_i % 10 == 5) {
@@ -914,11 +910,12 @@ int main(int argc, char *argv[]) {
                     printWordIds(word_ids, model_params.lookup_table);
                     cout << fmt::format("loss:{}\n", loss);
                     cout << "output:" << endl;
+                    auto predicted_ids = argmax(decoder_outputs, model_params.lookup_table.nVSize);
+
                     printWordIds(predicted_ids.at(0), model_params.lookup_table);
                 }
                 if (batch_i % 10 == 5) {
                     cout << "ppl:" << exp(loss_sum / corpus_word_sum) << std::endl;
-                    metric->print();
                 }
 
                 graph.backward();
