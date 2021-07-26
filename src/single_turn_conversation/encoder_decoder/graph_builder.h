@@ -567,7 +567,7 @@ struct GraphBuilder {
                         model_params.hidden_to_keyword_params);
                 keyword_prob = insnet::linear(*keyword_prob, model_params.lookup_table.E);
                 keyword_prob = insnet::split(*keyword_prob, keyword_bound, 0);
-                keyword_prob = insnet::softmax(*keyword_prob);
+                keyword_prob = insnet::logSoftmax(*keyword_prob);
             }
             keyword_probs.push_back(keyword_prob);
 
@@ -589,7 +589,7 @@ struct GraphBuilder {
                 cerr << "error state" << endl;
                 abort();
             }
-            normal_word_prob = insnet::softmax(*normal_word_prob);
+            normal_word_prob = insnet::logSoftmax(*normal_word_prob);
             normal_probs.push_back(normal_word_prob);
         }
         return make_pair(move(keyword_probs), move(normal_probs));
