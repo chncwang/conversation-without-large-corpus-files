@@ -896,6 +896,21 @@ int main(int argc, char *argv[]) {
                         model_params.lookup_table.size(), total_word_ids, 1.0);
                 if (loss < 1e10) {
                     loss_sum += loss;
+                } else {
+                    int i = 0;
+                    for (Node *node : decoder_outputs) {
+                        cout << "i:" << i << endl;
+                        cout << "answer:";
+                        for (int id : total_word_ids.at(i)) {
+                            cout << id << " ";
+                        }
+                        cout << "val:" << endl;
+                        node->val().print();
+                        cout << "grad:" << endl;
+                        node->grad().print();
+                        ++i;
+                    }
+                    abort();
                 }
 
                 if (batch_i % 10 == 5) {
