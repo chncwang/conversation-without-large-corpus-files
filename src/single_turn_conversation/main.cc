@@ -898,12 +898,14 @@ int main(int argc, char *argv[]) {
                     loss_sum += loss;
                 } else {
                     int i = 0;
+                    cout << "loss:" << loss << endl;
                     for (Node *node : decoder_outputs) {
                         cout << "i:" << i << endl;
                         cout << "answer:";
                         for (int id : total_word_ids.at(i)) {
                             cout << id << " ";
                         }
+                        cout << endl;
                         cout << "val:" << endl;
                         node->val().print();
                         cout << "grad:" << endl;
