@@ -144,7 +144,7 @@ struct QueueEle {
 };
 
 vector<BeamSearchResult> mostProbableResults(
-        const vector<shared_ptr<DecoderCellComponents>> &beam,
+        const vector<DecoderCellComponents> &beam,
         const vector<BeamSearchResult> &last_results,
         int current_word,
         int k,
@@ -157,7 +157,7 @@ vector<BeamSearchResult> mostProbableResults(
         Graph &graph) {
     vector<Node *> nodes;
     for (const auto &decoder_components : beam) {
-        nodes.push_back(decoder_components->wordvector_to_onehot);
+        nodes.push_back(decoder_components.wordvector_to_onehot);
         if (is_first) {
             break;
         }
@@ -232,7 +232,7 @@ vector<BeamSearchResult> mostProbableResults(
         }
         last_path.push_back(e.word_id);
 
-        BeamSearchResult result(*beam.at(e.source), last_path, e.log_prob);
+        BeamSearchResult result(beam.at(e.source), last_path, e.log_prob);
         results.push_back(result);
         queue.pop();
     }
@@ -329,17 +329,22 @@ struct GraphBuilder {
             ModelParams &model_params) {
         using namespace insnet;
         Node *emb = embedding(graph, answer, model_params.lookup_table);
-        decoder_components.state = lstm(decoder_components.state, *emb,
+        Node *context = additiveAttention(*decoder_components.state.hidden, *encoder_hiddens, enc_len,
+                model_params.attention_params).first;
+        Node *in = cat({emb, context});
+        decoder_components.state = lstm(decoder_components.state, *in,
                 model_params.decoder_params, hyper_params.dropout);
         Node *decoder_to_wordvector = decoder_components.decoderToWordVectors(hyper_params,
                 model_params);
-        Node *onehot = linear(*decoder_to_wordvector, model_params.lookup_table.E);
+        Node *o = cat({decoder_to_wordvector, emb, context});
+        o = linear(*o, model_params.output_params);
+        Node *onehot = linear(*o, model_params.lookup_table.E);
         Node *softmax = insnet::softmax(*onehot, onehot->size());
         decoder_components.wordvector_to_onehot = softmax;
     }
 
     pair<vector<int>, dtype> forwardDecoderUsingBeamSearch(Graph &graph,
-            const vector<shared_ptr<DecoderCellComponents>> &decoder_components_beam,
+            vector<DecoderCellComponents> &decoder_components_beam,
             int k,
             const HyperParams &hyper_params,
             ModelParams &model_params,
@@ -351,6 +356,12 @@ struct GraphBuilder {
         bool succeeded = false;
         set<int> searched_word_ids;
 
+        Node *h0 = tensor(graph, hyper_params.hidden_dim, 0.0f);
+
+        for (DecoderCellComponents &c : decoder_components_beam) {
+            c.state = {h0, h0};
+        }
+
         for (int iter = 0; ; ++iter) {
             cout << boost::format("forwardDecoderUsingBeamSearch iter:%1%\n") % iter;
             most_probable_results.clear();
@@ -359,6 +370,8 @@ struct GraphBuilder {
 
             int ended_count = word_ids_result.size();
             if (ended_count >= default_config.result_count_factor * k) {
+                cout << fmt::format("ended_count:{} factor:{} k:{}", ended_count,
+                        default_config.result_count_factor, k) << endl;
                 break;
             }
 
@@ -392,9 +405,8 @@ struct GraphBuilder {
                         } else {
                             stop_removed_results.push_back(beam_search_result);
                             last_answers.push_back(word);
-                            shared_ptr<DecoderCellComponents> ptr(new DecoderCellComponents(
-                                        beam_search_result.decoderComponents()));
-                            beam.push_back(ptr);
+                            DecoderCellComponents c(beam_search_result.decoderComponents());
+                            beam.push_back(c);
                         }
                         ++j;
                     }
@@ -407,7 +419,7 @@ struct GraphBuilder {
                 }
 
                 for (int beam_i = 0; beam_i < beam.size(); ++beam_i) {
-                    DecoderCellComponents &decoder_components = *beam.at(beam_i);
+                    DecoderCellComponents &decoder_components = beam.at(beam_i);
                     forwardDecoderByOneStep(graph, decoder_components,
                             i == 0 ? BEGIN_SYMBOL : last_answers.at(beam_i), hyper_params,
                             model_params);

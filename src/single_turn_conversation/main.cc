@@ -126,6 +126,7 @@ DefaultConfig parseDefaultConfig(INIReader &ini_reader) {
             1000000000);
     default_config.hold_batch_size = ini_reader.GetInteger(SECTION, "hold_batch_size", 100);
     default_config.device_id = ini_reader.GetInteger(SECTION, "device_id", 0);
+    default_config.beam_size = ini_reader.GetInteger(SECTION, "beam_size", 0);
     default_config.seed = ini_reader.GetInteger(SECTION, "seed", 0);
     default_config.cut_length = ini_reader.GetInteger(SECTION, "cut_length", 30);
     default_config.max_epoch = ini_reader.GetInteger(SECTION, "max_epoch", 100);
@@ -380,162 +381,156 @@ void computeMeanAndStandardDeviation(const vector<float> &nums, float &mean, flo
     }
 }
 
-//void decodeTestPosts(const HyperParams &hyper_params, ModelParams &model_params,
-//        DefaultConfig &default_config,
-//        const vector<PostAndResponses> &post_and_responses_vector,
-//        const vector<vector<string>> &post_sentences,
-//        const vector<vector<string>> &response_sentences,
-//        const unordered_map<string, float> &all_idf,
-//        const vector<string> &black_list) {
-//    LookupTable<Param> original_embeddings;
-//    original_embeddings.init(model_params.decoder_lookup_table.elems, hyper_params.word_file);
+void decodeTestPosts(const HyperParams &hyper_params, ModelParams &model_params,
+        DefaultConfig &default_config,
+        const vector<PostAndResponses> &post_and_responses_vector,
+        const vector<vector<string>> &post_sentences,
+        const vector<vector<string>> &response_sentences,
+        const unordered_map<string, float> &all_idf,
+        const vector<string> &black_list) {
+    vector<vector<vector<string>>> ref_sentences;
+    for (const PostAndResponses &post_and_responses : post_and_responses_vector) {
+        vector<vector<string>> pair;
+        for (const int id : post_and_responses.response_ids) {
+            auto s = response_sentences.at(id);
+            s.pop_back();
+            pair.push_back(s);
+        }
+        ref_sentences.push_back(pair);
+    }
+    using std::array;
+    array<unordered_map<string, float>, 4> ngram_idf_tables;
+    for (int i = 1; i <= 4; ++i) {
+        ngram_idf_tables.at(i - 1) = computeNgramIdf(ref_sentences, i);
+    }
 
-//    vector<vector<vector<string>>> ref_sentences;
-//    for (const PostAndResponses &post_and_responses : post_and_responses_vector) {
-//        vector<vector<string>> pair;
-//        for (const int id : post_and_responses.response_ids) {
-//            auto s = response_sentences.at(id);
-//            s.pop_back();
-//            pair.push_back(s);
-//        }
-//        ref_sentences.push_back(pair);
-//    }
-//    using std::array;
-//    array<unordered_map<string, float>, 4> ngram_idf_tables;
-//    for (int i = 1; i <= 4; ++i) {
-//        ngram_idf_tables.at(i - 1) = computeNgramIdf(ref_sentences, i);
-//        for (const auto &it : ngram_idf_tables.at(i - 1)) {
-//            cout << it.first << ":" << it.second << endl;
-//        }
-//    }
+    cout << "decodeTestPosts begin" << endl;
+    hyper_params.print();
+    vector<CandidateAndReferences> candidate_and_references_vector;
+    map<string, int64_t> overall_flops;
+    array<float, 4> cider_sums = {0, 0, 0, 0};
+    int64_t activations_sum = 0;
+    int loop_i = 0;
+    vector <float> greedy_matching_similarities;
+    vector <float> avg_matching_similarities;
+    vector <float> extrema_similarities;
+    for (const PostAndResponses &post_and_responses : post_and_responses_vector) {
+        ++loop_i;
+        cout << "post:" << endl;
+        print(post_sentences.at(post_and_responses.post_id));
+        Graph graph(ModelStage::INFERENCE, false, false, false);
+        GraphBuilder graph_builder;
+        graph_builder.forward(graph, post_sentences.at(post_and_responses.post_id), hyper_params,
+                model_params);
+        vector<DecoderCellComponents> decoder_components_vector;
+        decoder_components_vector.resize(default_config.beam_size);
+        auto pair = graph_builder.forwardDecoderUsingBeamSearch(graph, decoder_components_vector,
+                default_config.beam_size, hyper_params, model_params, default_config, black_list);
+        const vector<int> &word_ids = pair.first;
+        cout << "post:" << endl;
+        print(post_sentences.at(post_and_responses.post_id));
+        cout << "response:" << endl;
+        printWordIds(word_ids, model_params.lookup_table);
+        cout << "response words:" << endl;
+        printWordIds(word_ids, model_params.lookup_table);
+        const auto &flops = graph.getFLOPs();
+        if (loop_i == 1) {
+            overall_flops = flops;
+        } else {
+            for (const auto &it : flops) {
+                overall_flops.at(it.first) += it.second;
+            }
+        }
 
-//    cout << "decodeTestPosts begin" << endl;
-//    hyper_params.print();
-//    vector<CandidateAndReferences> candidate_and_references_vector;
-//    map<string, int64_t> overall_flops;
-//    array<float, 4> cider_sums = {0, 0, 0, 0};
-//    int64_t activations_sum = 0;
-//    int loop_i = 0;
-//    vector <float> greedy_matching_similarities;
-//    vector <float> avg_matching_similarities;
-//    vector <float> extrema_similarities;
-//    for (const PostAndResponses &post_and_responses : post_and_responses_vector) {
-//        ++loop_i;
-//        cout << "post:" << endl;
-//        print(post_sentences.at(post_and_responses.post_id));
-//        Graph graph(false, true, true);
-//        GraphBuilder graph_builder;
-//        graph_builder.forward(graph, post_sentences.at(post_and_responses.post_id), hyper_params,
-//                model_params, false);
-//        vector<DecoderComponents> decoder_components_vector;
-//        decoder_components_vector.resize(hyper_params.beam_size);
-//        auto pair = graph_builder.forwardDecoderUsingBeamSearch(graph, decoder_components_vector,
-//                hyper_params.beam_size, hyper_params, model_params, default_config, black_list);
-//        const vector<WordIdAndProbability> &word_ids_and_probability = pair.first;
-//        cout << "post:" << endl;
-//        print(post_sentences.at(post_and_responses.post_id));
-//        cout << "response:" << endl;
-//        printWordIds(word_ids_and_probability, model_params.decoder_lookup_table);
-//        cout << "response words:" << endl;
-//        printWordIds(word_ids_and_probability, model_params.decoder_lookup_table, true);
-//        const auto &flops = graph.getFLOPs();
-//        if (loop_i == 1) {
-//            overall_flops = flops;
-//        } else {
-//            for (const auto &it : flops) {
-//                overall_flops.at(it.first) += it.second;
-//            }
-//        }
+        float flops_sum = 0;
+        for (const auto &it : overall_flops) {
+            flops_sum += it.second;
+        }
+        for (const auto &it : overall_flops) {
+            cout << it.first << ":" << it.second / flops_sum << endl;
+        }
 
-//        float flops_sum = 0;
-//        for (const auto &it : overall_flops) {
-//            flops_sum += it.second;
-//        }
-//        for (const auto &it : overall_flops) {
-//            cout << it.first << ":" << it.second / flops_sum << endl;
-//        }
+        cout << boost::format("flops overall:%1% avg:%2%") % flops_sum %
+            (static_cast<float>(flops_sum) / loop_i) << endl;
 
-//        cout << boost::format("flops overall:%1% avg:%2%") % flops_sum %
-//            (static_cast<float>(flops_sum) / loop_i) << endl;
+        activations_sum += graph.getActivations();
+        cout << boost::format("activations:%1% avg:%2%") % activations_sum %
+            (static_cast<float>(activations_sum) / loop_i) << endl;
 
-//        activations_sum += graph.getActivations();
-//        cout << boost::format("activations:%1% avg:%2%") % activations_sum %
-//            (static_cast<float>(activations_sum) / loop_i) << endl;
+        dtype probability = pair.second;
+        cout << format("probability:%1%") % probability << endl;
+        if (word_ids.empty()) {
+            cerr << "empty result" << endl;
+            abort();
+        }
 
-//        dtype probability = pair.second;
-//        cout << format("probability:%1%") % probability << endl;
-//        if (word_ids_and_probability.empty()) {
-//            cerr << "empty result" << endl;
-//            abort();
-//        }
+        vector<string> decoded_word_ids;
+        auto to_str = [&](const int in) ->string {
+            return model_params.lookup_table.vocab.from_id(in);
+        };
+        transform(word_ids.begin(), word_ids.end(),
+                back_inserter(decoded_word_ids), to_str);
+        decoded_word_ids.pop_back();
+        const vector<int> &response_ids = post_and_responses.response_ids;
+        vector<vector<string>> str_references =
+            transferVector<vector<string>, int>(response_ids,
+                    [&](int response_id) -> vector<string> {
+                    return response_sentences.at(response_id);
+                    });
+        vector<vector<string>> id_references;
+        for (const vector<string> &strs : str_references) {
+            auto stop_removed = strs;
+            stop_removed.pop_back();
+            id_references.push_back(stop_removed);
+        }
 
-//        vector<string> decoded_word_ids;
-//        auto to_str = [&](const WordIdAndProbability &in) ->string {
-//            return model_params.decoder_lookup_table.elems.from_id(in.word_id);
-//        };
-//        transform(word_ids_and_probability.begin(), word_ids_and_probability.end(),
-//                back_inserter(decoded_word_ids), to_str);
-//        decoded_word_ids.pop_back();
-//        const vector<int> &response_ids = post_and_responses.response_ids;
-//        vector<vector<string>> str_references =
-//            transferVector<vector<string>, int>(response_ids,
-//                    [&](int response_id) -> vector<string> {
-//                    return response_sentences.at(response_id);
-//                    });
-//        vector<vector<string>> id_references;
-//        for (const vector<string> &strs : str_references) {
-//            auto stop_removed = strs;
-//            stop_removed.pop_back();
-//            id_references.push_back(stop_removed);
-//        }
+        CandidateAndReferences candidate_and_references(decoded_word_ids, id_references);
+        candidate_and_references_vector.push_back(candidate_and_references);
 
-//        CandidateAndReferences candidate_and_references(decoded_word_ids, id_references);
-//        candidate_and_references_vector.push_back(candidate_and_references);
-
-//        for (int ngram = 1; ngram <=4; ++ngram) {
-//            float bleu_value = computeMtevalBleu(candidate_and_references_vector, ngram);
-//            cout << "bleu_" << ngram << ":" << bleu_value << endl;
+        for (int ngram = 1; ngram <=4; ++ngram) {
+            float bleu_value = computeBleu(candidate_and_references_vector, ngram);
+            cout << "bleu_" << ngram << ":" << bleu_value << endl;
 //            float bleu_mean, bleu_deviation;
 //            computeMtevalBleuForEachResponse(candidate_and_references_vector, ngram, bleu_mean,
 //                    bleu_deviation);
 //            cout << boost::format("bleu_%1% mean:%2% deviation:%3%") % ngram % bleu_mean %
 //                bleu_deviation << endl;
-//            float nist_value = computeNist(candidate_and_references_vector, ngram);
-//            cout << "nist_" << ngram << ":" << nist_value << endl;
-//            float dist_value = computeDist(candidate_and_references_vector, ngram);
-//            cout << "dist_" << ngram << ":" << dist_value << endl;
-//            float cider = computeCIDEr(candidate_and_references, ngram_idf_tables.at(ngram - 1),
-//                    ngram);
-//            cider_sums.at(ngram - 1) += cider;
-//            cout << "cider_" << ngram << ":" << cider_sums.at(ngram - 1) / loop_i << endl;
-//        }
-//        float idf_value = computeEntropy(candidate_and_references_vector, all_idf);
-//        cout << "idf:" << idf_value << endl;
-//        float matched_idf = computeMatchedEntropy(candidate_and_references_vector, all_idf);
-//        cout << "matched idf:" << matched_idf << endl;
-//        float greedy_matching_sim = computeGreedyMatching(candidate_and_references,
-//                original_embeddings);
-//        greedy_matching_similarities.push_back(greedy_matching_sim);
-//        float greedy_matching_sim_mean, greedy_matching_sim_sd;
-//        computeMeanAndStandardDeviation(greedy_matching_similarities, greedy_matching_sim_mean,
-//                greedy_matching_sim_sd);
-//        cout << boost::format("greedy matching mean:%1% standard_deviation:%2%") %
-//            greedy_matching_sim_mean % greedy_matching_sim_sd << endl;
-//        float avg_sim = computeEmbeddingAvg(candidate_and_references, original_embeddings);
-//        avg_matching_similarities.push_back(avg_sim);
-//        float avg_matching_sim_mean, avg_matching_sim_sd;
-//        computeMeanAndStandardDeviation(avg_matching_similarities, avg_matching_sim_mean,
-//                avg_matching_sim_sd);
-//        cout << boost::format("embedding average mean:%1% standard_deviation:%2%") %
-//            avg_matching_sim_mean % avg_matching_sim_sd << endl;
-//        float extrema = computeExtrema(candidate_and_references, original_embeddings);
-//        extrema_similarities.push_back(extrema);
-//        float extrema_mean, extrema_sd;
-//        computeMeanAndStandardDeviation(extrema_similarities, extrema_mean, extrema_sd);
-//        cout << boost::format("extrema mean:%1% standard_deviation:%2%") % extrema_mean %
-//            extrema_sd << endl;
-//    }
-//}
+            float nist_value = computeNist(candidate_and_references_vector, ngram);
+            cout << "nist_" << ngram << ":" << nist_value << endl;
+            float dist_value = computeDist(candidate_and_references_vector, ngram);
+            cout << "dist_" << ngram << ":" << dist_value << endl;
+            float cider = computeCIDEr(candidate_and_references, ngram_idf_tables.at(ngram - 1),
+                    ngram);
+            cider_sums.at(ngram - 1) += cider;
+            cout << "cider_" << ngram << ":" << cider_sums.at(ngram - 1) / loop_i << endl;
+        }
+        float idf_value = computeEntropy(candidate_and_references_vector, all_idf);
+        cout << "idf:" << idf_value << endl;
+        float matched_idf = computeMatchedEntropy(candidate_and_references_vector, all_idf);
+        cout << "matched idf:" << matched_idf << endl;
+        float greedy_matching_sim = computeGreedyMatching(candidate_and_references,
+                model_params.lookup_table);
+        greedy_matching_similarities.push_back(greedy_matching_sim);
+        float greedy_matching_sim_mean, greedy_matching_sim_sd;
+        computeMeanAndStandardDeviation(greedy_matching_similarities, greedy_matching_sim_mean,
+                greedy_matching_sim_sd);
+        cout << boost::format("greedy matching mean:%1% standard_deviation:%2%") %
+            greedy_matching_sim_mean % greedy_matching_sim_sd << endl;
+        float avg_sim = computeEmbeddingAvg(candidate_and_references, model_params.lookup_table);
+        avg_matching_similarities.push_back(avg_sim);
+        float avg_matching_sim_mean, avg_matching_sim_sd;
+        computeMeanAndStandardDeviation(avg_matching_similarities, avg_matching_sim_mean,
+                avg_matching_sim_sd);
+        cout << boost::format("embedding average mean:%1% standard_deviation:%2%") %
+            avg_matching_sim_mean % avg_matching_sim_sd << endl;
+        float extrema = computeExtrema(candidate_and_references, model_params.lookup_table);
+        extrema_similarities.push_back(extrema);
+        float extrema_mean, extrema_sd;
+        computeMeanAndStandardDeviation(extrema_similarities, extrema_mean, extrema_sd);
+        cout << boost::format("extrema mean:%1% standard_deviation:%2%") % extrema_mean %
+            extrema_sd << endl;
+    }
+}
 
 pair<unordered_set<int>, unordered_set<int>> PostAndResponseIds(
         const vector<PostAndResponses> &post_and_responses_vector) {
@@ -740,9 +735,14 @@ int main(int argc, char *argv[]) {
     auto black_list = readBlackList(default_config.black_list_file);
 
     if (default_config.program_mode == ProgramMode::DECODING) {
-//        hyper_params.beam_size = beam_size;
-//        decodeTestPosts(hyper_params, model_params, default_config, test_post_and_responses,
-//                post_sentences, response_sentences, all_idf, black_list);
+        const string &model_file_path = default_config.input_model_file;
+        cout << format("model_file_path:%1%") % model_file_path << endl;
+        ModelParams model_params;
+        int epoch;
+        loadModel(default_config, hyper_params, model_params, epoch, model_file_path,
+                allocate_model_params);
+        decodeTestPosts(hyper_params, model_params, default_config, test_post_and_responses,
+                post_sentences, response_sentences, all_idf, black_list);
     } else if (default_config.program_mode == ProgramMode::DECODED_PPL) {
     } else if (default_config.program_mode == ProgramMode::METRIC) {
         const string &model_file_path = default_config.input_model_file;
