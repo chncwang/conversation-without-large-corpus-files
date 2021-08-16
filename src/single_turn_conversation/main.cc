@@ -959,45 +959,16 @@ int main(int argc, char *argv[]) {
 //                response_idf_info_list, test_post_and_responses, post_sentences,
 //                response_sentences, black_list);
     } else if (default_config.program_mode == ProgramMode::METRIC) {
-//        path dir_path(default_config.input_model_dir);
-//        if (!is_directory(dir_path)) {
-//            cerr << format("%1% is not dir path") % default_config.input_model_dir << endl;
-//            abort();
-//        }
-
-//        vector<string> ordered_file_paths;
-//        for(auto& entry : boost::make_iterator_range(directory_iterator(dir_path), {})) {
-//            string basic_name = entry.path().filename().string();
-//            cout << format("basic_name:%1%") % basic_name << endl;
-//            if (basic_name.find("model") != 0) {
-//                continue;
-//            }
-
-//            string model_file_path = entry.path().string();
-//            ordered_file_paths.push_back(model_file_path);
-//        }
-//        std::sort(ordered_file_paths.begin(), ordered_file_paths.end(),
-//                [](const string &a, const string &b)->bool {
-//                using boost::filesystem::last_write_time;
-//                return last_write_time(a) < last_write_time(b);
-//                });
-
-//        float max_rep_perplex = 0.0f;
-//        for(const string &model_file_path : ordered_file_paths) {
-//            cout << format("model_file_path:%1%") % model_file_path << endl;
-//            ModelParams model_params;
-//            shared_ptr<Json::Value> root_ptr = loadModel(model_file_path);
-//            loadModel(default_config, hyper_params, model_params, root_ptr.get(),
-//                    allocate_model_params);
-//            float rep_perplex = metricTestPosts(hyper_params, model_params, dev_post_and_responses,
-//                    post_sentences, response_sentences, response_idf_info_list);
-//            cout << format("model %1% rep_perplex is %2%") % model_file_path % rep_perplex << endl;
-//            if (max_rep_perplex < rep_perplex) {
-//                max_rep_perplex = rep_perplex;
-//                cout << format("best model now is %1%, and rep_perplex is %2%") % model_file_path %
-//                    rep_perplex << endl;
-//            }
-//        }
+        const string &model_file_path = default_config.input_model_file;
+        cout << format("model_file_path:%1%") % model_file_path << endl;
+        ModelParams model_params;
+        int epoch;
+        loadModel(default_config, hyper_params, model_params, epoch, model_file_path,
+                allocate_model_params);
+        float perplex = metricTestPosts(hyper_params, model_params,
+                test_post_and_responses, post_sentences, response_sentences,
+                response_idf_info_list);
+        cout << format("model %1% perplex is %2%") % model_file_path % perplex << endl;
     } else if (default_config.program_mode == ProgramMode::TRAINING) {
         insnet::AdamOptimizer optimizer(model_params.tunableParams(), hyper_params.learning_rate);
 
