@@ -1059,6 +1059,7 @@ int main(int argc, char *argv[]) {
                     int response_id = train_conversation_pairs.at(instance_index).response_id;
                     auto response_sentence = response_sentences.at(response_id);
                     vector<int> word_ids = toIds(response_sentence, model_params.lookup_table);
+                    auto word_ids_backup = word_ids;
                     for (int j = 0; j < word_ids.size(); ++j) {
                         if (j < word_ids.size() - 1) {
                             --word_ids.at(j);
@@ -1109,7 +1110,7 @@ int main(int argc, char *argv[]) {
                         print(post_sentences.at(post_id));
 
                         cout << "golden answer:" << endl;
-                        printWordIds(word_ids, model_params.lookup_table);
+                        printWordIds(word_ids_backup, model_params.lookup_table);
 
                         cout << "golden keywords:" << endl;
                         printWordIds(keyword_nodes_and_ids.second, model_params.lookup_table);
