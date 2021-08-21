@@ -38,6 +38,7 @@ struct DefaultConfig {
     int hold_batch_size;
     int seed;
     int cut_length;
+    int beam_size;
     float keyword_bound;
     float keyword_fork_bound;
     int max_epoch;
@@ -76,6 +77,7 @@ struct DefaultConfig {
             << "hold_batch_size:" << hold_batch_size << std::endl
             << "seed:" << seed << std::endl
             << "cut_length:" << cut_length << std::endl
+            << "beam_size:" << beam_size << std::endl
             << "keyword_bound:" << keyword_bound << std::endl
             << "keyword_fork_bound:" << keyword_fork_bound << std::endl
             << "max_epoch:" << max_epoch << std::endl

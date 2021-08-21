@@ -21,7 +21,6 @@ struct HyperParams {
     int hidden_dim;
     float dropout;
     int batch_size;
-    int beam_size;
     float learning_rate;
     float learning_rate_decay;
     float min_learning_rate;
@@ -44,7 +43,6 @@ struct HyperParams {
             << "hidden_dim:" << hidden_dim << std::endl
             << "dropout:" << dropout << std::endl
             << "batch_size:" << batch_size << std::endl
-            << "beam_size:" << beam_size << std::endl
             << "learning_rate:" << learning_rate << std::endl
             << "learning_rate_decay:" << learning_rate_decay << std::endl
             << "warm_up_learning_rate:" << warm_up_learning_rate << std::endl
